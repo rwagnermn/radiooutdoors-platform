@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Add Journal Entry | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+    <div class="location-card journal-form-card">
+        <p><a href="{% url 'edit_adventure' adventure.slug %}">← Back to {{ adventure.title }}</a></p>
+        <h1>Add Journal Entry</h1>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {% include "adventures/_journal_entry_fields.html" %}
+            <button type="submit" class="button-primary">Save Journal Entry</button>
+        </form>
+    </div>
+</section>
+{% endblock %}

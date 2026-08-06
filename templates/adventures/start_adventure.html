@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Start the Adventure | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+  <div class="location-card" style="max-width:760px;margin:40px auto;">
+    <h1>Start the Adventure</h1>
+    <p style="margin-bottom:30px;">Give it a title and select a location. Both can be changed later.</p>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label for="{{ form.title.id_for_label }}">Adventure Title</label>
+      {{ form.title }}
+      {% for error in form.title.errors %}<p>{{ error }}</p>{% endfor %}
+      <label for="{{ form.location.id_for_label }}">Location</label>
+      {{ form.location }}
+      {% for error in form.location.errors %}<p>{{ error }}</p>{% endfor %}
+      <p style="margin:5px 0 30px;">Location not listed? “Create New Location” comes next.</p>
+      <button type="submit" class="button-primary">Start the Adventure</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

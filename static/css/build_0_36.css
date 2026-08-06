@@ -1,0 +1,10 @@
+/* Build 0.36 — Story First and 15-second rule */
+.story-first-help{margin-top:-4px;margin-bottom:18px;color:#555}
+.story-first-section{margin-bottom:20px}
+.optional-label{font-weight:500;color:#666}
+.optional-story-section{margin:18px 0;border:1px solid #d8ded7;border-radius:8px;background:#f8f9f6}
+.optional-story-section>summary{padding:12px 14px;font-weight:900;color:#234231;cursor:pointer}
+.optional-story-section[open]>summary{border-bottom:1px solid #d8ded7}
+.optional-story-section>div{padding:14px}
+.optional-story-section .photo-upload-box{border:0;margin:0;background:transparent}
+.journal-form-card textarea{min-height:220px}

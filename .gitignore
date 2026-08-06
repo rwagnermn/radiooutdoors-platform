@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual Environment
+.venv/
+
+# SQLite database
+db.sqlite3
+
+# VS Code settings
+.vscode/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Uploaded media
+media/
+
+# Secrets
+google_maps_api_key.txt
+qrz_username.txt
+qrz_password.txt
+
+# Build artifacts
+*.zip
+BUILD_*
+Install_*.py
+Install_*.ps1
+Update_*.py

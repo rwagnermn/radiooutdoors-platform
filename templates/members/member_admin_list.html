@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Manage Members | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+<h1>Manage Members</h1>
+<p>QRZ status, account access, and permanent removal.</p>
+<div class="member-table-scroll">
+<table class="member-directory-table">
+<thead><tr><th>Callsign</th><th>Name</th><th>QRZ</th><th>Account</th><th>Data</th><th>Actions</th></tr></thead>
+<tbody>
+{% for profile in members %}
+<tr>
+<td>{{ profile.callsign|default:"Incomplete" }}</td>
+<td>{{ profile.public_name }}</td>
+<td>{% if profile.callsign_verified %}Verified{% else %}Not verified{% endif %}</td>
+<td>{% if profile.user.is_active %}Active{% else %}Inactive{% endif %}</td>
+<td>{{ profile.total_adventures }} A · {{ profile.total_journals }} J · {{ profile.total_photos }} P</td>
+<td><div class="member-admin-actions">
+<form method="post" action="{% url 'member_toggle_active' profile.pk %}">{% csrf_token %}<button type="submit">{% if profile.user.is_active %}Deactivate{% else %}Activate{% endif %}</button></form>
+<a href="{% url 'member_delete' profile.pk %}" class="member-delete-link">Delete</a>
+</div></td>
+</tr>
+{% empty %}<tr><td colspan="6">No member profiles.</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+</section>
+{% endblock %}

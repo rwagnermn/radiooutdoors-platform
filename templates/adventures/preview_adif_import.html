@@ -1,0 +1,104 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Verify Contacts | Radio Outdoors{% endblock %}
+
+{% block content %}
+<style>
+.adif-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin:22px 0}
+.adif-summary div{padding:12px;background:#f2f4ef;border-radius:8px}
+.adif-summary span{display:block;font-size:12px;font-weight:900;text-transform:uppercase;color:#687069}
+.adif-summary strong{display:block;margin-top:3px;color:#234231}
+.contact-scroll{max-height:430px;overflow:auto;border:1px solid #d8ded7;border-radius:8px}
+.contact-table{width:100%;min-width:850px;border-collapse:collapse;font-size:13px;line-height:1.05}
+.contact-table th,.contact-table td{height:25px;padding:3px 7px;border-bottom:1px solid #e5e8e4;white-space:nowrap}
+.contact-table th{position:sticky;top:0;background:#eef1ed;color:#234231;text-align:left}
+.adif-actions{display:flex;gap:12px;margin-top:20px}.adif-actions form{margin:0}
+</style>
+
+<section class="content">
+    <div class="view-page-toolbar">
+        <a href="{% url 'journal_entry_detail' entry.pk %}" class="back-link-button">
+            ← Back to Journal Entry
+        </a>
+    </div>
+
+    <div class="location-card" style="max-width:1150px;margin:20px auto 50px;padding:30px;">
+        <p class="section-kicker">Visual Verification</p>
+        <h1>Is this the right file?</h1>
+
+        <div class="adif-summary">
+            <div><span>File</span><strong>{{ filename }}</strong></div>
+            <div><span>Contacts Found</span><strong>{{ contact_count }}</strong></div>
+            <div>
+                <span>Date Range</span>
+                <strong>
+                    {% if date_start == date_end %}
+                        {{ date_start }}
+                    {% else %}
+                        {{ date_start }} through {{ date_end }}
+                    {% endif %}
+                </strong>
+            </div>
+            <div>
+                <span>Modes Found</span>
+                <strong>
+                    {% if modes %}
+                        {{ modes|join:", " }}
+                    {% else %}
+                        Not listed
+                    {% endif %}
+                </strong>
+            </div>
+        </div>
+
+        <h2>First Contacts</h2>
+
+        <div class="contact-scroll">
+            <table class="contact-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Callsign</th>
+                        <th>Mode</th>
+                        <th>Name</th>
+                        <th>State / Country</th>
+                        <th>Miles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contact in preview_contacts %}
+                        <tr>
+                            <td>{{ contact.qso_date }}</td>
+                            <td>{{ contact.time_on|slice:":5"|default:"—" }}</td>
+                            <td><strong>{{ contact.callsign }}</strong></td>
+                            <td>{{ contact.mode|default:"—" }}</td>
+                            <td>{{ contact.name|default:"—" }}</td>
+                            <td>
+                                {% if contact.state and contact.country %}
+                                    {{ contact.state }}, {{ contact.country }}
+                                {% else %}
+                                    {{ contact.state|default:contact.country|default:"—" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ contact.distance_miles|default_if_none:"—" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="adif-actions">
+            <form method="post" action="{% url 'confirm_adif_import' entry.pk token %}">
+                {% csrf_token %}
+                <button type="submit" class="button-primary">Import These Contacts</button>
+            </form>
+
+            <form method="post" action="{% url 'cancel_adif_import' entry.pk token %}">
+                {% csrf_token %}
+                <button type="submit" class="button-secondary-dark">Choose Another File</button>
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock %}

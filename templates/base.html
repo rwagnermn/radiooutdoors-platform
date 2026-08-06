@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Radio Outdoors{% endblock %}</title>
+<link rel="stylesheet" href="{% static 'css/style.css' %}?v=029">
+</head>
+<body>
+{% include "partials/header.html" %}
+<main>
+{% if messages %}
+<div class="flash-messages">
+{% for message in messages %}<div class="flash-message {{ message.tags }}">{{ message }}</div>{% endfor %}
+</div>
+{% endif %}
+{% block content %}{% endblock %}
+</main>
+{% include "partials/footer.html" %}
+<script>
+setTimeout(function(){
+ document.querySelectorAll(".flash-message").forEach(function(m){
+  m.classList.add("flash-message-hiding");
+  setTimeout(function(){m.remove();},300);
+ });
+},5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Locations | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content">
+
+    <div class="section-heading-row">
+        <div>
+            <h1>Locations</h1>
+            <p>Find places where operators have shared Radio Outdoors Adventures.</p>
+        </div>
+
+        {% if user.is_authenticated %}
+            <a href="{% url 'create_location' %}" class="button-primary">
+                Add New Location
+            </a>
+        {% endif %}
+    </div>
+
+    <form method="get" class="location-filter-bar">
+        <div>
+            <label for="q">Search</label>
+            <input
+                id="q"
+                name="q"
+                value="{{ search }}"
+                placeholder="Name, city, state, or notes"
+            >
+        </div>
+
+        <div>
+            <label for="state">State</label>
+            <select id="state" name="state">
+                <option value="">All states</option>
+
+                {% for state in states %}
+                    <option
+                        value="{{ state }}"
+                        {% if selected_state == state %}selected{% endif %}
+                    >
+                        {{ state }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="type">Location Type</label>
+            <select id="type" name="type">
+                <option value="">All types</option>
+
+                {% for value, label in location_types %}
+                    <option
+                        value="{{ value }}"
+                        {% if selected_type == value %}selected{% endif %}
+                    >
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="button-primary">
+            Apply
+        </button>
+
+        <a href="{% url 'locations' %}" class="filter-clear-link">
+            Clear
+        </a>
+    </form>
+
+    <div class="location-table-wrap">
+        <table class="location-table">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Type</th>
+                    <th>City</th>
+                    <th>State</th>
+                    <th class="text-center">Operating Locations</th>
+                    <th class="text-center">Adventures</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for location in locations %}
+                    <tr
+                        class="location-list-row"
+                        tabindex="0"
+                        role="link"
+                        onclick="window.location='{% url 'location_detail' location.pk %}';"
+                        onkeydown="if(event.key==='Enter'){window.location='{% url 'location_detail' location.pk %}';}"
+                    >
+                        <td>
+                            <a
+                                href="{% url 'location_detail' location.pk %}"
+                                onclick="event.stopPropagation();"
+                            >
+                                <strong>{{ location.name }}</strong>
+                            </a>
+
+                            {% if location.street_address %}
+                                <div class="location-list-address">
+                                    {{ location.street_address }}
+                                </div>
+                            {% endif %}
+
+                            {% if location.reference_code %}
+                                <div class="location-reference-code">
+                                    {{ location.reference_code }}
+                                </div>
+                            {% endif %}
+
+                            {% if location.description %}
+                                <div class="location-list-description">
+                                    {{ location.description|truncatewords:18 }}
+                                </div>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ location.get_location_type_display }}</td>
+                        <td>{{ location.city|default:"—" }}</td>
+                        <td>{{ location.state|default:"—" }}</td>
+
+                        <td class="text-center">
+                            {{ location.operating_location_count }}
+                        </td>
+
+                        <td class="text-center">
+                            {{ location.adventure_count }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="empty-table-message">
+                            No locations match these filters.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</section>
+{% endblock %}

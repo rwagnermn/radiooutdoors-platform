@@ -1,0 +1,47 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Import Contacts | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content">
+    <div class="view-page-toolbar">
+        <a href="{% url 'journal_entry_detail' entry.pk %}" class="back-link-button">
+            ← Back to Journal Entry
+        </a>
+    </div>
+
+    <div class="location-card" style="max-width:850px;margin:20px auto 50px;padding:30px;">
+        <p class="section-kicker">Journal Entry</p>
+        <h1>Import Contacts</h1>
+        <p style="font-size:19px;font-weight:800;color:#315f48;">
+            {{ entry.title|default:"Journal Entry" }}
+        </p>
+
+        <p>
+            Select the ADIF export containing the contacts you want shown
+            with this Journal Entry. The source file is not retained.
+        </p>
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="journal-form-section">
+                <label for="{{ form.adif_file.id_for_label }}">ADIF File</label>
+                {{ form.adif_file }}
+
+                {% if form.adif_file.help_text %}
+                    <p class="field-help">{{ form.adif_file.help_text }}</p>
+                {% endif %}
+
+                {% for error in form.adif_file.errors %}
+                    <p class="form-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="button-primary">
+                Preview Contacts
+            </button>
+        </form>
+    </div>
+</section>
+{% endblock %}

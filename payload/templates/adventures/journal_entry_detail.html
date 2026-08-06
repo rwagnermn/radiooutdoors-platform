@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content">
+    <article class="journal-entry-view">
+        <div class="journal-view-heading">
+            <div class="journal-heading-main">
+                <p>
+                    <a href="{{ adventure.get_absolute_url }}#journal-entries" class="back-to-journal-link">
+                        ← Back to Adventure
+                    </a>
+                </p>
+
+                <p class="journal-adventure-name">{{ adventure.title }}</p>
+
+                <div class="compact-meta-row">
+                    <span>{{ entry.entry_at|date:"F j, Y — g:i A" }}</span>
+                    <span class="visibility-label">
+                        {% if entry.is_public %}Public{% else %}Private{% endif %}
+                    </span>
+                </div>
+
+                <h1>{{ entry.title|default:"Journal Entry" }}</h1>
+            </div>
+
+            {% if user == adventure.owner %}
+                <div class="journal-heading-actions">
+                    <a href="{% url 'import_adif' entry.pk %}" class="button-secondary-dark">
+                        Import Contacts
+                    </a>
+
+                    <div class="action-menu" data-menu>
+                        <button
+                            type="button"
+                            class="action-menu-button"
+                            data-menu-button
+                            aria-label="Journal actions"
+                            aria-expanded="false"
+                        >☰</button>
+
+                        <div class="action-menu-panel" data-menu-panel>
+                            <a href="{% url 'edit_journal_entry' entry.pk %}">Edit Journal</a>
+
+                            <form method="post" action="{% url 'toggle_journal_visibility' entry.pk %}">
+                                {% csrf_token %}
+                                <button type="submit">
+                                    {% if entry.is_public %}Make Private{% else %}Make Public{% endif %}
+                                </button>
+                            </form>
+
+                            <form
+                                method="post"
+                                action="{% url 'delete_journal_entry' entry.pk %}"
+                                onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');"
+                            >
+                                {% csrf_token %}
+                                <button type="submit" class="danger-menu-item">Delete Journal</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <section class="journal-notes-view">
+            <h2>Journal Notes</h2>
+            {{ entry.body|linebreaks }}
+        </section>
+
+        {% if entry.photos.all %}
+            <section class="journal-view-section">
+                <h2>Photos</h2>
+                <div class="journal-photo-grid journal-view-photos">
+                    {% for photo in entry.photos.all %}
+                        <figure class="journal-photo">
+                            <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:'Adventure photo' }}">
+                            {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}
+                        </figure>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+        {% if contact_count %}
+            <section class="journal-view-section">
+                <h2>Contacts</h2>
+
+                <div class="contact-summary-grid">
+                    <div><strong>{{ contact_count }}</strong><span>Contacts</span></div>
+                    <div><strong>{{ state_count }}</strong><span>States / Provinces</span></div>
+                    <div><strong>{{ country_count }}</strong><span>Countries</span></div>
+                    <div>
+                        <strong>
+                            {% if longest_contact %}
+                                {{ longest_contact.callsign }} · {{ longest_contact.distance_miles }} mi
+                            {% else %}—{% endif %}
+                        </strong>
+                        <span>Longest Contact</span>
+                    </div>
+                </div>
+
+                <details class="contact-details">
+                    <summary>
+                        Show {{ contact_count }} Contact{{ contact_count|pluralize }}
+                    </summary>
+
+                    <form
+                        method="post"
+                        action="{% url 'delete_selected_contacts' entry.pk %}"
+                        id="contact-delete-form"
+                        onsubmit="return confirmContactDelete();"
+                    >
+                        {% csrf_token %}
+
+                        <div class="contact-toolbar">
+                            <input
+                                id="contact-search"
+                                class="contact-search"
+                                type="search"
+                                placeholder="Find callsign or place"
+                            >
+
+                            {% if user == adventure.owner %}
+                                <button type="button" id="select-visible-contacts">Select Visible</button>
+                                <button type="button" id="clear-contact-selection">Clear</button>
+                                <button
+                                    type="submit"
+                                    id="delete-selected-contacts"
+                                    class="contact-delete-button"
+                                    disabled
+                                >Delete Selected</button>
+                            {% endif %}
+                        </div>
+
+                        <div class="contact-table-scroll">
+                            <table id="journal-contact-table" class="compact-contact-table">
+                                <thead>
+                                    <tr>
+                                        {% if user == adventure.owner %}
+                                            <th class="contact-select-column">
+                                                <input type="checkbox" id="select-all-contacts" aria-label="Select all contacts">
+                                            </th>
+                                        {% endif %}
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Callsign</th>
+                                        <th>Mode</th>
+                                        <th>Name</th>
+                                        <th>State / Country</th>
+                                        <th>Miles</th>
+                                        <th>Comment</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {% for contact in contacts %}
+                                        <tr>
+                                            {% if user == adventure.owner %}
+                                                <td class="contact-select-column">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="contact_ids"
+                                                        value="{{ contact.pk }}"
+                                                        class="contact-row-checkbox"
+                                                        aria-label="Select {{ contact.callsign }}"
+                                                    >
+                                                </td>
+                                            {% endif %}
+                                            <td>{{ contact.qso_date|date:"M j, Y" }}</td>
+                                            <td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
+                                            <td class="contact-call">{{ contact.callsign }}</td>
+                                            <td>{{ contact.mode|default:"—" }}</td>
+                                            <td>{{ contact.name|default:"—" }}</td>
+                                            <td>{{ contact.location_label|default:"—" }}</td>
+                                            <td>{{ contact.distance_miles|default_if_none:"—" }}</td>
+                                            <td>{{ contact.comment|default:"" }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
+                </details>
+            </section>
+        {% endif %}
+
+        {% if entry.radio or entry.antenna or entry.mode_ssb or entry.mode_cw or entry.mode_digital or entry.mode_fm or entry.mode_am or entry.mode_other %}
+            <section class="journal-view-section">
+                <h2>Station</h2>
+                <div class="station-summary">
+                    {% if entry.radio %}<span><strong>Radio:</strong> {{ entry.radio }}</span>{% endif %}
+                    {% if entry.antenna %}<span><strong>Antenna:</strong> {{ entry.antenna }}</span>{% endif %}
+                </div>
+            </section>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

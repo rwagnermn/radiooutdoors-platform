@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><article class="journal-entry-view">
+<div class="journal-view-heading">
+<div class="journal-heading-main">
+<p><a href="{{ adventure.get_absolute_url }}#journal-entries" class="back-to-journal-link">← Back to Adventure</a></p>
+<p class="journal-adventure-name">{{ adventure.title }}</p>
+<div class="compact-meta-row">
+<span>{{ entry.entry_at|date:"F j, Y — g:i A" }}</span>
+
+{% if user == adventure.owner %}
+<form
+    method="post"
+    action="{% url 'toggle_journal_visibility' entry.pk %}"
+    class="inline-visibility-form"
+>
+    {% csrf_token %}
+    <button
+        type="submit"
+        class="inline-visibility-control"
+        title="Click to make this Journal {% if entry.is_public %}private{% else %}public{% endif %}"
+    >
+        {% if entry.is_public %}Public{% else %}Private{% endif %}
+    </button>
+</form>
+{% else %}
+<span class="visibility-label">
+    {% if entry.is_public %}Public{% else %}Private{% endif %}
+</span>
+{% endif %}
+</div>
+<h1>{{ entry.title|default:"Journal Entry" }}</h1>
+</div>
+{% if user == adventure.owner %}
+<div class="journal-heading-actions">
+<a href="{% url 'import_adif' entry.pk %}" class="button-secondary-dark">Import Contacts</a>
+<a href="{% url 'edit_journal_entry' entry.pk %}" class="ro-small-action">Edit Journal</a>
+<form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
+onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">
+{% csrf_token %}
+<button type="submit" class="ro-small-action ro-danger-action">Delete Journal</button>
+</form>
+</div></div>
+{% endif %}
+</div>
+
+<section class="journal-notes-view"><h2>Journal Notes</h2>{{ entry.body|linebreaks }}</section>
+
+{% if entry.photos.all %}
+<section class="journal-view-section"><h2>Photos</h2><div class="journal-photo-grid journal-view-photos">
+{% for photo in entry.photos.all %}<figure class="journal-photo">
+<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">
+{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}</figure>{% endfor %}
+</div></section>
+{% endif %}
+
+{% if contact_count %}
+<section class="journal-view-section"><h2>Contacts</h2>
+<div class="contact-summary-grid">
+<div><strong>{{ contact_count }}</strong><span>Contacts</span></div>
+<div><strong>{{ state_count }}</strong><span>States / Provinces</span></div>
+<div><strong>{{ country_count }}</strong><span>Countries</span></div>
+<div><strong>{% if longest_contact %}{{ longest_contact.callsign }} · {{ longest_contact.distance_miles }} mi{% else %}—{% endif %}</strong><span>Longest Contact</span></div>
+</div>
+<details class="contact-details"><summary>Show {{ contact_count }} Contact{{ contact_count|pluralize }}</summary>
+<form method="post" action="{% url 'delete_selected_contacts' entry.pk %}" id="contact-delete-form" onsubmit="return confirmContactDelete();">
+{% csrf_token %}
+<div class="contact-toolbar">
+<input id="contact-search" class="contact-search" type="search" placeholder="Find callsign or place">
+{% if user == adventure.owner %}
+<button type="button" id="select-visible-contacts">Select Visible</button>
+<button type="button" id="clear-contact-selection">Clear</button>
+<button type="submit" id="delete-selected-contacts" class="contact-delete-button" disabled>Delete Selected</button>
+{% endif %}
+</div>
+<div class="contact-table-scroll"><table id="journal-contact-table" class="compact-contact-table">
+<thead><tr>{% if user == adventure.owner %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
+<th>Date</th><th>Time</th><th>Callsign</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Miles</th><th>Comment</th></tr></thead>
+<tbody>{% for contact in contacts %}<tr>
+{% if user == adventure.owner %}<td class="contact-select-column"><input type="checkbox" name="contact_ids" value="{{ contact.pk }}" class="contact-row-checkbox"></td>{% endif %}
+<td>{{ contact.qso_date|date:"M j, Y" }}</td>
+<td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
+<td class="contact-call">{{ contact.callsign }}</td><td>{{ contact.mode|default:"—" }}</td>
+<td>{{ contact.name|default:"—" }}</td><td>{{ contact.location_label|default:"—" }}</td>
+<td>{{ contact.distance_miles|default_if_none:"—" }}</td><td>{{ contact.comment|default:"" }}</td>
+</tr>{% endfor %}</tbody></table></div></form></div></section>
+{% endif %}
+</article></section>
+
+<script>
+(function(){
+ const table=document.getElementById("journal-contact-table");
+ const search=document.getElementById("contact-search");
+ if(!table||!search)return;
+ const all=()=>Array.from(table.querySelectorAll(".contact-row-checkbox"));
+ const visible=()=>all().filter(b=>!b.closest("tr").hidden);
+ const del=document.getElementById("delete-selected-contacts");
+ const update=()=>{
+  const n=all().filter(b=>b.checked).length;
+  if(del){del.disabled=n===0;del.textContent=n?"Delete Selected ("+n+")":"Delete Selected";}
+ };
+ search.addEventListener("input",function(){
+  const q=search.value.trim().toLowerCase();
+  table.querySelectorAll("tbody tr").forEach(r=>r.hidden=!!(q&&!r.textContent.toLowerCase().includes(q)));
+  update();
+ });
+ table.addEventListener("change",update);
+ const sa=document.getElementById("select-all-contacts");
+ if(sa)sa.addEventListener("change",()=>{visible().forEach(b=>b.checked=sa.checked);update();});
+ const sv=document.getElementById("select-visible-contacts");
+ if(sv)sv.addEventListener("click",()=>{visible().forEach(b=>b.checked=true);update();});
+ const cl=document.getElementById("clear-contact-selection");
+ if(cl)cl.addEventListener("click",()=>{all().forEach(b=>b.checked=false);update();});
+ window.confirmContactDelete=function(){
+  const n=all().filter(b=>b.checked).length;
+  return n>0&&confirm("Delete "+n+" selected contact"+(n===1?"?":"s?")+"\n\nThis cannot be undone.");
+ };
+ update();
+})();
+</script>
+{% endblock %}

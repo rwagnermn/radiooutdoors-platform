@@ -1,0 +1,156 @@
+
+/* Build 0.29 stabilization */
+.flash-message{transition:opacity .3s ease,transform .3s ease}
+.flash-message-hiding{opacity:0;transform:translateY(-6px)}
+.adventure-cover-image{width:100%;max-height:480px;object-fit:cover;border-radius:12px;margin-bottom:28px}
+.adventure-detail-heading,.journal-edit-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+.adventure-detail-copy{min-width:0;flex:1}
+.ro-actions-column{width:74px;min-width:74px;text-align:center!important;vertical-align:middle!important}
+.ro-action-menu{position:relative;display:inline-block}
+.ro-action-menu>summary{display:flex;align-items:center;justify-content:center;width:34px;height:30px;padding:0;border:1px solid #aeb8b0;border-radius:5px;background:#fff;color:#234231;font-size:17px;line-height:1;cursor:pointer;list-style:none;user-select:none}
+.ro-action-menu>summary::-webkit-details-marker{display:none}
+.ro-action-menu>summary:hover{background:#eef1ed}
+.ro-action-menu-panel{position:absolute;top:0;left:42px;z-index:9000;width:190px;padding:6px;border:1px solid #d8ded7;border-radius:8px;background:#fff;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+.ro-detail-menu{margin-top:76px;flex:0 0 auto}
+.ro-detail-menu .ro-action-menu-panel{right:42px;left:auto}
+.ro-action-menu-panel a,.ro-action-menu-panel button{display:block;width:100%;padding:8px 9px;border:0;border-radius:5px;background:transparent;color:#234231;text-align:left;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}
+.ro-action-menu-panel a:hover,.ro-action-menu-panel button:hover{background:#f2f4ef}
+.ro-action-menu-panel .danger-menu-item{color:#8b2d2d}
+.adventure-table-wrap{overflow-x:auto;overflow-y:visible;padding-bottom:200px;margin-bottom:-200px}
+.contact-select-column{width:42px!important;min-width:42px!important;padding:0!important;text-align:center!important;vertical-align:middle!important}
+.contact-select-column input[type="checkbox"]{display:block!important;width:16px!important;height:16px!important;margin:0 auto!important;float:none!important}
+.form-error-summary{margin-top:14px;padding:10px 12px;border:1px solid #b84a4a;border-radius:6px;color:#8b2d2d;background:#fff3f3;font-weight:700}
+
+
+/* Build 0.29.1 reliable controls */
+.ro-action-menu-button {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;
+    height:30px;
+    padding:0;
+    border:1px solid #aeb8b0;
+    border-radius:5px;
+    background:#fff;
+    color:#234231;
+    font-size:17px;
+    line-height:1;
+    cursor:pointer;
+}
+
+.ro-action-menu-button:hover {
+    background:#eef1ed;
+}
+
+.ro-action-menu-panel {
+    display:none;
+}
+
+.ro-action-menu.open .ro-action-menu-panel {
+    display:block;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    width:auto !important;
+    min-width:0 !important;
+    margin:0 8px 0 0 !important;
+    padding:0 !important;
+    pointer-events:auto !important;
+    cursor:pointer;
+}
+
+.selection-matrix label,
+.visibility-control label {
+    cursor:pointer;
+}
+
+
+/* Build 0.30 — no popup menus */
+.ro-action-stack {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    width:72px;
+    padding:3px;
+    border:1px solid #d8ded7;
+    border-radius:6px;
+    background:#fff;
+}
+
+.ro-action-stack a,
+.ro-action-stack button {
+    display:block;
+    width:100%;
+    padding:3px 5px;
+    border:0;
+    border-radius:4px;
+    background:transparent;
+    color:#234231;
+    text-align:left;
+    font:inherit;
+    font-size:13px;
+    font-weight:800;
+    line-height:1.25;
+    cursor:pointer;
+}
+
+.ro-action-stack a:hover,
+.ro-action-stack button:hover {
+    background:#eef1ed;
+}
+
+.ro-action-stack .danger-menu-item {
+    color:#8b2d2d;
+}
+
+.ro-journal-card-actions {
+    width:68px;
+}
+
+.ro-page-actions {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.ro-page-actions form,
+.journal-heading-actions form {
+    margin:0;
+}
+
+.ro-small-action {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:30px;
+    width:auto;
+    margin:0;
+    padding:5px 9px;
+    border:1px solid #aeb8b0;
+    border-radius:5px;
+    background:#fff;
+    color:#234231;
+    font:inherit;
+    font-size:14px;
+    font-weight:800;
+    line-height:1.1;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+.ro-small-action:hover {
+    background:#eef1ed;
+}
+
+.ro-danger-action {
+    color:#8b2d2d;
+}
+
+.ro-action-menu,
+.ro-action-menu-button,
+.ro-action-menu-panel {
+    display:none !important;
+}

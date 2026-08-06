@@ -1,0 +1,651 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content">
+
+    <div class="view-page-toolbar">
+        {% if editing_location %}
+            <a
+                href="{% url 'location_detail' editing_location.pk %}"
+                class="back-link-button"
+            >
+                ← Back to Location
+            </a>
+        {% else %}
+            <a href="{% url 'locations' %}" class="back-link-button">
+                ← Back to Locations
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="location-card location-editor-card">
+        <h1>{{ page_title }}</h1>
+
+        <form method="post" id="location-form">
+            {% csrf_token %}
+
+            <section class="location-editor-section">
+                <h2>Location</h2>
+
+                <div class="location-editor-grid">
+                    <div class="field-span-two">
+                        <label for="{{ location_form.name.id_for_label }}">
+                            Location Name
+                        </label>
+                        {{ location_form.name }}
+                        {% for error in location_form.name.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.location_type.id_for_label }}">
+                            Location Type
+                        </label>
+                        {{ location_form.location_type }}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.reference_code.id_for_label }}">
+                            Reference / Park ID
+                        </label>
+                        {{ location_form.reference_code }}
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.street_address.id_for_label }}">
+                            Street Address
+                        </label>
+                        {{ location_form.street_address }}
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.address_line_2.id_for_label }}">
+                            Address Line 2
+                        </label>
+                        {{ location_form.address_line_2 }}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.city.id_for_label }}">City</label>
+                        {{ location_form.city }}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.state.id_for_label }}">
+                            State / Province
+                        </label>
+                        {{ location_form.state }}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.postal_code.id_for_label }}">
+                            ZIP / Postal Code
+                        </label>
+                        {{ location_form.postal_code }}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.country.id_for_label }}">Country</label>
+                        {{ location_form.country }}
+                    </div>
+
+                    <div class="field-span-two address-map-note">
+                        <strong>Map integration:</strong>
+                        These fields can be entered manually now. Later, a map pin can
+                        suggest an address, but it will not overwrite a manually corrected address.
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.official_website.id_for_label }}">
+                            Official Website
+                        </label>
+                        {{ location_form.official_website }}
+                        <p class="field-help">
+                            Park, campground, government, airport, or other official page.
+                        </p>
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.description.id_for_label }}">
+                            Location Description
+                        </label>
+                        {{ location_form.description }}
+                    </div>
+                </div>
+            </section>
+
+            <section class="location-editor-section">
+                <h2>Operating Location</h2>
+                <p class="section-help">
+                    The exact place within the larger location where a station can be set up.
+                </p>
+
+                <div class="location-editor-grid">
+                    <div class="field-span-two">
+                        <label for="{{ operating_form.name.id_for_label }}">
+                            Operating Location Name
+                        </label>
+                        {{ operating_form.name }}
+                        {% for error in operating_form.name.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ operating_form.description.id_for_label }}">
+                            Operating Location Notes
+                        </label>
+                        {{ operating_form.description }}
+                    </div>
+                </div>
+            </section>
+
+
+            <section class="location-editor-section">
+                <div class="map-editor-heading">
+                    <div>
+                        <h2>Map Pins</h2>
+                        <p class="section-help">
+                            Search for the location, then place the general Location pin
+                            and the exact Operating Location pin.
+                        </p>
+                    </div>
+
+                    <div class="map-pin-buttons">
+                        <button type="button" id="choose-location-pin" class="active">
+                            Set Location Pin
+                        </button>
+                        <button type="button" id="choose-operating-pin">
+                            Set Operating Pin
+                        </button>
+                        <button type="button" id="clear-active-pin">
+                            Clear Selected Pin
+                        </button>
+                    </div>
+                </div>
+
+                {{ location_form.latitude }}
+                {{ location_form.longitude }}
+                {{ operating_form.latitude }}
+                {{ operating_form.longitude }}
+
+                {% if google_maps_api_key %}
+                    <div class="google-map-search-row">
+                        <input
+                            type="text"
+                            id="google-map-search"
+                            placeholder="Search park, place, or address"
+                            autocomplete="off"
+                        >
+                        <button type="button" id="google-map-search-button">
+                            Search Map
+                        </button>
+                    </div>
+
+                    <div class="map-active-instruction" id="map-active-instruction">
+                        {% if location_form.latitude.value and location_form.longitude.value %}
+                            The orange Location pin was placed from the main map.
+                            Drag it to fine-tune, or click the map to move it.
+                        {% else %}
+                            Click the map to place the orange Location pin.
+                        {% endif %}
+                    </div>
+
+                    <div id="location-pin-map" class="location-pin-map"></div>
+
+                    <div id="suggested-address-panel"
+                         class="suggested-address-panel"
+                         hidden>
+                        <div>
+                            <span>Suggested Address</span>
+                            <strong id="suggested-address-text"></strong>
+                        </div>
+                        <button type="button" id="use-suggested-address">
+                            Use Suggested Address
+                        </button>
+                    </div>
+
+                    <div class="map-coordinate-readout">
+                        <div>
+                            <span>Location Pin</span>
+                            <strong id="location-pin-readout">Not set</strong>
+                        </div>
+                        <div>
+                            <span>Operating Location Pin</span>
+                            <strong id="operating-pin-readout">Not set</strong>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="google-maps-setup-message">
+                        Google Maps API key needed.
+                    </div>
+                {% endif %}
+            </section>
+
+            <section class="location-editor-section">
+                <div class="amenities-editor-heading">
+                    <div>
+                        <h2>Location Amenities</h2>
+                        <p class="section-help">
+                            Unknown remains the default. Use the buttons for fast entry.
+                        </p>
+                    </div>
+
+                    <div class="amenity-set-buttons">
+                        <button type="button" id="set-all-no">
+                            Set All to No
+                        </button>
+
+                        <button type="button" id="set-all-unknown">
+                            Set All to Unknown
+                        </button>
+                    </div>
+                </div>
+
+                <div class="amenities-entry-matrix">
+                    <div>
+                        <label for="{{ operating_form.parking.id_for_label }}">
+                            Parking
+                        </label>
+                        {{ operating_form.parking }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.restrooms.id_for_label }}">
+                            Restrooms
+                        </label>
+                        {{ operating_form.restrooms }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.picnic_tables.id_for_label }}">
+                            Picnic Tables
+                        </label>
+                        {{ operating_form.picnic_tables }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.shelter.id_for_label }}">
+                            Shelter
+                        </label>
+                        {{ operating_form.shelter }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.shade.id_for_label }}">
+                            Shade
+                        </label>
+                        {{ operating_form.shade }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.power.id_for_label }}">
+                            Power
+                        </label>
+                        {{ operating_form.power }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.drinking_water.id_for_label }}">
+                            Drinking Water
+                        </label>
+                        {{ operating_form.drinking_water }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.cell_coverage_bars.id_for_label }}">
+                            Cell Coverage
+                        </label>
+                        {{ operating_form.cell_coverage_bars }}
+                    </div>
+
+                    <div>
+                        <label for="{{ operating_form.ambient_noise_level.id_for_label }}">
+                            Ambient Noise
+                        </label>
+                        {{ operating_form.ambient_noise_level }}
+                    </div>
+                </div>
+            </section>
+
+            <div class="location-editor-actions">
+                <button type="submit" class="button-primary">
+                    {{ save_label }}
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<script>
+(function () {
+    const yesNoFieldIds = [
+        "{{ operating_form.parking.id_for_label }}",
+        "{{ operating_form.restrooms.id_for_label }}",
+        "{{ operating_form.picnic_tables.id_for_label }}",
+        "{{ operating_form.shelter.id_for_label }}",
+        "{{ operating_form.shade.id_for_label }}",
+        "{{ operating_form.power.id_for_label }}",
+        "{{ operating_form.drinking_water.id_for_label }}"
+    ];
+
+    function setYesNoFields(value) {
+        yesNoFieldIds.forEach(function (fieldId) {
+            const field = document.getElementById(fieldId);
+
+            if (field) {
+                field.value = value;
+                field.dispatchEvent(new Event("change"));
+            }
+        });
+    }
+
+    document.getElementById("set-all-no").addEventListener(
+        "click",
+        function () {
+            setYesNoFields("no");
+        }
+    );
+
+    document.getElementById("set-all-unknown").addEventListener(
+        "click",
+        function () {
+            setYesNoFields("unknown");
+        }
+    );
+})();
+</script>
+
+{% if google_maps_api_key %}
+<script>
+let radioOutdoorsLocationMap;
+
+async function initLocationEditorMap() {
+    const {Map} = await google.maps.importLibrary("maps");
+    const {AdvancedMarkerElement, PinElement} =
+        await google.maps.importLibrary("marker");
+
+    const mapElement = document.getElementById("location-pin-map");
+    if (!mapElement) return;
+
+    const geocoder = new google.maps.Geocoder();
+
+    const locationLat = document.getElementById(
+        "{{ location_form.latitude.id_for_label }}"
+    );
+    const locationLng = document.getElementById(
+        "{{ location_form.longitude.id_for_label }}"
+    );
+    const operatingLat = document.getElementById(
+        "{{ operating_form.latitude.id_for_label }}"
+    );
+    const operatingLng = document.getElementById(
+        "{{ operating_form.longitude.id_for_label }}"
+    );
+
+    const locationReadout = document.getElementById("location-pin-readout");
+    const operatingReadout = document.getElementById("operating-pin-readout");
+    const instruction = document.getElementById("map-active-instruction");
+
+    const locationButton = document.getElementById("choose-location-pin");
+    const operatingButton = document.getElementById("choose-operating-pin");
+    const clearButton = document.getElementById("clear-active-pin");
+    const searchInput = document.getElementById("google-map-search");
+    const searchButton = document.getElementById("google-map-search-button");
+
+    const suggestionPanel = document.getElementById("suggested-address-panel");
+    const suggestionText = document.getElementById("suggested-address-text");
+    const useSuggestionButton = document.getElementById("use-suggested-address");
+
+    const street = document.getElementById(
+        "{{ location_form.street_address.id_for_label }}"
+    );
+    const city = document.getElementById(
+        "{{ location_form.city.id_for_label }}"
+    );
+    const state = document.getElementById(
+        "{{ location_form.state.id_for_label }}"
+    );
+    const postal = document.getElementById(
+        "{{ location_form.postal_code.id_for_label }}"
+    );
+    const country = document.getElementById(
+        "{{ location_form.country.id_for_label }}"
+    );
+
+    let activePin = "location";
+    let locationMarker = null;
+    let operatingMarker = null;
+    let suggestedAddress = null;
+
+    const numberOrNull = value => {
+        const number = parseFloat(value);
+        return Number.isFinite(number) ? number : null;
+    };
+
+    const locLat = numberOrNull(locationLat.value);
+    const locLng = numberOrNull(locationLng.value);
+    const opLat = numberOrNull(operatingLat.value);
+    const opLng = numberOrNull(operatingLng.value);
+
+    let center = {lat: 45.0, lng: -93.2};
+    let zoom = 6;
+
+    if (locLat !== null && locLng !== null) {
+        center = {lat: locLat, lng: locLng};
+        zoom = 14;
+    } else if (opLat !== null && opLng !== null) {
+        center = {lat: opLat, lng: opLng};
+        zoom = 15;
+    }
+
+    radioOutdoorsLocationMap = new Map(mapElement, {
+        center,
+        zoom,
+        mapId: "DEMO_MAP_ID",
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true
+    });
+
+    function updateReadouts() {
+        const a = numberOrNull(locationLat.value);
+        const b = numberOrNull(locationLng.value);
+        const c = numberOrNull(operatingLat.value);
+        const d = numberOrNull(operatingLng.value);
+
+        locationReadout.textContent =
+            a !== null && b !== null ? `${a.toFixed(6)}, ${b.toFixed(6)}` : "Not set";
+        operatingReadout.textContent =
+            c !== null && d !== null ? `${c.toFixed(6)}, ${d.toFixed(6)}` : "Not set";
+    }
+
+    function savePosition(kind, position) {
+        if (kind === "location") {
+            locationLat.value = position.lat.toFixed(6);
+            locationLng.value = position.lng.toFixed(6);
+        } else {
+            operatingLat.value = position.lat.toFixed(6);
+            operatingLng.value = position.lng.toFixed(6);
+        }
+        updateReadouts();
+    }
+
+    function pinElement(kind) {
+        return new PinElement({
+            background: kind === "location" ? "#ef880a" : "#234231",
+            borderColor: "#ffffff",
+            glyphColor: "#ffffff",
+            glyph: kind === "location" ? "L" : "O",
+            scale: 1.25
+        }).element;
+    }
+
+    function createMarker(kind, position) {
+        const marker = new AdvancedMarkerElement({
+            map: radioOutdoorsLocationMap,
+            position,
+            gmpDraggable: true,
+            content: pinElement(kind)
+        });
+
+        marker.addListener("dragend", function () {
+            const p = marker.position;
+            const position = {
+                lat: typeof p.lat === "function" ? p.lat() : p.lat,
+                lng: typeof p.lng === "function" ? p.lng() : p.lng
+            };
+            savePosition(kind, position);
+            if (kind === "location") suggestAddress(position);
+        });
+
+        return marker;
+    }
+
+    function setMarker(kind, position) {
+        if (kind === "location") {
+            if (!locationMarker) locationMarker = createMarker(kind, position);
+            else locationMarker.position = position;
+            savePosition(kind, position);
+            suggestAddress(position);
+        } else {
+            if (!operatingMarker) operatingMarker = createMarker(kind, position);
+            else operatingMarker.position = position;
+            savePosition(kind, position);
+        }
+    }
+
+    function selectPin(kind) {
+        activePin = kind;
+        locationButton.classList.toggle("active", kind === "location");
+        operatingButton.classList.toggle("active", kind === "operating");
+        instruction.textContent = kind === "location"
+            ? "Click the map to place the orange Location pin."
+            : "Click the map to place the green Operating Location pin.";
+    }
+
+    function value(result, type, shortName=false) {
+        const component = result.address_components.find(
+            item => item.types.includes(type)
+        );
+        if (!component) return "";
+        return shortName ? component.short_name : component.long_name;
+    }
+
+    function parseAddress(result) {
+        const streetNumber = value(result, "street_number");
+        const route = value(result, "route");
+        return {
+            formatted: result.formatted_address,
+            street: [streetNumber, route].filter(Boolean).join(" "),
+            city: value(result, "locality")
+                || value(result, "postal_town")
+                || value(result, "administrative_area_level_2"),
+            state: value(result, "administrative_area_level_1", true),
+            postal: value(result, "postal_code"),
+            country: value(result, "country")
+        };
+    }
+
+    async function suggestAddress(position) {
+        try {
+            const response = await geocoder.geocode({location: position});
+            if (!response.results.length) return;
+            suggestedAddress = parseAddress(response.results[0]);
+            suggestionText.textContent = suggestedAddress.formatted;
+            suggestionPanel.hidden = false;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    useSuggestionButton.addEventListener("click", function () {
+        if (!suggestedAddress) return;
+        street.value = suggestedAddress.street;
+        city.value = suggestedAddress.city;
+        state.value = suggestedAddress.state;
+        postal.value = suggestedAddress.postal;
+        country.value = suggestedAddress.country;
+        suggestionPanel.hidden = true;
+    });
+
+    locationButton.addEventListener("click", () => selectPin("location"));
+    operatingButton.addEventListener("click", () => selectPin("operating"));
+
+    clearButton.addEventListener("click", function () {
+        if (activePin === "location") {
+            if (locationMarker) locationMarker.map = null;
+            locationMarker = null;
+            locationLat.value = "";
+            locationLng.value = "";
+            suggestionPanel.hidden = true;
+        } else {
+            if (operatingMarker) operatingMarker.map = null;
+            operatingMarker = null;
+            operatingLat.value = "";
+            operatingLng.value = "";
+        }
+        updateReadouts();
+    });
+
+    radioOutdoorsLocationMap.addListener("click", function (event) {
+        if (!event.latLng) return;
+        setMarker(activePin, {
+            lat: event.latLng.lat(),
+            lng: event.latLng.lng()
+        });
+    });
+
+    async function searchMap() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        const response = await geocoder.geocode({address: query});
+        if (!response.results.length) {
+            alert("No matching location was found.");
+            return;
+        }
+
+        const result = response.results[0];
+        const position = {
+            lat: result.geometry.location.lat(),
+            lng: result.geometry.location.lng()
+        };
+
+        radioOutdoorsLocationMap.setCenter(position);
+        radioOutdoorsLocationMap.setZoom(15);
+        selectPin("location");
+        setMarker("location", position);
+    }
+
+    searchButton.addEventListener("click", searchMap);
+    searchInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            searchMap();
+        }
+    });
+
+    if (locLat !== null && locLng !== null) {
+        locationMarker = createMarker("location", {lat: locLat, lng: locLng});
+    }
+    if (opLat !== null && opLng !== null) {
+        operatingMarker = createMarker("operating", {lat: opLat, lng: opLng});
+    }
+
+    updateReadouts();
+    selectPin("location");
+}
+
+window.initLocationEditorMap = initLocationEditorMap;
+</script>
+<script
+    async
+    src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initLocationEditorMap"
+></script>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}My Followers | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+
+<div class="section-heading-row">
+<div>
+<h1>My Followers</h1>
+<p>
+You choose who receives notices about your new public Adventures.
+Names and email addresses are visible only to you and site administrators.
+</p>
+</div>
+<a href="{% url 'member_detail' profile.callsign %}" class="ro-small-action">Back to Profile</a>
+</div>
+
+<section class="location-card follower-invite-card">
+<h2>Add a Follower</h2>
+<p>
+Enter a name and email. Existing Radio Outdoors accounts are added as approved
+Followers. Everyone else receives an invitation to create a free Follower
+account.
+</p>
+
+<form method="post" action="{% url 'invite_follower' %}" class="follower-invite-form">
+{% csrf_token %}
+<div>
+<label for="{{ invitation_form.name.id_for_label }}">Name</label>
+{{ invitation_form.name }}
+{{ invitation_form.name.errors }}
+</div>
+<div>
+<label for="{{ invitation_form.email.id_for_label }}">Email address</label>
+{{ invitation_form.email }}
+{{ invitation_form.email.errors }}
+</div>
+<button type="submit" class="button-primary">Add or Invite Follower</button>
+</form>
+</section>
+
+<h2>Invitations</h2>
+<div class="member-table-scroll follower-section-table">
+<table class="member-directory-table follower-table">
+<thead>
+<tr>
+<th>Name</th>
+<th>Email</th>
+<th>Sent</th>
+<th>Status</th>
+<th>Accepted</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+{% for invitation in invitations %}
+<tr>
+<td>{{ invitation.name }}</td>
+<td>{{ invitation.email }}</td>
+<td>{{ invitation.created_at|date:"M j, Y" }}</td>
+<td>{{ invitation.get_status_display }}</td>
+<td>
+{% if invitation.accepted_at %}
+{{ invitation.accepted_at|date:"M j, Y" }}
+{% else %}
+—
+{% endif %}
+</td>
+<td>
+<div class="follower-actions">
+{% if invitation.status == "pending" %}
+<form method="post" action="{% url 'invitation_action' invitation.pk 'resend' %}">{% csrf_token %}<button type="submit">Resend</button></form>
+<form method="post" action="{% url 'invitation_action' invitation.pk 'cancel' %}">{% csrf_token %}<button type="submit" class="danger-menu-item">Cancel</button></form>
+{% else %}
+—
+{% endif %}
+</div>
+</td>
+</tr>
+{% empty %}
+<tr><td colspan="6">No invitations have been sent.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<h2>Follower Accounts</h2>
+<div class="member-table-scroll follower-section-table">
+<table class="member-directory-table follower-table">
+<thead>
+<tr>
+<th>Name</th>
+<th>Email</th>
+<th>Requested</th>
+<th>Status</th>
+<th>Responded</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+{% for relationship in relationships %}
+<tr>
+<td>{{ relationship.follower.get_full_name|default:relationship.follower.username }}</td>
+<td>{{ relationship.follower.email|default:"No email supplied" }}</td>
+<td>{{ relationship.created_at|date:"M j, Y" }}</td>
+<td>{{ relationship.get_status_display }}</td>
+<td>{% if relationship.responded_at %}{{ relationship.responded_at|date:"M j, Y" }}{% else %}—{% endif %}</td>
+<td>
+<div class="follower-actions">
+{% if relationship.status == "pending" %}
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'approve' %}">{% csrf_token %}<button type="submit">Approve</button></form>
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'decline' %}">{% csrf_token %}<button type="submit">Decline</button></form>
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'block' %}">{% csrf_token %}<button type="submit" class="danger-menu-item">Block</button></form>
+{% elif relationship.status == "approved" %}
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'remove' %}">{% csrf_token %}<button type="submit">Remove</button></form>
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'block' %}">{% csrf_token %}<button type="submit" class="danger-menu-item">Block</button></form>
+{% elif relationship.status == "blocked" %}
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'unblock' %}">{% csrf_token %}<button type="submit">Unblock</button></form>
+{% else %}
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'approve' %}">{% csrf_token %}<button type="submit">Approve</button></form>
+<form method="post" action="{% url 'respond_to_follow' relationship.pk 'block' %}">{% csrf_token %}<button type="submit" class="danger-menu-item">Block</button></form>
+{% endif %}
+</div>
+</td>
+</tr>
+{% empty %}
+<tr><td colspan="6">No Follower accounts yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+</section>
+{% endblock %}

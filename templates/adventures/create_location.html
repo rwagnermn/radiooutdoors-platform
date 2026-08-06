@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+    <div class="view-page-toolbar">
+        <a href="{% if editing_location %}{% url 'location_detail' editing_location.pk %}{% else %}{% url 'locations' %}{% endif %}" class="back-link-button">← Back</a>
+    </div>
+
+    <div class="location-card location-editor-card">
+        <h1>{{ page_title }}</h1>
+
+        {% if location_form.errors or operating_form.errors %}
+        <div class="form-error-summary" role="alert">
+            <strong>The Location was not saved.</strong>
+            <p>Fix the following:</p>
+            <ul class="form-error-list">
+                {% for field in location_form %}
+                    {% for error in field.errors %}
+                        <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                    {% endfor %}
+                {% endfor %}
+                {% for error in location_form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                {% if operating_form %}
+                    {% for field in operating_form %}
+                        {% for error in field.errors %}
+                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in operating_form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form method="post" id="location-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="return_to" value="{{ return_to }}">
+            <input type="hidden" name="draft_title" value="{{ draft_title }}">
+            <input type="hidden" name="draft_public" value="{{ draft_public }}">
+
+            <section class="location-editor-section">
+                <h2>Location</h2>
+                <p class="section-help">Start typing a park, airport, campground, or address. Select the match to fill the address.</p>
+
+                <div class="location-editor-grid">
+                    <div class="field-span-two">
+                        <label for="{{ location_form.name.id_for_label }}">Location Name</label>
+                        {{ location_form.name }}
+                        {% for error in location_form.name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.location_type.id_for_label }}">Location Type</label>
+                        {{ location_form.location_type }}
+                        {% for error in location_form.location_type.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ location_form.reference_code.id_for_label }}">Reference / Park ID</label>
+                        {{ location_form.reference_code }}
+                        {% for error in location_form.reference_code.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.street_address.id_for_label }}">Street Address</label>
+                        {{ location_form.street_address }}
+                        {% for error in location_form.street_address.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.address_line_2.id_for_label }}">Address Line 2</label>
+                        {{ location_form.address_line_2 }}
+                    </div>
+
+                    <div><label for="{{ location_form.city.id_for_label }}">City</label>{{ location_form.city }}</div>
+                    <div><label for="{{ location_form.state.id_for_label }}">State / Province</label>{{ location_form.state }}</div>
+                    <div><label for="{{ location_form.postal_code.id_for_label }}">ZIP / Postal Code</label>{{ location_form.postal_code }}</div>
+                    <div><label for="{{ location_form.country.id_for_label }}">Country</label>{{ location_form.country }}</div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.official_website.id_for_label }}">Official Website</label>
+                        {{ location_form.official_website }}
+                        {% for error in location_form.official_website.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="field-span-two">
+                        <label for="{{ location_form.description.id_for_label }}">Location Notes (optional)</label>
+                        {{ location_form.description }}
+                    </div>
+                </div>
+
+                {{ location_form.latitude }}
+                {{ location_form.longitude }}
+            </section>
+
+            <section id="advisory-editor-section" class="location-editor-section advisory-editor-section{% if location_form.has_operating_advisory.value %} advisory-active{% endif %}{% if location_form.operating_advisory.errors %} advisory-has-error{% endif %}">
+                <label class="advisory-checkbox" for="{{ location_form.has_operating_advisory.id_for_label }}">
+                    {{ location_form.has_operating_advisory }}
+                    <span><strong>Operating Advisory</strong><small>Show this Location with a red pin. Other operators should read the note before making the trip.</small></span>
+                </label>
+                <div id="advisory-note-wrap" class="advisory-note-wrap">
+                    <label for="{{ location_form.operating_advisory.id_for_label }}">Advisory Note</label>
+                    {{ location_form.operating_advisory }}
+                    {% for error in location_form.operating_advisory.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                </div>
+            </section>
+
+            {% if operating_form %}
+            <section class="location-editor-section">
+                <h2>Add First Operating Position</h2>
+                <p class="section-help">Name the exact place where the station can be set up, then click the map to place the blue pin.</p>
+
+                <div class="location-editor-grid">
+                    <div class="field-span-two">
+                        <label for="{{ operating_form.name.id_for_label }}">Operating Position</label>
+                        {{ operating_form.name }}
+                        {% for error in operating_form.name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field-span-two">
+                        <label for="{{ operating_form.description.id_for_label }}">Notes (optional)</label>
+                        {{ operating_form.description }}
+                    </div>
+                </div>
+
+                <div class="amenities-editor-heading">
+                    <h3>Amenities</h3>
+                    <p class="section-help">Choose what is known. Leave anything else as Unknown.</p>
+                </div>
+
+                <div class="location-editor-grid amenities-editor-grid">
+                    <div>
+                        <label for="{{ operating_form.parking.id_for_label }}">Parking</label>
+                        {{ operating_form.parking }}
+                        {% for error in operating_form.parking.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.restrooms.id_for_label }}">Restrooms</label>
+                        {{ operating_form.restrooms }}
+                        {% for error in operating_form.restrooms.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.picnic_tables.id_for_label }}">Picnic Tables</label>
+                        {{ operating_form.picnic_tables }}
+                        {% for error in operating_form.picnic_tables.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.shelter.id_for_label }}">Shelter</label>
+                        {{ operating_form.shelter }}
+                        {% for error in operating_form.shelter.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.shade.id_for_label }}">Shade</label>
+                        {{ operating_form.shade }}
+                        {% for error in operating_form.shade.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.power.id_for_label }}">Power</label>
+                        {{ operating_form.power }}
+                        {% for error in operating_form.power.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.drinking_water.id_for_label }}">Drinking Water</label>
+                        {{ operating_form.drinking_water }}
+                        {% for error in operating_form.drinking_water.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.cell_coverage_bars.id_for_label }}">Cell Coverage</label>
+                        {{ operating_form.cell_coverage_bars }}
+                        {% for error in operating_form.cell_coverage_bars.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        <label for="{{ operating_form.ambient_noise_level.id_for_label }}">Ambient Noise</label>
+                        {{ operating_form.ambient_noise_level }}
+                        {% for error in operating_form.ambient_noise_level.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+                </div>
+
+                {{ operating_form.latitude }}
+                {{ operating_form.longitude }}
+
+                {% if google_maps_api_key %}
+                    <div id="position-map" class="location-pin-map"></div>
+                    <p id="position-map-status" class="field-help">Select a Location above or click the map to place the blue Operating Position pin.</p>
+                {% else %}
+                    <div class="google-maps-setup-message">Google Maps API key needed to place the Operating Position.</div>
+                {% endif %}
+            </section>
+            {% endif %}
+
+            <button type="submit" class="button-primary">{{ save_label }}</button>
+        </form>
+    </div>
+</section>
+
+<script>
+(function () {
+    const checkbox = document.getElementById("{{ location_form.has_operating_advisory.id_for_label }}");
+    const noteWrap = document.getElementById("advisory-note-wrap");
+    const advisorySection = document.getElementById("advisory-editor-section");
+    function showAdvisoryNote() {
+        if (checkbox && noteWrap) {
+            noteWrap.hidden = !checkbox.checked;
+        }
+        if (checkbox && advisorySection) {
+            advisorySection.classList.toggle("advisory-active", checkbox.checked);
+        }
+    }
+    if (checkbox) checkbox.addEventListener("change", showAdvisoryNote);
+    showAdvisoryNote();
+})();
+</script>
+
+{% if operating_form and google_maps_api_key %}
+<script>
+async function initLocationEditor() {
+    const {Map} = await google.maps.importLibrary("maps");
+    const {AdvancedMarkerElement, PinElement} = await google.maps.importLibrary("marker");
+    const {Autocomplete} = await google.maps.importLibrary("places");
+
+    const locationName = document.getElementById("{{ location_form.name.id_for_label }}");
+    const street = document.getElementById("{{ location_form.street_address.id_for_label }}");
+    const city = document.getElementById("{{ location_form.city.id_for_label }}");
+    const state = document.getElementById("{{ location_form.state.id_for_label }}");
+    const postal = document.getElementById("{{ location_form.postal_code.id_for_label }}");
+    const country = document.getElementById("{{ location_form.country.id_for_label }}");
+    const website = document.getElementById("{{ location_form.official_website.id_for_label }}");
+    const locationLat = document.getElementById("{{ location_form.latitude.id_for_label }}");
+    const locationLng = document.getElementById("{{ location_form.longitude.id_for_label }}");
+    const positionLat = document.getElementById("{{ operating_form.latitude.id_for_label }}");
+    const positionLng = document.getElementById("{{ operating_form.longitude.id_for_label }}");
+    const status = document.getElementById("position-map-status");
+
+    const startingPosition = {
+        lat: parseFloat(positionLat.value || locationLat.value) || 45.0,
+        lng: parseFloat(positionLng.value || locationLng.value) || -93.0
+    };
+
+    const map = new Map(document.getElementById("position-map"), {
+        center: startingPosition,
+        zoom: (positionLat.value || locationLat.value) ? 15 : 7,
+        mapId: "DEMO_MAP_ID",
+        streetViewControl: true,
+        mapTypeControl: true
+    });
+
+    let marker = null;
+    function placePosition(pos, pan) {
+        const clean = {lat: Number(pos.lat), lng: Number(pos.lng)};
+        positionLat.value = clean.lat.toFixed(6);
+        positionLng.value = clean.lng.toFixed(6);
+        if (marker) marker.map = null;
+        const pin = new PinElement({background: "#2e6fd8", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "O"});
+        marker = new AdvancedMarkerElement({map: map, position: clean, content: pin.element, title: "Operating Position"});
+        if (pan) { map.panTo(clean); map.setZoom(16); }
+        if (status) status.textContent = "Blue Operating Position pin placed.";
+    }
+
+    if (positionLat.value && positionLng.value) placePosition(startingPosition, false);
+
+    map.addListener("click", function (event) {
+        placePosition({lat: event.latLng.lat(), lng: event.latLng.lng()}, false);
+    });
+
+    const autocomplete = new Autocomplete(locationName, {
+        fields: ["name", "formatted_address", "address_components", "geometry", "website"],
+        types: ["establishment", "geocode"]
+    });
+
+    autocomplete.addListener("place_changed", function () {
+        const place = autocomplete.getPlace();
+        if (!place.geometry || !place.geometry.location) return;
+
+        if (place.name) locationName.value = place.name;
+        if (place.website && !website.value) website.value = place.website;
+
+        let streetNumber = "";
+        let route = "";
+        let locality = "";
+        let admin = "";
+        let zip = "";
+        let nation = "";
+
+        (place.address_components || []).forEach(function (component) {
+            const types = component.types || [];
+            if (types.includes("street_number")) streetNumber = component.long_name;
+            if (types.includes("route")) route = component.long_name;
+            if (types.includes("locality") || types.includes("postal_town")) locality = component.long_name;
+            if (!locality && types.includes("administrative_area_level_2")) locality = component.long_name;
+            if (types.includes("administrative_area_level_1")) admin = component.short_name;
+            if (types.includes("postal_code")) zip = component.long_name;
+            if (types.includes("country")) nation = component.long_name;
+        });
+
+        street.value = [streetNumber, route].filter(Boolean).join(" ");
+        city.value = locality;
+        state.value = admin;
+        postal.value = zip;
+        country.value = nation || country.value;
+
+        const pos = {lat: place.geometry.location.lat(), lng: place.geometry.location.lng()};
+        locationLat.value = pos.lat.toFixed(6);
+        locationLng.value = pos.lng.toFixed(6);
+        placePosition(pos, true);
+    });
+}
+window.initLocationEditor = initLocationEditor;
+</script>
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker,places&callback=initLocationEditor"></script>
+{% endif %}
+{% endblock %}

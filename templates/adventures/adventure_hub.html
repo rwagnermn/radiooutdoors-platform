@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Adventures | Radio Outdoors{% endblock %}
+
+{% block content %}
+
+<section class="content">
+
+    <div style="max-width:1050px;margin:45px auto;">
+
+        <header style="text-align:center;margin-bottom:45px;">
+            <h1>Adventures</h1>
+            <p>Write your story or explore adventures shared by other operators.</p>
+        </header>
+
+        <div class="adventure-grid">
+
+            <article class="location-card">
+                <h2>My Adventures</h2>
+                <p>
+                    Continue an active Adventure Journal or revisit completed adventures.
+                </p>
+
+                {% if user.is_authenticated %}
+                    <p style="margin-top:25px;">
+                        <a href="{% url 'my_adventures' %}"
+                           class="button-primary">
+                            View My Adventures
+                        </a>
+                    </p>
+                {% else %}
+                    <p style="margin-top:25px;">
+                        Sign in to view your adventures.
+                    </p>
+                {% endif %}
+            </article>
+
+            <article class="location-card">
+                <h2>All Adventures</h2>
+                <p>
+                    Browse the outdoor radio stories shared by all operators.
+                </p>
+
+                <p style="margin-top:25px;">
+                    <a href="{% url 'all_adventures' %}"
+                       class="button-primary">
+                        Explore All Adventures
+                    </a>
+                </p>
+            </article>
+
+        </div>
+
+        {% if user.is_authenticated %}
+            <p style="text-align:center;margin-top:35px;">
+                <a href="{% url 'start_adventure' %}"
+                   class="button-secondary">
+                    Start the Adventure
+                </a>
+            </p>
+        {% endif %}
+
+    </div>
+
+</section>
+
+{% endblock %}

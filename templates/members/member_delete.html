@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ profile.callsign }} | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><div class="location-card member-delete-card">
+<h1>Delete {{ profile.callsign }}</h1>
+<p>This permanently deletes the account and all associated Adventures, Journals, photos, contacts, and comments.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}
+<button type="submit" class="member-danger-button">Delete Member and All Data</button>
+<a href="{% url 'member_admin_list' %}">Cancel</a>
+</form>
+</div></section>
+{% endblock %}

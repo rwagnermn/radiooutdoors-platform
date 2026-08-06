@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ adventure.title }} | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+{% if user == adventure.owner %}
+<div class="view-page-toolbar"><a href="{% url 'my_adventures' %}" class="back-link-button">← Back to My Adventures</a></div>
+{% endif %}
+{% if adventure.cover_photo %}
+<img src="{{ adventure.cover_photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ adventure.title }}" class="adventure-cover-image">
+{% endif %}
+<div class="adventure-detail-heading">
+<div class="adventure-detail-copy">
+<p><span class="adventure-status adventure-status-{{ adventure.display_status_key }}">{{ adventure.display_status_label }}</span>
+<span class="adventure-status-updated">Updated {{ adventure.updated_at|timesince }} ago</span></p>
+<h1>{{ adventure.title }}</h1>
+<div class="compact-meta-row">
+<span>{{ adventure.started_at|date:"F j, Y" }}</span>
+<span>{{ adventure.owner }}</span>
+
+{% if user == adventure.owner %}
+<form
+    method="post"
+    action="{% url 'toggle_adventure_visibility' adventure.slug %}"
+    class="inline-visibility-form"
+>
+    {% csrf_token %}
+    <button
+        type="submit"
+        class="inline-visibility-control"
+        title="Click to make this Adventure {% if adventure.is_public %}private{% else %}public{% endif %}"
+    >
+        {% if adventure.is_public %}Public{% else %}Private{% endif %}
+    </button>
+</form>
+{% else %}
+<span class="visibility-label">
+    {% if adventure.is_public %}Public{% else %}Private{% endif %}
+</span>
+{% endif %}
+</div>
+<p>{% if adventure.location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}Location not entered{% endif %}</p>
+{% if adventure.operating_location %}<p><strong>Operating Location:</strong> {{ adventure.operating_location.name }}</p>{% endif %}
+</div>
+{% if user == adventure.owner %}
+<div class="ro-page-actions">
+<a href="{% url 'edit_adventure' adventure.slug %}" class="ro-small-action">Edit Adventure</a>
+<form method="post" action="{% url 'delete_adventure' adventure.slug %}"
+onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');">
+{% csrf_token %}
+<button type="submit" class="ro-small-action ro-danger-action">Delete Adventure</button>
+</form>
+</div>
+{% endif %}
+</div>
+
+{% if adventure.summary %}<section class="adventure-overview-card"><h2>Adventure Summary</h2><div>{{ adventure.summary|linebreaks }}</div></section>{% endif %}
+
+<section id="journal-entries" class="adventure-journal-section">
+<div class="adventure-journal-heading"><div><p class="adventure-journal-kicker">The pages of this Adventure</p><h2>Adventure Journal</h2></div>
+{% if user == adventure.owner %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">Add Journal Entry</a>{% endif %}</div>
+
+{% for entry in journal_entries %}
+<article class="location-card journal-entry-clickable" tabindex="0" role="link"
+onclick="window.location='{% url 'journal_entry_detail' entry.pk %}';"
+onkeydown="if(event.key==='Enter'){window.location='{% url 'journal_entry_detail' entry.pk %}';}">
+<div class="journal-entry-public-heading">
+<div><p class="journal-entry-date-line">{{ entry.entry_at|date:"F j, Y — g:i A" }} · {% if entry.is_public %}Public{% else %}Private{% endif %}</p>
+<h3>{{ entry.title|default:"Journal Entry" }}</h3></div>
+{% if user == adventure.owner %}
+<div class="ro-action-stack ro-journal-card-actions" onclick="event.stopPropagation();">
+<a href="{% url 'journal_entry_detail' entry.pk %}">View</a>
+<a href="{% url 'edit_journal_entry' entry.pk %}">Edit</a>
+<form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
+onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">
+{% csrf_token %}
+<button type="submit" class="danger-menu-item">Delete</button>
+</form>
+</div>
+{% endif %}
+</div>
+<div class="journal-entry-preview">{{ entry.body|truncatewords:55|linebreaks }}</div>
+{% if entry.photos.all %}<div class="journal-entry-thumbnail-row">
+{% for photo in entry.photos.all|slice:":4" %}<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">{% endfor %}
+</div>{% endif %}
+<p class="journal-entry-open-hint">Open Journal Entry</p>
+</article>
+{% empty %}<div class="location-card">No journal entries yet.</div>{% endfor %}
+</section>
+{% if adventure.lessons_learned %}<section class="adventure-lessons-card"><h2>Lessons Learned</h2><div>{{ adventure.lessons_learned|linebreaks }}</div></section>{% endif %}
+</section>
+{% endblock %}

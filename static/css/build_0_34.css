@@ -1,0 +1,21 @@
+/* Build 0.34 — Registration and Navigation */
+.header-container{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.main-nav{flex:1}
+.account-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.account-nav a,.account-nav button{white-space:nowrap}
+.account-nav form{margin:0}
+.account-nav button{width:auto;margin:0;padding:7px 10px;border:1px solid rgba(255,255,255,.65);border-radius:5px;background:transparent;color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.account-nav button:hover{background:rgba(255,255,255,.14)}
+.create-account-link{padding:7px 10px;border:1px solid #f0b429;border-radius:5px}
+.registration-card{max-width:900px;margin:auto}
+.registration-kicker{text-transform:uppercase;letter-spacing:.08em;color:#ba6c11;font-weight:900}
+.registration-explainer{margin:20px 0;padding:14px 16px;border:1px solid #d8ded7;border-radius:8px;background:#f7f8f5}
+.registration-explainer p{margin:8px 0}
+.registration-form small{display:block;margin-top:5px;color:#666}
+.registration-signin{margin-top:18px}
+.account-shortcuts{display:flex;gap:8px;flex-wrap:wrap}
+.visitor-follow-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media(max-width:1050px){
+.header-container{align-items:flex-start}
+.main-nav,.account-nav{width:100%}
+}

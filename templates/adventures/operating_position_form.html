@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Add Operating Position{% endblock %}
+{% block content %}
+<section class="content">
+<div class="view-page-toolbar"><a href="{% url 'location_detail' location.pk %}" class="back-link-button">← Back to {{ location.name }}</a></div>
+<div class="location-card location-editor-card">
+<h1>Add Operating Position</h1><p>{{ location.name }}</p>
+<form method="post">{% csrf_token %}
+{{ form.non_field_errors }}
+<label for="{{ form.name.id_for_label }}">Operating Position</label>{{ form.name }}{{ form.name.errors }}
+<label for="{{ form.description.id_for_label }}">Notes (optional)</label>{{ form.description }}{{ form.description.errors }}
+{{ form.latitude }}{{ form.longitude }}
+{% if google_maps_api_key %}<p class="field-help">Click the map where the station can be set up.</p><div id="position-map" class="location-pin-map"></div>{% endif %}
+<div class="amenities-editor-heading"><h2>Amenities</h2></div>
+<div class="amenities-entry-matrix">
+<div><label for="{{ form.parking.id_for_label }}">Parking</label>{{ form.parking }}</div>
+<div><label for="{{ form.restrooms.id_for_label }}">Restrooms</label>{{ form.restrooms }}</div>
+<div><label for="{{ form.picnic_tables.id_for_label }}">Picnic Tables</label>{{ form.picnic_tables }}</div>
+<div><label for="{{ form.shelter.id_for_label }}">Shelter</label>{{ form.shelter }}</div>
+<div><label for="{{ form.shade.id_for_label }}">Shade</label>{{ form.shade }}</div>
+<div><label for="{{ form.power.id_for_label }}">Power</label>{{ form.power }}</div>
+<div><label for="{{ form.drinking_water.id_for_label }}">Drinking Water</label>{{ form.drinking_water }}</div>
+<div><label for="{{ form.cell_coverage_bars.id_for_label }}">Cell Coverage</label>{{ form.cell_coverage_bars }}</div>
+<div><label for="{{ form.ambient_noise_level.id_for_label }}">Ambient Noise</label>{{ form.ambient_noise_level }}</div>
+</div>
+<button type="submit" class="button-primary">Save Operating Position</button>
+</form></div></section>
+{% if google_maps_api_key %}
+<script>
+async function initPositionMap(){
+ const {Map}=await google.maps.importLibrary("maps");
+ const {AdvancedMarkerElement,PinElement}=await google.maps.importLibrary("marker");
+ const lat=document.getElementById("{{ form.latitude.id_for_label }}");
+ const lng=document.getElementById("{{ form.longitude.id_for_label }}");
+ const initial=(lat.value&&lng.value)?{lat:parseFloat(lat.value),lng:parseFloat(lng.value)}:{lat:45,lng:-93};
+ const map=new Map(document.getElementById("position-map"),{center:initial,zoom:(lat.value&&lng.value)?16:8,mapId:"DEMO_MAP_ID"});
+ let marker;
+ function place(pos){if(marker)marker.map=null;const pin=new PinElement({background:"#2e6fd8",borderColor:"#fff",glyphColor:"#fff"});marker=new AdvancedMarkerElement({map,position:pos,content:pin.element});}
+ if(lat.value&&lng.value)place(initial);
+ map.addListener("click",e=>{lat.value=e.latLng.lat().toFixed(6);lng.value=e.latLng.lng().toFixed(6);place(e.latLng);});
+}
+window.initPositionMap=initPositionMap;
+</script>
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initPositionMap"></script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,336 @@
+﻿{% extends "base.html" %}
+{% block title %}{{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+    <article class="journal-entry-view">
+        <div class="journal-view-heading">
+            <div>
+                <p>
+                    <a
+                        href="{{ adventure.get_absolute_url }}#journal-entries"
+                        class="back-to-journal-link"
+                    >
+                        â† Back to Adventure
+                    </a>
+                </p>
+                <p class="journal-adventure-name">{{ adventure.title }}</p>
+                <p class="journal-entry-date">{{ entry.entry_at|date:"F j, Y â€” g:i A" }}</p>
+                <h1>{{ entry.title|default:"Journal Entry" }}</h1>
+            </div>
+            {% if user == adventure.owner %}
+                <div class="journal-owner-actions">
+                    <a
+                        href="{% url 'import_adif' entry.pk %}"
+                        class="button-secondary-dark"
+                    >
+                        Import Contacts
+                    </a>
+                    <a
+                        href="{% url 'edit_journal_entry' entry.pk %}"
+                        class="button-primary"
+                    >
+                        Edit Journal Entry
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+
+        <section class="journal-notes-view">
+            <h2>Journal Notes</h2>
+            {{ entry.body|linebreaks }}
+        </section>
+
+        {% if entry.photos.all %}
+            <section class="journal-view-section">
+                <h2>Photos</h2>
+                <div class="journal-photo-grid journal-view-photos">
+                    {% for photo in entry.photos.all %}
+                        <figure class="journal-photo">
+                            <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:'Adventure photo' }}">
+                            {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}
+                        </figure>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+
+        {% if contact_count %}
+            <section class="journal-view-section contact-journal-section">
+                <div class="contact-section-heading">
+                    <div>
+                        <h2>Contacts</h2>
+                        <p>Imported from the operator's primary logbook.</p>
+                    </div>
+                    <strong class="contact-total">{{ contact_count }}</strong>
+                </div>
+
+                <div class="contact-summary-strip">
+                    <div>
+                        <span>Contacts</span>
+                        <strong>{{ contact_count }}</strong>
+                    </div>
+                    <div>
+                        <span>States / Provinces</span>
+                        <strong>{{ state_count }}</strong>
+                    </div>
+                    <div>
+                        <span>Countries</span>
+                        <strong>{{ country_count }}</strong>
+                    </div>
+                    <div>
+                        <span>Longest Contact</span>
+                        <strong>
+                            {% if longest_contact %}
+                                {{ longest_contact.callsign }}
+                                Â· {{ longest_contact.distance_miles }} mi
+                            {% else %}
+                                â€”
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
+
+                <details class="contact-details">
+                    <summary>
+                        Show {{ contact_count }} Contact{{ contact_count|pluralize }}
+                    </summary>
+
+                    <div class="contact-table-tools">
+                        <label for="contact-search">Find callsign or place</label>
+                        <input
+                            id="contact-search"
+                            type="search"
+                            placeholder="Start typing..."
+                        >
+                    </div>
+
+                    <div class="contact-table-scroll">
+                        <table
+                            class="compact-contact-table"
+                            id="journal-contact-table"
+                        >
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Callsign</th>
+                                    <th>Mode</th>
+                                    <th>Name</th>
+                                    <th>State / Country</th>
+                                    <th class="text-right">Miles</th>
+                                    <th>Comment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for contact in contacts %}
+                                    <tr>
+                                        <td>{{ contact.qso_date|date:"M j, Y" }}</td>
+                                        <td>
+                                            {% if contact.time_on %}
+                                                {{ contact.time_on|time:"H:i" }}
+                                            {% else %}
+                                                â€”
+                                            {% endif %}
+                                        </td>
+                                        <td class="contact-call">{{ contact.callsign }}</td>
+                                        <td>{{ contact.mode|default:"â€”" }}</td>
+                                        <td>{{ contact.name|default:"â€”" }}</td>
+                                        <td>{{ contact.location_label|default:"â€”" }}</td>
+                                        <td class="text-right">
+                                            {{ contact.distance_miles|default_if_none:"â€”" }}
+                                        </td>
+                                        <td class="contact-comment">
+                                            {{ contact.comment|default:"" }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </section>
+
+            <script>
+            (function () {
+                const search = document.getElementById("contact-search");
+                const table = document.getElementById("journal-contact-table");
+
+                if (!search || !table) {
+                    return;
+                }
+
+                search.addEventListener("input", function () {
+                    const query = search.value.trim().toLowerCase();
+
+                    table.querySelectorAll("tbody tr").forEach(function (row) {
+                        row.hidden = query && !row.textContent
+                            .toLowerCase()
+                            .includes(query);
+                    });
+                });
+            })();
+            </script>
+        {% endif %}
+
+        {% if entry.contact_count %}
+            <section class="journal-view-section">
+                <h2>Contacts</h2>
+
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(135px,1fr));gap:10px;margin:15px 0;">
+                    <div style="padding:11px;background:#f2f4ef;border-radius:7px;">
+                        <strong>{{ entry.contact_count }}</strong><br>Contacts
+                    </div>
+                    <div style="padding:11px;background:#f2f4ef;border-radius:7px;">
+                        <strong>{{ entry.contact_state_count }}</strong><br>States / Provinces
+                    </div>
+                    <div style="padding:11px;background:#f2f4ef;border-radius:7px;">
+                        <strong>{{ entry.contact_country_count }}</strong><br>Countries
+                    </div>
+                    <div style="padding:11px;background:#f2f4ef;border-radius:7px;">
+                        <strong>
+                            {% if entry.longest_contact %}
+                                {{ entry.longest_contact.callsign }}
+                                · {{ entry.longest_contact.distance_miles }} mi
+                            {% else %}
+                                —
+                            {% endif %}
+                        </strong><br>Longest Contact
+                    </div>
+                </div>
+
+                <details>
+                    <summary style="cursor:pointer;font-weight:900;color:#234231;">
+                        Show {{ entry.contact_count }} Contact{{ entry.contact_count|pluralize }}
+                    </summary>
+
+                    <input
+                        id="contact-search"
+                        type="search"
+                        placeholder="Find callsign or place"
+                        style="margin:10px 0;max-width:360px;padding:7px;"
+                    >
+
+                    <div style="max-height:520px;overflow:auto;border:1px solid #d8ded7;border-radius:8px;">
+                        <table
+                            id="journal-contact-table"
+                            style="width:100%;min-width:950px;border-collapse:collapse;font-size:13px;line-height:1.05;"
+                        >
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Callsign</th>
+                                    <th>Mode</th>
+                                    <th>Name</th>
+                                    <th>State / Country</th>
+                                    <th>Miles</th>
+                                    <th>Comment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for contact in entry.contacts.all %}
+                                    <tr>
+                                        <td>{{ contact.qso_date|date:"M j, Y" }}</td>
+                                        <td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
+                                        <td><strong>{{ contact.callsign }}</strong></td>
+                                        <td>{{ contact.mode|default:"—" }}</td>
+                                        <td>{{ contact.name|default:"—" }}</td>
+                                        <td>{{ contact.location_label|default:"—" }}</td>
+                                        <td>{{ contact.distance_miles|default_if_none:"—" }}</td>
+                                        <td>{{ contact.comment|default:"" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+
+                <style>
+                #journal-contact-table th,
+                #journal-contact-table td {
+                    height:25px;
+                    padding:3px 7px;
+                    border-bottom:1px solid #e5e8e4;
+                    white-space:nowrap;
+                }
+                #journal-contact-table th {
+                    position:sticky;
+                    top:0;
+                    background:#eef1ed;
+                    color:#234231;
+                    text-align:left;
+                }
+                </style>
+
+                <script>
+                (function () {
+                    const search = document.getElementById("contact-search");
+                    const table = document.getElementById("journal-contact-table");
+
+                    if (!search || !table) return;
+
+                    search.addEventListener("input", function () {
+                        const query = search.value.trim().toLowerCase();
+
+                        table.querySelectorAll("tbody tr").forEach(function (row) {
+                            row.hidden = query && !row.textContent
+                                .toLowerCase()
+                                .includes(query);
+                        });
+                    });
+                })();
+                </script>
+            </section>
+        {% endif %}
+
+        {% if entry.radio or entry.antenna or entry.mode_ssb or entry.mode_cw or entry.mode_digital or entry.mode_fm or entry.mode_am or entry.mode_other %}
+            <section class="journal-view-section">
+                <h2>Station</h2>
+                <div class="station-summary">
+                    {% if entry.radio %}<span><strong>Radio:</strong> {{ entry.radio }}</span>{% endif %}
+                    {% if entry.antenna %}<span><strong>Antenna:</strong> {{ entry.antenna }}</span>{% endif %}
+                    {% if entry.mode_ssb or entry.mode_cw or entry.mode_digital or entry.mode_fm or entry.mode_am or entry.mode_other %}
+                        <span>
+                            <strong>Operating Mode:</strong>
+                            {% if entry.mode_ssb %}SSB{% endif %}
+                            {% if entry.mode_cw %}{% if entry.mode_ssb %}, {% endif %}CW{% endif %}
+                            {% if entry.mode_digital %}{% if entry.mode_ssb or entry.mode_cw %}, {% endif %}Digital{% endif %}
+                            {% if entry.mode_fm %}{% if entry.mode_ssb or entry.mode_cw or entry.mode_digital %}, {% endif %}FM{% endif %}
+                            {% if entry.mode_am %}{% if entry.mode_ssb or entry.mode_cw or entry.mode_digital or entry.mode_fm %}, {% endif %}AM{% endif %}
+                            {% if entry.mode_other %}{% if entry.mode_ssb or entry.mode_cw or entry.mode_digital or entry.mode_fm or entry.mode_am %}, {% endif %}Other{% endif %}
+                        </span>
+                    {% endif %}
+                </div>
+            </section>
+        {% endif %}
+
+        {% if entry.portable or entry.mobile or entry.pota or entry.sota or entry.qrp or entry.wwff or entry.contest or entry.field_day or entry.club_event or entry.other_method %}
+            <section class="journal-view-section">
+                <h2>Operating Methods</h2>
+                <div class="method-tags">
+                    {% if entry.portable %}<span>Portable</span>{% endif %}
+                    {% if entry.mobile %}<span>Mobile</span>{% endif %}
+                    {% if entry.pota %}<span>POTA</span>{% endif %}
+                    {% if entry.sota %}<span>SOTA</span>{% endif %}
+                    {% if entry.qrp %}<span>QRP</span>{% endif %}
+                    {% if entry.wwff %}<span>WWFF</span>{% endif %}
+                    {% if entry.contest %}<span>Contest</span>{% endif %}
+                    {% if entry.field_day %}<span>Field Day</span>{% endif %}
+                    {% if entry.club_event %}<span>Club Event</span>{% endif %}
+                    {% if entry.other_method %}<span>Other</span>{% endif %}
+                </div>
+            </section>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}
+

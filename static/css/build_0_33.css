@@ -1,0 +1,16 @@
+/* Build 0.33 — About and Followers */
+.about-hero{max-width:960px;margin:0 auto 30px;text-align:center}
+.about-kicker{text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#ba6c11}
+.about-lead{font-size:1.25rem;line-height:1.6}
+.about-purpose-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:28px 0}
+.about-purpose-grid .location-card{margin:0}
+.about-story-card blockquote{margin:22px 0 0;padding:16px 20px;border-left:5px solid #ef880a;background:#fff9ef;font-size:1.15rem;font-weight:800}
+.about-legacy,.about-share{max-width:900px;margin:34px auto}
+.account-type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.follower-table{min-width:900px}
+.follower-actions{display:flex;gap:6px;flex-wrap:wrap}
+.follower-actions form{margin:0}
+.follower-actions button{width:auto;margin:0;padding:6px 9px;border:1px solid #aeb8b0;border-radius:5px;background:#fff;color:#234231;font-weight:800}
+.follower-actions .danger-menu-item{color:#8b2d2d;border-color:#c99090}
+.profile-role-guide{margin:0 0 20px;padding:14px;border:1px solid #d8ded7;border-radius:8px;background:#f7f8f5}
+@media(max-width:800px){.about-purpose-grid,.account-type-grid{grid-template-columns:1fr}}

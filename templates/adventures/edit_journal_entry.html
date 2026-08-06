@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Edit Journal Entry | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><div class="location-card journal-form-card">
+<div class="journal-edit-heading">
+<div><p><a href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal Entry</a></p><h1>Edit Journal Entry</h1></div>
+<div class="ro-page-actions">
+<a href="{% url 'journal_entry_detail' entry.pk %}" class="ro-small-action">View Journal</a>
+<form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
+onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">
+{% csrf_token %}
+<button type="submit" class="ro-small-action ro-danger-action">Delete Journal</button>
+</form>
+</div>
+</div></div>
+
+<form method="post" enctype="multipart/form-data">
+{% csrf_token %}{{ form.non_field_errors }}
+{% include "adventures/_journal_entry_fields.html" %}
+<button type="submit" class="button-primary">Save Journal Entry</button>
+<a href="{% url 'journal_entry_detail' entry.pk %}" class="cancel-link">Cancel</a>
+</form>
+{% if form.errors %}<div class="form-error-summary">The Journal Entry was not saved. Correct the highlighted field and try again.</div>{% endif %}
+
+{% if entry.photos.all %}<section class="current-photos"><h2>Current Photos</h2><div class="journal-photo-grid">
+{% for photo in entry.photos.all %}<figure class="journal-photo journal-photo-manage">
+<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">
+{% if adventure.cover_photo_id == photo.pk %}<div class="cover-photo-badge">Cover Photo</div>{% endif %}
+<div class="photo-actions">
+{% if adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_cover_photo' photo.pk %}">{% csrf_token %}<button type="submit">Make Cover</button></form>{% endif %}
+<form method="post" action="{% url 'delete_photo' photo.pk %}" onsubmit="return confirm('Delete this photo?');">{% csrf_token %}<button type="submit">Delete</button></form>
+</div></figure>{% endfor %}</div></section>{% endif %}
+</div></section>
+{% endblock %}

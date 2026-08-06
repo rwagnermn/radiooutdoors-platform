@@ -1,0 +1,10 @@
+{% load static %}
+<header class="site-header">
+<div class="header-container">
+<a href="{% url 'home' %}" class="logo" aria-label="Radio Outdoors home"><img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors"></a>
+<nav class="main-nav" aria-label="Main navigation">
+<a href="{% url 'home' %}">Home</a><a href="{% url 'all_adventures' %}">Adventures</a><a href="{% url 'locations' %}">Locations</a><a href="{% url 'map_explorer' %}">Map</a><a href="{% url 'members' %}">Members</a><a href="{% url 'about' %}">About</a><a href="{% url 'help_center' %}">Help</a><a href="{% url 'support_radio_outdoors' %}">Support</a>
+</nav>
+<nav class="account-nav" aria-label="Account navigation">
+{% if user.is_authenticated %}<a href="{% url 'account_home' %}">My Account</a>{% if user.member_profile.callsign %}<a href="{% url 'my_adventures' %}">My Adventures</a><a href="{% url 'follower_management' %}">My Followers</a>{% else %}<a href="{% url 'following_list' %}">Following</a>{% endif %}{% if user.is_staff %}<a href="{% url 'stewardship_dashboard' %}">Stewardship</a><a href="{% url 'member_admin_list' %}">Manage Members</a>{% endif %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign Out</button></form>{% else %}<a href="{% url 'login' %}">Sign In</a><a href="{% url 'register' %}" class="create-account-link">Create Account</a>{% endif %}
+</nav></div></header>

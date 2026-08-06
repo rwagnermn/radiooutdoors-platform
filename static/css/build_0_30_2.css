@@ -1,0 +1,28 @@
+
+/* Build 0.30.2 — visible Journal privacy control */
+.inline-visibility-form {
+    display:inline;
+    width:auto;
+    margin:0;
+}
+
+.inline-visibility-control {
+    width:auto;
+    min-height:0;
+    margin:0;
+    padding:2px 7px;
+    border:1px solid transparent;
+    border-radius:5px;
+    background:transparent;
+    color:#4f6793;
+    font:inherit;
+    font-weight:900;
+    line-height:1.25;
+    cursor:pointer;
+}
+
+.inline-visibility-control:hover,
+.inline-visibility-control:focus-visible {
+    border-color:#9aa8bc;
+    background:#eef2f7;
+}

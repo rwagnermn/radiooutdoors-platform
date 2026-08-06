@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}My Member Profile | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+<div class="location-card member-form-card">
+<h1>My Member Profile</h1><section class="profile-role-guide"><h2>Your Radio Outdoors account</h2><p><strong>Registered Member / Follower:</strong> has an account, can request to follow Members, receive notifications, and later become a publishing Member.</p><p><strong>Member:</strong> a Registered Member with a QRZ-verified callsign who can publish Adventures and manage Followers.</p></section>
+<p>Enter your current callsign. QRZ verification supports United States and foreign operators.</p>
+
+<form method="post">
+{% csrf_token %}
+{{ form.non_field_errors }}
+
+<div class="member-callsign-entry">
+<div>
+<label for="{{ form.callsign.id_for_label }}">Current Callsign</label>
+{{ form.callsign }}{{ form.callsign.errors }}
+</div>
+<button type="submit" name="action" value="verify" class="ro-small-action">Check QRZ</button>
+</div>
+
+{% if qrz_preview %}
+<div class="qrz-preview">
+<strong>{{ qrz_preview.callsign }} found</strong>
+<span>{{ qrz_preview.first_name }} {{ qrz_preview.last_name }}</span>
+<span>{{ qrz_preview.city }}{% if qrz_preview.state %}, {{ qrz_preview.state }}{% endif %} {{ qrz_preview.country }}</span>
+<span>Class {{ qrz_preview.license_class|default:"—" }} · Grid {{ qrz_preview.grid|default:"—" }}</span>
+</div>
+{% elif profile.callsign_verified %}
+<div class="qrz-preview">
+<strong>{{ profile.callsign }} · QRZ Verified</strong>
+<span>{{ profile.qrz_first_name }} {{ profile.qrz_last_name }}</span>
+<span>Class {{ profile.qrz_license_class|default:"—" }} · Grid {{ profile.qrz_grid|default:"—" }}</span>
+</div>
+{% endif %}
+
+<div class="two-column-fields">
+<div><label for="{{ form.display_name.id_for_label }}">Display Name</label>{{ form.display_name }}{{ form.display_name.errors }}</div>
+<div><label for="{{ form.email.id_for_label }}">Email</label>{{ form.email }}{{ form.email.errors }}</div>
+<div><label for="{{ form.first_name.id_for_label }}">First Name</label>{{ form.first_name }}{{ form.first_name.errors }}</div>
+<div><label for="{{ form.last_name.id_for_label }}">Last Name</label>{{ form.last_name }}{{ form.last_name.errors }}</div>
+<div><label for="{{ form.home_city.id_for_label }}">City</label>{{ form.home_city }}{{ form.home_city.errors }}</div>
+<div><label for="{{ form.home_state.id_for_label }}">State / Province</label>{{ form.home_state }}{{ form.home_state.errors }}</div>
+<div><label for="{{ form.home_country.id_for_label }}">Country</label>{{ form.home_country }}{{ form.home_country.errors }}</div>
+<div><label for="{{ form.website.id_for_label }}">Website</label>{{ form.website }}{{ form.website.errors }}</div>
+</div>
+
+<label for="{{ form.bio.id_for_label }}">About Me</label>{{ form.bio }}{{ form.bio.errors }}
+<label class="member-public-choice">{{ form.profile_is_public }} <span>Show my profile in the Members directory</span></label>
+
+<button type="submit" name="action" value="save" class="button-primary">Verify and Save Profile</button>
+</form>
+</div>
+</section>
+{% endblock %}

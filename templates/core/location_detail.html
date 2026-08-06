@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block title %}{{ location.name }} | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content">
+
+    <div class="view-page-toolbar">
+        <a href="{% url 'locations' %}" class="back-link-button">
+            ← Back to Locations
+        </a>
+
+        <div class="location-toolbar-actions">
+            {% if user.is_staff %}
+                <a
+                    href="{% url 'edit_location' location.pk %}"
+                    class="button-secondary-dark"
+                >
+                    Edit Location
+                </a>
+            {% endif %}
+
+            {% if user.is_authenticated %}
+                <form
+                    method="post"
+                    action="{% url 'start_adventure_here' location.pk %}"
+                    class="start-adventure-form"
+                >
+                    {% csrf_token %}
+                    <button type="submit" class="button-primary">
+                        Start Adventure Here
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <header class="location-detail-header">
+        <p class="location-type-label">
+            {{ location.get_location_type_display }}
+        </p>
+
+        <h1>{{ location.name }}</h1>
+
+        <p class="location-place-line">
+            {% if location.city %}{{ location.city }}{% endif %}
+            {% if location.city and location.state %}, {% endif %}
+            {% if location.state %}{{ location.state }}{% endif %}
+            {% if location.country %}
+                {% if location.city or location.state %} · {% endif %}
+                {{ location.country }}
+            {% endif %}
+        </p>
+
+
+
+        {% if location.street_address or location.city or location.state or location.postal_code %}
+            <div class="location-address-card">
+                <span>Address</span>
+
+                <address>
+                    {% if location.street_address %}
+                        {{ location.street_address }}<br>
+                    {% endif %}
+
+                    {% if location.address_line_2 %}
+                        {{ location.address_line_2 }}<br>
+                    {% endif %}
+
+                    {% if location.city %}
+                        {{ location.city }}
+                    {% endif %}
+
+                    {% if location.city and location.state %}, {% endif %}
+
+                    {% if location.state %}
+                        {{ location.state }}
+                    {% endif %}
+
+                    {% if location.postal_code %}
+                        {{ location.postal_code }}
+                    {% endif %}
+
+                    {% if location.country %}
+                        <br>{{ location.country }}
+                    {% endif %}
+                </address>
+            </div>
+        {% endif %}
+
+        {% if location.reference_code or location.official_website %}
+            <div class="location-reference-row">
+                {% if location.reference_code %}
+                    <div>
+                        <span>Reference / Park ID</span>
+                        <strong>{{ location.reference_code }}</strong>
+                    </div>
+                {% endif %}
+
+                {% if location.official_website %}
+                    <a
+                        href="{{ location.official_website }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="official-website-link"
+                    >
+                        Official Website 
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if location.has_operating_advisory %}<section class="location-advisory"><h2>Operating Advisory</h2>{{ location.operating_advisory|linebreaks }}</section>{% endif %}
+{% if location.description %}
+            <div class="location-description">
+                {{ location.description|linebreaks }}
+            </div>
+        {% endif %}
+    </header>
+
+
+    {% if location.operating_locations.all %}
+        <section class="location-map-section">
+            <div class="location-section-heading">
+                <div>
+                    <p class="section-kicker">Operating Positions</p>
+                    <h2>Operating Position Map</h2>
+                </div>
+            </div>
+
+            {% if google_maps_api_key %}
+                <div
+                    id="location-detail-map"
+                    class="location-detail-map"
+                ></div>
+
+                <script id="operating-location-map-data" type="application/json">
+                    [
+                        {% for operating_location in location.operating_locations.all %}
+                            {% if operating_location.latitude and operating_location.longitude %}
+                                {
+                                    "name": "{{ operating_location.name|escapejs }}",
+                                    "latitude": {{ operating_location.latitude }},
+                                    "longitude": {{ operating_location.longitude }}
+                                }{% if not forloop.last %},{% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    ]
+                </script>
+            {% else %}
+                <div class="google-maps-setup-message">
+                    Add a Google Maps API key to display this map.
+                </div>
+            {% endif %}
+        </section>
+    {% endif %}
+
+    <section class="operating-location-section">
+        <div class="location-section-heading">
+            <div>
+                <p class="section-kicker">Exact places to set up</p>
+                <h2>Operating Positions</h2>
+                {% if user.is_authenticated %}<a href="{% url 'add_operating_position' location.pk %}" class="button-primary compact-action">Add Operating Position</a>{% endif %}
+            </div>
+        </div>
+
+        <div class="operating-location-grid">
+            {% for operating_location in location.operating_locations.all %}
+                <article class="operating-location-card">
+                    <div class="operating-location-title-row">
+                        <h3>{{ operating_location.name }}</h3>
+
+                        {% if user.is_authenticated %}
+                            <form
+                                method="post"
+                                action="{% url 'start_adventure_here' location.pk %}"
+                                class="start-adventure-form"
+                            >
+                                {% csrf_token %}
+                                <input
+                                    type="hidden"
+                                    name="operating_location"
+                                    value="{{ operating_location.pk }}"
+                                >
+                                <button
+                                    type="submit"
+                                    class="button-secondary-dark start-exact-button"
+                                >
+                                    Start Adventure at this exact spot
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+
+                    {% if operating_location.description %}
+                        <div class="operating-location-description">
+                            {{ operating_location.description|linebreaks }}
+                        </div>
+                    {% endif %}
+                    <div class="amenity-grid">
+                        <div><span>Parking</span><strong>{{ operating_location.get_parking_display }}</strong></div>
+                        <div><span>Restrooms</span><strong>{{ operating_location.get_restrooms_display }}</strong></div>
+                        <div><span>Picnic Tables</span><strong>{{ operating_location.get_picnic_tables_display }}</strong></div>
+                        <div><span>Shelter</span><strong>{{ operating_location.get_shelter_display }}</strong></div>
+                        <div><span>Shade</span><strong>{{ operating_location.get_shade_display }}</strong></div>
+                        <div><span>Power</span><strong>{{ operating_location.get_power_display }}</strong></div>
+                        <div><span>Drinking Water</span><strong>{{ operating_location.get_drinking_water_display }}</strong></div>
+                        <div><span>Cell Coverage</span><strong>{{ operating_location.get_cell_coverage_bars_display }}</strong></div>
+                        <div><span>Ambient Noise</span><strong>{{ operating_location.get_ambient_noise_level_display }}</strong></div>
+                    </div>
+                </article>
+            {% empty %}
+                <div class="location-card">
+                    No Operating Positions have been added yet.
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="location-adventure-section">
+        <div class="location-section-heading">
+            <div>
+                <p class="section-kicker">Stories from this place</p>
+                <h2>Adventures at {{ location.name }}</h2>
+            </div>
+        </div>
+
+        <div class="location-adventure-table-wrap">
+            <table class="location-adventure-table">
+                <thead>
+                    <tr>
+                        <th>Photo</th>
+                        <th>Status</th>
+                        <th>Adventure</th>
+                        <th>Operator</th>
+                        <th>Date</th>
+                        <th class="text-center">Journal</th>
+                        <th class="text-center">Photos</th>
+                        <th class="text-center">Comments</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for adventure in adventures %}
+                        <tr
+                            class="location-adventure-row"
+                            tabindex="0"
+                            role="link"
+                            onclick="window.location='{{ adventure.get_absolute_url }}';"
+                            onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}"
+                        >
+                            <td class="location-adventure-photo">
+                                {% if adventure.cover_photo %}
+                                    <img
+                                        src="{{ adventure.cover_photo.image.url }}"
+                                        alt=""
+                                    >
+                                {% else %}
+                                    <div class="location-adventure-placeholder"></div>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <span class="adventure-status adventure-status-{{ adventure.display_status_key }}">
+                                    {{ adventure.display_status_label }}
+                                </span>
+                            </td>
+
+                            <td>
+                                <strong>{{ adventure.title }}</strong>
+
+                                {% if adventure.operating_location %}
+                                    <div class="location-adventure-subtext">
+                                        {{ adventure.operating_location.name }}
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <td>{{ adventure.owner }}</td>
+                            <td>{{ adventure.started_at|date:"M j, Y" }}</td>
+                            <td class="text-center">{{ adventure.journal_count }}</td>
+                            <td class="text-center">{{ adventure.photo_count }}</td>
+                            <td class="text-center">{{ adventure.comment_count }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="empty-table-message">
+                                No Adventures have been shared from this location yet.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</section>
+
+{% if google_maps_api_key and location.operating_locations.all %}
+<script>
+async function initLocationDetailMap() {
+    const mapElement = document.getElementById("location-detail-map");
+
+    if (!mapElement) {
+        return;
+    }
+
+    const points = [];
+
+    {% for operating_location in location.operating_locations.all %}
+        {% if operating_location.latitude != None and operating_location.longitude != None %}
+            points.push({
+                name: "{{ operating_location.name|escapejs }}",
+                latitude: {{ operating_location.latitude }},
+                longitude: {{ operating_location.longitude }}
+            });
+        {% endif %}
+    {% endfor %}
+
+    if (!points.length) {
+        mapElement.innerHTML =
+            "<p class='map-empty-message'>No Operating Position pins have coordinates yet.</p>";
+        return;
+    }
+
+    const {Map, InfoWindow} =
+        await google.maps.importLibrary("maps");
+    const {AdvancedMarkerElement, PinElement} =
+        await google.maps.importLibrary("marker");
+
+    const map = new Map(mapElement, {
+        center: {
+            lat: points[0].latitude,
+            lng: points[0].longitude
+        },
+        zoom: 15,
+        mapId: "DEMO_MAP_ID",
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true
+    });
+
+    const bounds = new google.maps.LatLngBounds();
+    const infoWindow = new InfoWindow();
+
+    points.forEach(function (point) {
+        const pin = new PinElement({
+            background: "{% if location.has_operating_advisory %}#b51f2e{% else %}#2e6fd8{% endif %}",
+            borderColor: "#ffffff",
+            glyphColor: "#ffffff",
+            glyph: "O"
+        });
+
+        const marker = new AdvancedMarkerElement({
+            map: map,
+            position: {
+                lat: point.latitude,
+                lng: point.longitude
+            },
+            title: point.name,
+            content: pin.element
+        });
+
+        marker.addListener("click", function () {
+            infoWindow.setContent(
+                "<strong>" + point.name + "</strong><br>Operating Position"
+            );
+            infoWindow.open({
+                map: map,
+                anchor: marker
+            });
+        });
+
+        bounds.extend(marker.position);
+    });
+
+    if (points.length > 1) {
+        map.fitBounds(bounds, 35);
+    }
+}
+
+window.initLocationDetailMap = initLocationDetailMap;
+</script>
+<script
+    async
+    src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initLocationDetailMap"
+></script>
+{% endif %}
+{% endblock %}
+

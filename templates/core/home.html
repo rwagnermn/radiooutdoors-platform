@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Home | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-overlay">
+        <div class="hero-panel">
+            <div class="hero-content">
+                <h1 class="hero-title">
+                    <span class="white">GET OUT.</span><br>
+                    <span class="orange">SET UP.</span><br>
+                    <span class="white">MAKE CONTACT.</span>
+                </h1>
+
+                <p class="hero-story">
+                    Some contacts are measured in signal reports.<br>
+                    <strong>The best contacts are remembered for a lifetime.</strong>
+                </p>
+
+                <div class="hero-tagline" aria-label="Any place, any park, anywhere">
+                    <span>ANY PLACE</span><b>&bull;</b>
+                    <span>ANY PARK</span><b>&bull;</b>
+                    <span>ANYWHERE</span>
+                </div>
+
+                <div class="hero-buttons">
+                    <a href="{% url 'all_adventures' %}" class="button-primary">
+                        Explore Adventures
+                    </a>
+
+                    <a href="{% url 'locations' %}" class="button-secondary">
+                        Explore Locations
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="intro">
+    <div class="content">
+        <h2>Beyond the Four Walls of the Shack</h2>
+        <p>
+            Radio Outdoors is where amateur radio meets the outdoors.
+            Whether you're operating from a park, campground, lakeshore,
+            trail, summit, boat, or your own backyard, every contact has
+            a story worth telling.
+        </p>
+    </div>
+</section>
+
+<section class="featured-adventures">
+    <h2>Featured Adventures</h2>
+
+    <div class="adventure-grid">
+        {% for adventure in featured_adventures %}
+            <article class="adventure-card">
+                {% if adventure.cover_photo %}
+                    <img
+                        src="{{ adventure.cover_photo.image.url }}"
+                        alt="{{ adventure.title }}"
+                    >
+                {% endif %}
+
+                <h3>
+                    <a href="{{ adventure.get_absolute_url }}">
+                        {{ adventure.title }}
+                    </a>
+                </h3>
+
+                <p>
+                    {% if adventure.location %}
+                        {{ adventure.location.name }}
+                    {% else %}
+                        Location not entered
+                    {% endif %}
+                </p>
+            </article>
+        {% empty %}
+            <article class="adventure-card">
+                <h3>Your next adventure starts here.</h3>
+                <p>Be the first to share your outdoor operating story.</p>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="home-why content">
+<h2>Why Radio Outdoors?</h2>
+<p>We are not merely preserving contacts. We are preserving experiences.</p>
+<a href="{% url 'why_radio_outdoors' %}" class="button-primary">Why Radio Outdoors?</a>
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+/* Build 0.35 — Follower Invitations */
+.follower-invite-card{margin:20px 0 28px}
+.follower-invite-form{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
+.follower-invite-form input{margin-bottom:0}
+.follower-invite-form button{margin:0;white-space:nowrap}
+.follower-section-table{margin-bottom:30px}
+.registration-submit{background:#234231!important;color:#fff!important;border-color:#234231!important}
+.registration-submit:hover{background:#162d21!important}
+@media(max-width:850px){
+.follower-invite-form{grid-template-columns:1fr}
+}

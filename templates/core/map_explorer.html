@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Map | Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content map-page-content">
+
+    <div class="section-heading-row">
+        <div>
+            <h1>Radio Outdoors Map</h1>
+            <p>
+                Explore outdoor operating locations and see who may be out playing radio.
+            </p>
+        </div>
+
+        <div class="map-point-count">
+            {{ point_count }} Map Pin{{ point_count|pluralize }}
+        </div>
+    </div>
+
+    <div class="radio-map-controls">
+
+        <label>
+            <input type="checkbox" id="show-operating-pins" checked>
+            <span class="radio-map-control-dot operating-dot"></span>
+            Operating Positions
+        </label>
+
+        <label>
+            <input type="checkbox" id="show-current-only">
+            <span class="radio-map-control-dot current-dot"></span>
+            Currently Operating Only
+        </label>
+
+        <button type="button" id="fit-visible-pins">
+            Show All Visible Pins
+        </button>
+        {% if user.is_authenticated %}
+            <button
+                type="button"
+                id="add-location-pin-mode"
+                class="map-add-pin-button"
+            >
+                Add Location Pin
+            </button>
+        {% endif %}
+
+    </div>
+
+
+    {% if user.is_authenticated %}
+        <div
+            id="global-map-pin-instruction"
+            class="global-map-pin-instruction"
+            hidden
+        >
+            Click the map where the Location belongs.
+            The Add Location form will open with that pin already filled in.
+        </div>
+    {% endif %}
+
+    {% if google_maps_api_key %}
+        <div
+            id="radio-outdoors-map"
+            class="radio-outdoors-map"
+        ></div>
+    {% else %}
+        <div class="google-maps-setup-message">
+            <h2>Google Maps API key needed</h2>
+            <p>
+                Add your key to
+                <code>google_maps_api_key.txt</code>
+                in the project folder, restart the server, and reload this page.
+            </p>
+        </div>
+    {% endif %}
+
+    {% if not map_points %}
+        <div class="location-card map-no-pins">
+            No map pins have been added yet. Edit a Location to place the first pin.
+        </div>
+    {% endif %}
+
+    {{ map_points|json_script:"radio-outdoors-map-data" }}
+
+</section>
+
+{% if google_maps_api_key %}
+<script>
+function escapeMapText(value) {
+    const element = document.createElement("div");
+    element.textContent = value || "";
+    return element.innerHTML;
+}
+
+function startAdventureForm(point) {
+    if (!point.can_start_adventure || !point.start_adventure_url) {
+        return "";
+    }
+
+    const operatingInput = point.operating_location_id
+        ? (
+            "<input type='hidden' name='operating_location' value='"
+            + escapeMapText(String(point.operating_location_id))
+            + "'>"
+        )
+        : "";
+
+    return (
+        "<form method='post' action='"
+        + escapeMapText(point.start_adventure_url)
+        + "' class='radio-map-start-form'>"
+        + "<input type='hidden' name='csrfmiddlewaretoken' value='"
+        + "{{ csrf_token|escapejs }}"
+        + "'>"
+        + operatingInput
+        + "<button type='submit'>Start Adventure Here</button>"
+        + "</form>"
+    );
+}
+
+
+function formatMapUpdate(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+
+    return date.toLocaleString(
+        undefined,
+        {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit"
+        }
+    );
+}
+
+async function initRadioOutdoorsMap() {
+    const {Map, InfoWindow} =
+        await google.maps.importLibrary("maps");
+    const {AdvancedMarkerElement, PinElement} =
+        await google.maps.importLibrary("marker");
+
+    const points = JSON.parse(
+        document.getElementById(
+            "radio-outdoors-map-data"
+        ).textContent
+    );
+
+    const map = new Map(
+        document.getElementById("radio-outdoors-map"),
+        {
+            center: {lat: 39.5, lng: -98.35},
+            zoom: 4,
+            mapId: "DEMO_MAP_ID",
+            mapTypeControl: true,
+            streetViewControl: true,
+            fullscreenControl: true
+        }
+    );
+
+    const showOperating = document.getElementById(
+        "show-operating-pins"
+    );
+    const showCurrentOnly = document.getElementById(
+        "show-current-only"
+    );
+    const fitVisibleButton = document.getElementById(
+        "fit-visible-pins"
+    );
+    const addLocationPinButton = document.getElementById(
+        "add-location-pin-mode"
+    );
+    const addLocationInstruction = document.getElementById(
+        "global-map-pin-instruction"
+    );
+
+    let addingLocationPin = false;
+
+    const infoWindow = new InfoWindow();
+    const markerRecords = [];
+
+    function popupHtml(point) {
+        const pinLabel = point.kind === "location"
+            ? "Named Place"
+            : "Operating Position";
+
+        const photo = point.cover_photo_url
+            ? (
+                "<img class='radio-map-popup-photo' src='"
+                + escapeMapText(point.cover_photo_url)
+                + "' alt=''>"
+            )
+            : "<div class='radio-map-popup-photo-placeholder'>Radio Outdoors</div>";
+
+        const currentBadge = point.currently_operating
+            ? "<span class='radio-map-live-badge'>Currently Operating</span>"
+            : "";
+
+        const latest = point.latest_title
+            ? (
+                "<div class='radio-map-popup-latest'>"
+                + "<span>Latest Adventure</span>"
+                + "<strong>"
+                + escapeMapText(point.latest_title)
+                + "</strong>"
+                + "<small>"
+                + escapeMapText(point.latest_status)
+                + (
+                    point.latest_updated
+                        ? " Â· Updated " + escapeMapText(
+                            formatMapUpdate(point.latest_updated)
+                        )
+                        : ""
+                )
+                + "</small>"
+                + "</div>"
+            )
+            : "";
+
+        const adventureLink = point.latest_url
+            ? (
+                "<a class='radio-map-popup-secondary' href='"
+                + escapeMapText(point.latest_url)
+                + "'>Open Latest Adventure</a>"
+            )
+            : "";
+
+        return (
+            "<article class='radio-map-popup-card'>"
+            + photo
+            + "<div class='radio-map-popup-content'>"
+            + currentBadge
+            + "<span class='radio-map-popup-type'>"
+            + escapeMapText(pinLabel)
+            + "</span>"
+            + "<h3>" + escapeMapText(point.title) + "</h3>"
+            + "<p>" + escapeMapText(point.subtitle) + "</p>"
+            + "<div class='radio-map-popup-count'>"
+            + point.adventure_count
+            + " Adventure"
+            + (point.adventure_count === 1 ? "" : "s")
+            + "</div>"
+            + latest
+            + "<div class='radio-map-popup-actions'>"
+            + "<a href='" + escapeMapText(point.url) + "'>View Location</a>"
+            + adventureLink
+            + startAdventureForm(point)
+            + "</div>"
+            + "</div>"
+            + "</article>"
+        );
+    }
+
+    function markerVisible(record) {
+        const kindVisible = showOperating.checked;
+
+        const activityVisible = !showCurrentOnly.checked
+            || record.point.currently_operating;
+
+        return kindVisible && activityVisible;
+    }
+
+    function updateVisibleMarkers() {
+        markerRecords.forEach(function (record) {
+            record.marker.map = markerVisible(record)
+                ? map
+                : null;
+        });
+    }
+
+    function fitVisibleMarkers() {
+        const visible = markerRecords.filter(markerVisible);
+
+        if (!visible.length) {
+            return;
+        }
+
+        const bounds = new google.maps.LatLngBounds();
+
+        visible.forEach(function (record) {
+            bounds.extend(record.marker.position);
+        });
+
+        if (visible.length === 1) {
+            map.setCenter(visible[0].marker.position);
+            map.setZoom(14);
+        } else {
+            map.fitBounds(bounds, 45);
+        }
+    }
+
+    points.forEach(function (point) {
+        let background = "#2e6fd8";
+
+        if (point.currently_operating) {
+            background = "#f0b429";
+        }
+
+        if (point.has_operating_advisory) {
+            background = "#b51f2e";
+        }
+
+        const pin = new PinElement({
+            background: background,
+            borderColor: "#ffffff",
+            glyphColor: "#ffffff",
+            glyph: point.currently_operating
+                ? "LIVE"
+                : (
+                    "O"
+                ),
+            scale: point.currently_operating ? 1.32 : 1.10
+        });
+
+        const marker = new AdvancedMarkerElement({
+            map: map,
+            position: {
+                lat: point.latitude,
+                lng: point.longitude
+            },
+            title: point.title,
+            content: pin.element
+        });
+
+        marker.addListener("click", function () {
+            infoWindow.setContent(popupHtml(point));
+
+            infoWindow.open({
+                map: map,
+                anchor: marker
+            });
+        });
+
+        markerRecords.push({
+            marker: marker,
+            point: point
+        });
+    });
+
+    [
+        showOperating,
+        showCurrentOnly
+    ].forEach(function (control) {
+        control.addEventListener(
+            "change",
+            function () {
+                infoWindow.close();
+                updateVisibleMarkers();
+                fitVisibleMarkers();
+            }
+        );
+    });
+
+    fitVisibleButton.addEventListener(
+        "click",
+        fitVisibleMarkers
+    );
+
+    if (addLocationPinButton) {
+        addLocationPinButton.addEventListener(
+            "click",
+            function () {
+                addingLocationPin = !addingLocationPin;
+
+                addLocationPinButton.classList.toggle(
+                    "active",
+                    addingLocationPin
+                );
+
+                addLocationPinButton.textContent = addingLocationPin
+                    ? "Cancel Pin Placement"
+                    : "Add Location Pin";
+
+                if (addLocationInstruction) {
+                    addLocationInstruction.hidden = !addingLocationPin;
+                }
+
+                map.setOptions({
+                    draggableCursor: addingLocationPin
+                        ? "crosshair"
+                        : null
+                });
+            }
+        );
+
+        map.addListener("click", function (event) {
+            if (!addingLocationPin || !event.latLng) {
+                return;
+            }
+
+            const latitude = event.latLng.lat().toFixed(6);
+            const longitude = event.latLng.lng().toFixed(6);
+
+            const url =
+                "{% url 'create_location' %}"
+                + "?latitude=" + encodeURIComponent(latitude)
+                + "&longitude=" + encodeURIComponent(longitude);
+
+            window.location.href = url;
+        });
+    }
+
+    fitVisibleMarkers();
+}
+
+window.initRadioOutdoorsMap = initRadioOutdoorsMap;
+</script>
+
+<script
+    async
+    src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsMap"
+></script>
+{% endif %}
+{% endblock %}
+
