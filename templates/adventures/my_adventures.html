@@ -31,15 +31,23 @@ onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_ur
 <td class="center-column">{{ adventure.journal_count }}</td>
 <td class="center-column">{{ adventure.photo_count }}</td>
 <td class="center-column">{{ adventure.comment_count }}</td>
-<td class="ro-actions-column" onclick="event.stopPropagation();">
-<div class="ro-action-stack">
-<a href="{{ adventure.get_absolute_url }}">View</a>
-<a href="{% url 'edit_adventure' adventure.slug %}">Edit</a>
+<td class="ro-actions-column" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+<div class="journal-entry-menu">
+<button type="button" class="journal-menu-button" aria-label="Actions for {{ adventure.title }}" aria-expanded="false">☰</button>
+<div class="journal-menu-panel">
+<a href="{{ adventure.get_absolute_url }}">View Adventure</a>
+<a href="{% url 'edit_adventure' adventure.slug %}">Edit Adventure</a>
+<form method="post" action="{% if adventure.status == 'completed' %}{% url 'mark_adventure_in_progress' adventure.slug %}{% else %}{% url 'mark_adventure_done' adventure.slug %}{% endif %}">
+{% csrf_token %}
+<input type="hidden" name="next" value="{% url 'my_adventures' %}">
+<button type="submit">{% if adventure.status == 'completed' %}Mark In Progress{% else %}Mark Completed{% endif %}</button>
+</form>
 <form method="post" action="{% url 'delete_adventure' adventure.slug %}"
 onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');">
 {% csrf_token %}
-<button type="submit" class="danger-menu-item">Delete</button>
+<button type="submit" class="danger-menu-item">Delete Adventure</button>
 </form>
+</div>
 </div>
 </td>
 </tr>
@@ -47,4 +55,32 @@ onsubmit="return confirm('Delete this Adventure and all Journals, photos, contac
 <tr><td colspan="9" class="empty-table-message">No adventures yet. <a href="{% url 'add_adventure' %}">Add New Adventure</a></td></tr>
 {% endfor %}
 </tbody></table></div></section>
+<script>
+document.addEventListener("click", function (event) {
+    document.querySelectorAll(".journal-menu-panel.open").forEach(function (panel) {
+        if (!panel.parentElement.contains(event.target)) {
+            panel.classList.remove("open");
+            const button = panel.parentElement.querySelector(".journal-menu-button");
+            if (button) button.setAttribute("aria-expanded", "false");
+        }
+    });
+});
+
+document.querySelectorAll(".journal-menu-button").forEach(function (button) {
+    button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        const panel = button.nextElementSibling;
+        const willOpen = !panel.classList.contains("open");
+
+        document.querySelectorAll(".journal-menu-panel.open").forEach(function (openPanel) {
+            openPanel.classList.remove("open");
+            const openButton = openPanel.parentElement.querySelector(".journal-menu-button");
+            if (openButton) openButton.setAttribute("aria-expanded", "false");
+        });
+
+        panel.classList.toggle("open", willOpen);
+        button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+});
+</script>
 {% endblock %}

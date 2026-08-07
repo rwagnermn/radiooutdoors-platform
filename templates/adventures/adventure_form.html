@@ -24,6 +24,19 @@
         {% endif %}
     </div>
 
+    {% if adventure %}
+        <div class="adventure-form-section">
+            <h2>Status</h2>
+            <form method="post" action="{% if adventure.status == 'completed' %}{% url 'mark_adventure_in_progress' adventure.slug %}{% else %}{% url 'mark_adventure_done' adventure.slug %}{% endif %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'edit_adventure' adventure.slug %}">
+                <button type="submit" class="button-primary">
+                    {% if adventure.status == "completed" %}Mark In Progress{% else %}Mark Completed{% endif %}
+                </button>
+            </form>
+        </div>
+    {% endif %}
+
     <div class="location-card">
         <form method="post">
             {% csrf_token %}
@@ -39,6 +52,15 @@
                         <p class="form-error">{{ error }}</p>
                     {% endfor %}
                 </div>
+                <div>
+                    <input type="hidden" name="adventure_visibility_present" value="1">
+                    <label for="{{ form.is_public.id_for_label }}">
+                        {{ form.is_public }} Visible to Everyone
+                    </label>
+                    {% for error in form.is_public.errors %}
+                        <p class="form-error">{{ error }}</p>
+                    {% endfor %}
+                </div>
 </div>
 
             <div class="adventure-form-section">
@@ -46,63 +68,10 @@
 
                 <div class="two-column-fields">
                     <div>
-                        <label for="{{ form.location.id_for_label }}">Location</label>
+                        <label for="{{ form.location.id_for_label }}">
+                            Location <span class="required-field-label">Required Field</span>
+                        </label>
                         {{ form.location }}
-                        <script>
-                        (function () {
-                            const locationSelect = document.getElementById(
-                                "{{ form.location.id_for_label }}"
-                            );
-                            const titleInput = document.getElementById(
-                                "{{ form.title.id_for_label }}"
-                            );
-                            const publicInput = document.getElementById(
-                                "{{ form.is_public.id_for_label }}"
-                            );
-
-                            if (!locationSelect) {
-                                return;
-                            }
-
-                            const addOption = document.createElement("option");
-                            addOption.value = "__add_new_location__";
-                            addOption.textContent = "+ Add New Location";
-
-                            locationSelect.insertBefore(
-                                addOption,
-                                locationSelect.options[1] || null
-                            );
-
-                            locationSelect.addEventListener(
-                                "change",
-                                function () {
-                                    if (
-                                        locationSelect.value !==
-                                        "__add_new_location__"
-                                    ) {
-                                        return;
-                                    }
-
-                                    const params = new URLSearchParams();
-                                    params.set("return_to", "adventure");
-                                    params.set(
-                                        "title",
-                                        titleInput ? titleInput.value : ""
-                                    );
-                                    params.set(
-                                        "public",
-                                        publicInput && !publicInput.checked
-                                            ? "0"
-                                            : "1"
-                                    );
-
-                                    window.location.href =
-                                        "{% url 'create_location' %}?" +
-                                        params.toString();
-                                }
-                            );
-                        })();
-                        </script>
                         {% for error in form.location.errors %}
                             <p class="form-error">{{ error }}</p>
                         {% endfor %}
@@ -110,7 +79,7 @@
 
                     <div>
                         <label for="{{ form.operating_location.id_for_label }}">
-                            Operating Position
+                            Operating Position <span class="required-field-label">Required Field</span>
                         </label>
                         {{ form.operating_location }}
                         {% for error in form.operating_location.errors %}
@@ -118,21 +87,29 @@
                         {% endfor %}
                     </div>
                 </div>
+
+                <p id="no-operating-positions-message" hidden>
+                    <strong>No Operating Positions exist for this Location yet. Choose “📍 Drop a New Pin...” and click the map to create the first one.</strong>
+                </p>
+
+                <p id="position-placement-banner" class="form-guidance-banner" hidden>
+                    <strong>Click on the map to place the new Operating Position.</strong>
+                </p>
+
+                <div id="new-position-prompt" hidden>
+                    <label for="new-position-name">Operating Position Name <span class="required-field-label">Required Field</span></label>
+                    <input id="new-position-name" type="text" maxlength="150">
+                    <label for="new-position-notes">Notes (optional)</label>
+                    <textarea id="new-position-notes" rows="3"></textarea>
+                    <button id="save-new-position" type="button">Save Operating Position</button>
+                    <button id="cancel-new-position" type="button">Cancel</button>
+                </div>
+
+                {% if google_maps_api_key %}
+                    <div id="adventure-position-map" class="location-pin-map"></div>
+                {% endif %}
             </div>
 
-
-            {% if adventure %}
-                <div class="adventure-form-section">
-                    <h2>Status</h2>
-                    <label for="{{ form.status.id_for_label }}">
-                        Adventure Status
-                    </label>
-                    {{ form.status }}
-                    {% for error in form.status.errors %}
-                        <p class="form-error">{{ error }}</p>
-                    {% endfor %}
-                </div>
-            {% endif %}
 
             <button type="submit" class="button-primary">
                 Save Adventure
@@ -266,6 +243,293 @@
     {% endif %}
 
 </section>
+{{ operating_positions|json_script:"adventure-operating-positions" }}
+<script>
+(function () {
+    const locationSelect = document.getElementById(
+        "{{ form.location.id_for_label }}"
+    );
+    const positionSelect = document.getElementById(
+        "{{ form.operating_location.id_for_label }}"
+    );
+    const titleInput = document.getElementById(
+        "{{ form.title.id_for_label }}"
+    );
+    const publicInput = document.getElementById(
+        "{{ form.is_public.id_for_label }}"
+    );
+    const positions = JSON.parse(
+        document.getElementById("adventure-operating-positions").textContent
+    );
+    const emptyMessage = document.getElementById(
+        "no-operating-positions-message"
+    );
+    const placementBanner = document.getElementById(
+        "position-placement-banner"
+    );
+    const positionPrompt = document.getElementById("new-position-prompt");
+    const positionName = document.getElementById("new-position-name");
+    const positionNotes = document.getElementById("new-position-notes");
+    const dropPinValue = "__drop_new_pin__";
+    let placementMode = false;
+    let clearPendingMapPosition = null;
+
+    if (!locationSelect || !positionSelect) {
+        return;
+    }
+
+    const addOption = document.createElement("option");
+    addOption.value = "__add_new_location__";
+    addOption.textContent = "+ Add New Location";
+    locationSelect.insertBefore(
+        addOption,
+        locationSelect.options[1] || null
+    );
+
+    function populatePositions(selectedPositionId) {
+        const locationId = Number(locationSelect.value);
+        const matchingPositions = positions.filter(function (position) {
+            return position.location_id === locationId;
+        });
+        positionSelect.replaceChildren();
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Choose the exact operating position";
+        positionSelect.appendChild(placeholder);
+
+        matchingPositions.forEach(function (position) {
+                const option = document.createElement("option");
+                option.value = String(position.id);
+                option.textContent = position.name;
+                option.selected = String(position.id) === String(selectedPositionId);
+                positionSelect.appendChild(option);
+            });
+
+        if (locationId) {
+            const dropPinOption = document.createElement("option");
+            dropPinOption.value = dropPinValue;
+            dropPinOption.textContent = "📍 Drop a New Pin...";
+            positionSelect.appendChild(dropPinOption);
+        }
+
+        if (emptyMessage) {
+            emptyMessage.hidden = !locationId || matchingPositions.length !== 0;
+        }
+    }
+
+    function exitPlacementMode(resetSelection) {
+        placementMode = false;
+        placementBanner.hidden = true;
+        positionPrompt.hidden = true;
+        positionName.value = "";
+        positionNotes.value = "";
+        if (clearPendingMapPosition) {
+            clearPendingMapPosition();
+        }
+        if (resetSelection && positionSelect.value === dropPinValue) {
+            positionSelect.value = "";
+        }
+    }
+
+    const initialPositionId = positionSelect.value;
+    populatePositions(initialPositionId);
+
+    locationSelect.addEventListener("change", function () {
+        if (locationSelect.value === "__add_new_location__") {
+            const params = new URLSearchParams();
+            params.set("return_to", "adventure");
+            params.set("title", titleInput ? titleInput.value : "");
+            params.set(
+                "public",
+                publicInput && !publicInput.checked ? "0" : "1"
+            );
+            window.location.href =
+                "{% url 'create_location' %}?" + params.toString();
+            return;
+        }
+
+        exitPlacementMode(false);
+        populatePositions("");
+    });
+
+    positionSelect.addEventListener("change", function () {
+        if (positionSelect.value === dropPinValue) {
+            placementMode = true;
+            placementBanner.hidden = false;
+            positionPrompt.hidden = true;
+            positionName.value = "";
+            positionNotes.value = "";
+            if (clearPendingMapPosition) {
+                clearPendingMapPosition();
+            }
+            return;
+        }
+
+        exitPlacementMode(false);
+    });
+
+    window.initAdventurePositionMap = async function () {
+        const mapElement = document.getElementById("adventure-position-map");
+        const mappedPositions = positions.filter(function (position) {
+            return position.latitude !== null && position.longitude !== null;
+        });
+
+        if (!mapElement) {
+            return;
+        }
+
+        const {Map} = await google.maps.importLibrary("maps");
+        const {AdvancedMarkerElement, PinElement} =
+            await google.maps.importLibrary("marker");
+        const bounds = new google.maps.LatLngBounds();
+        const map = new Map(mapElement, radioOutdoorsMapOptions({
+            center: mappedPositions.length
+                ? {
+                    lat: mappedPositions[0].latitude,
+                    lng: mappedPositions[0].longitude
+                }
+                : {lat: 39.5, lng: -98.35},
+            zoom: mappedPositions.length ? 8 : 4,
+            mapId: "DEMO_MAP_ID"
+        }));
+
+        let temporaryMarker = null;
+        let pendingPosition = null;
+        const savePosition = document.getElementById("save-new-position");
+        const cancelPosition = document.getElementById("cancel-new-position");
+
+        clearPendingMapPosition = function () {
+            if (temporaryMarker) {
+                temporaryMarker.map = null;
+            }
+            temporaryMarker = null;
+            pendingPosition = null;
+        };
+
+        map.addListener("click", function (event) {
+            const locationId = Number(locationSelect.value);
+            if (!placementMode || !locationId || !event.latLng) {
+                return;
+            }
+
+            const clickedPosition = {
+                lat: event.latLng.lat(),
+                lng: event.latLng.lng()
+            };
+            const temporaryPin = new PinElement({
+                background: "#2e6fd8",
+                borderColor: "#ffffff",
+                glyphColor: "#ffffff",
+                glyph: "O"
+            });
+
+            if (temporaryMarker) {
+                temporaryMarker.map = null;
+            }
+            temporaryMarker = new AdvancedMarkerElement({
+                map: map,
+                position: clickedPosition,
+                title: "New Operating Position",
+                content: temporaryPin.element
+            });
+            pendingPosition = {
+                locationId: locationId,
+                latitude: clickedPosition.lat,
+                longitude: clickedPosition.lng
+            };
+            positionPrompt.hidden = false;
+            positionName.focus();
+        });
+
+        cancelPosition.addEventListener("click", function () {
+            exitPlacementMode(true);
+        });
+
+        savePosition.addEventListener("click", async function () {
+            const name = positionName.value.trim();
+            if (!pendingPosition || !name) {
+                positionName.focus();
+                return;
+            }
+
+            const body = new FormData();
+            body.set("name", name);
+            body.set("description", positionNotes.value.trim());
+            body.set("latitude", pendingPosition.latitude.toFixed(6));
+            body.set("longitude", pendingPosition.longitude.toFixed(6));
+            body.set(
+                "csrfmiddlewaretoken",
+                document.querySelector(
+                    "form input[name='csrfmiddlewaretoken']"
+                ).value
+            );
+
+            const endpoint =
+                "{% url 'create_operating_position_inline' 0 %}".replace(
+                    "/0/", "/" + pendingPosition.locationId + "/"
+                );
+            const response = await fetch(endpoint, {
+                method: "POST",
+                body: body,
+                credentials: "same-origin"
+            });
+
+            if (!response.ok) {
+                exitPlacementMode(true);
+                window.alert("The Operating Position could not be saved. Please try again.");
+                return;
+            }
+
+            const savedPosition = await response.json();
+            positions.push(savedPosition);
+            temporaryMarker.title = savedPosition.name;
+            temporaryMarker = null;
+            pendingPosition = null;
+            placementMode = false;
+            placementBanner.hidden = true;
+            positionName.value = "";
+            positionNotes.value = "";
+            positionPrompt.hidden = true;
+            populatePositions(savedPosition.id);
+        });
+
+        mappedPositions.forEach(function (position) {
+            const pin = new PinElement({
+                background: "#2e6fd8",
+                borderColor: "#ffffff",
+                glyphColor: "#ffffff",
+                glyph: "O"
+            });
+            const marker = new AdvancedMarkerElement({
+                map: map,
+                position: {
+                    lat: position.latitude,
+                    lng: position.longitude
+                },
+                title: position.name,
+                content: pin.element
+            });
+
+            marker.addListener("click", function () {
+                locationSelect.value = String(position.location_id);
+                populatePositions(position.id);
+            });
+            bounds.extend(marker.position);
+        });
+
+        if (mappedPositions.length === 1) {
+            map.setCenter(bounds.getCenter());
+            map.setZoom(14);
+        } else if (mappedPositions.length > 1) {
+            map.fitBounds(bounds, 45);
+        }
+    };
+})();
+</script>
+{% if google_maps_api_key %}
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventurePositionMap"></script>
+{% endif %}
 <script>
 document.addEventListener("click", function (event) {
     document.querySelectorAll(".journal-menu-panel.open").forEach(function (panel) {

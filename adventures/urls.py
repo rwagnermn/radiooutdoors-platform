@@ -17,6 +17,7 @@ from .views import (
     cancel_adif_import,
     confirm_adif_import,
     create_location,
+    create_operating_position_inline,
     delete_comment,
     toggle_journal_visibility,
     toggle_adventure_visibility,
@@ -51,6 +52,11 @@ urlpatterns = [
         "locations/<int:location_id>/positions/add/",
         add_operating_position,
         name="add_operating_position",
+    ),
+    path(
+        "locations/<int:location_id>/positions/inline/",
+        create_operating_position_inline,
+        name="create_operating_position_inline",
     ),
     path(
         "locations/<int:location_id>/edit/",
@@ -118,5 +124,4 @@ urlpatterns = [
     ),
     path("<slug:slug>/", adventure_detail, name="adventure_detail"),
 ]
-
 

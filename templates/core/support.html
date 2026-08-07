@@ -1,1 +1,120 @@
-{% extends "base.html" %}{% block title %}Support Radio Outdoors{% endblock %}{% block content %}<section class="content support-page"><header class="support-hero"><h1>Support Radio Outdoors</h1><p>Radio Outdoors is free to read and free to use. Public Adventures will not be placed behind a paywall.</p></header><div class="support-grid">{% for title,text in support_items %}{% endfor %}<article class="location-card"><h2>One-Time Donations</h2><p>Help cover hosting, backups, email, security, domains, and operating costs.</p></article><article class="location-card"><h2>Supporting Members</h2><p>Voluntary annual support without paid-only essential features.</p></article><article class="location-card"><h2>Club Sponsorship</h2><p>Amateur radio clubs can help preserve outdoor-radio stories.</p></article><article class="location-card"><h2>Corporate Sponsorship</h2><p>Tasteful support without popups or intrusive advertising.</p></article><article class="location-card"><h2>Merchandise</h2><p>Shirts, mugs, stickers, and other Radio Outdoors items.</p></article><article class="location-card"><h2>Affiliate Purchases</h2><p>Optional retailer links may earn a commission at no additional cost.</p></article></div><section class="location-card sustainability-card"><h2>Sustainability</h2><p>Radio Outdoors is being built with the understanding that no one is here forever. Software, documentation, finances, backups, credentials, and stewardship must be organized so the project can continue after its original founder or developers can no longer maintain it.</p><p>The project succeeds only if the stories remain available for the next generation.</p></section></section>{% endblock %}
+{% extends "base.html" %}
+
+{% block title %}Support Radio Outdoors{% endblock %}
+
+{% block content %}
+<section class="content support-page">
+    <header class="support-hero">
+        <h1>Support Radio Outdoors</h1>
+        <p>
+            Radio Outdoors is free to use. Contributions help cover the real
+            costs of keeping the service available, including hosting, maps,
+            storage, backups, domain services, security, and continued
+            development.
+        </p>
+        <p class="support-optional-note">
+            Contributing is always optional and does not unlock core features.
+        </p>
+    </header>
+
+    <div class="support-options" aria-label="Ways to support Radio Outdoors">
+        <details class="support-option-card">
+            <summary>Make a One-Time Contribution</summary>
+            <div class="support-option-content">
+                <p>
+                    Future payment options may include PayPal, credit card,
+                    and debit card.
+                </p>
+
+                <div class="support-example-choices" aria-label="Example one-time contribution amounts">
+                    <button type="button" disabled>$10</button>
+                    <button type="button" disabled>$25</button>
+                    <button type="button" disabled>$50</button>
+                    <button type="button" disabled>Other Amount</button>
+                </div>
+
+                <p class="support-security-note">
+                    Secure payment processing will be handled by established
+                    payment providers. Radio Outdoors will not store credit
+                    card numbers, CVV codes, or other sensitive card
+                    information.
+                </p>
+
+                <div class="support-payment-placeholders">
+                    <button type="button" disabled aria-disabled="true">
+                        Pay with PayPal — Coming Soon
+                    </button>
+                    <button type="button" disabled aria-disabled="true">
+                        Pay with Credit/Debit Card — Payment Setup Pending
+                    </button>
+                </div>
+            </div>
+        </details>
+
+        <details class="support-option-card">
+            <summary>Become a Sustaining Supporter</summary>
+            <div class="support-option-content">
+                <p>
+                    Sustaining Supporters will be able to provide recurring
+                    monthly support toward the ongoing operation of Radio
+                    Outdoors.
+                </p>
+
+                <div class="support-example-choices" aria-label="Example monthly contribution amounts">
+                    <button type="button" disabled>$5/month</button>
+                    <button type="button" disabled>$10/month</button>
+                    <button type="button" disabled>$20/month</button>
+                    <button type="button" disabled>Other Amount</button>
+                </div>
+
+                <p>
+                    Becoming a Sustaining Supporter is optional. Core Radio
+                    Outdoors functionality remains available without payment.
+                </p>
+
+                <div class="support-payment-placeholders">
+                    <button type="button" disabled aria-disabled="true">
+                        Pay with PayPal — Coming Soon
+                    </button>
+                    <button type="button" disabled aria-disabled="true">
+                        Pay with Credit/Debit Card — Payment Setup Pending
+                    </button>
+                </div>
+            </div>
+        </details>
+
+        <details class="support-option-card">
+            <summary>Help Cover Infrastructure</summary>
+            <div class="support-option-content">
+                <p>Contributions may help cover:</p>
+                <ul class="support-cost-list">
+                    <li>Web hosting</li>
+                    <li>Database hosting</li>
+                    <li>Image and photo storage</li>
+                    <li>Backups</li>
+                    <li>Google Maps and API usage</li>
+                    <li>Domain registration</li>
+                    <li>Email services</li>
+                    <li>Security services</li>
+                    <li>Future scaling costs</li>
+                </ul>
+            </div>
+        </details>
+
+        <details class="support-option-card">
+            <summary>Other Ways to Help</summary>
+            <div class="support-option-content">
+                <p>Financial support is not the only way to contribute:</p>
+                <ul class="support-help-list">
+                    <li>Report bugs</li>
+                    <li>Suggest improvements</li>
+                    <li>Help test new features</li>
+                    <li>Share Radio Outdoors with other amateur radio operators</li>
+                    <li>Contribute technical skills</li>
+                    <li>Help preserve club and amateur radio history</li>
+                </ul>
+            </div>
+        </details>
+    </div>
+</section>
+{% endblock %}

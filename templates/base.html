@@ -5,7 +5,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Radio Outdoors{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'css/style.css' %}?v=029">
+<link rel="stylesheet" href="{% static 'css/style.css' %}?v=032">
+<script src="{% static 'js/radiooutdoors-maps.js' %}?v=001"></script>
 </head>
 <body>
 {% include "partials/header.html" %}
@@ -18,6 +19,7 @@
 {% block content %}{% endblock %}
 </main>
 {% include "partials/footer.html" %}
+<script src="{% static 'js/journal-photo-viewer.js' %}?v=001"></script>
 <script>
 setTimeout(function(){
  document.querySelectorAll(".flash-message").forEach(function(m){

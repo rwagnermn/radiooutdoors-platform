@@ -22,7 +22,7 @@ class AdventureForm(forms.ModelForm):
 
     class Meta:
         model = Adventure
-        fields = ["title", "is_public", "location", "operating_location", "status"]
+        fields = ["title", "is_public", "location", "operating_location"]
         widgets = {
             "title": forms.TextInput(
                 attrs={
@@ -34,6 +34,9 @@ class AdventureForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        if not self.is_bound and not self.instance.pk:
+            self.initial.setdefault("is_public", True)
 
         location_id = None
 
@@ -50,12 +53,6 @@ class AdventureForm(forms.ModelForm):
                 OperatingLocation.objects.filter(location_id=location_id)
                 .order_by("name")
             )
-
-        if not (self.instance and self.instance.pk):
-            self.fields.pop("status", None)
-        else:
-            self.fields["status"].label = "Adventure Status"
-
 
 class LocationForm(forms.ModelForm):
     def clean(self):
@@ -265,6 +262,8 @@ class JournalEntryForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.instance.pk:
+            self.initial.setdefault("is_public", True)
         self.fields["entry_at"].input_formats = ["%Y-%m-%dT%H:%M"]
         self.fields["body"].required = True
         self.fields["body"].help_text = (

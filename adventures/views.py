@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -14,6 +14,7 @@ from datetime import date, datetime, time, timedelta
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from core.models import Adventure, Comment, JournalContact, JournalEntry, Location, OperatingLocation, Photo
@@ -287,7 +288,13 @@ def add_adventure(request):
     draft_public = request.GET.get("public", "1")
 
     if request.method == "POST":
-        form = AdventureForm(request.POST)
+        form_data = request.POST.copy()
+        if (
+            "adventure_visibility_present" not in form_data
+            and "is_public" not in form_data
+        ):
+            form_data["is_public"] = "on"
+        form = AdventureForm(form_data)
 
         if form.is_valid():
             adventure = form.save(commit=False)
@@ -316,6 +323,27 @@ def add_adventure(request):
                 ).order_by("name")
             )
 
+    operating_positions = [
+        {
+            "id": position.pk,
+            "location_id": position.location_id,
+            "name": position.name,
+            "latitude": (
+                float(position.latitude)
+                if position.latitude is not None
+                else None
+            ),
+            "longitude": (
+                float(position.longitude)
+                if position.longitude is not None
+                else None
+            ),
+        }
+        for position in OperatingLocation.objects.order_by(
+            "location__name", "name"
+        )
+    ]
+
     return render(
         request,
         "adventures/adventure_form.html",
@@ -323,7 +351,50 @@ def add_adventure(request):
             "form": form,
             "page_title": "Add New Adventure",
             "adventure": None,
+            "operating_positions": operating_positions,
         },
+    )
+
+
+@login_required
+@require_POST
+def create_operating_position_inline(request, location_id):
+    location = get_object_or_404(Location, pk=location_id)
+    form = OperatingLocationForm(
+        {
+            "name": request.POST.get("name", ""),
+            "description": request.POST.get("description", ""),
+            "latitude": request.POST.get("latitude", ""),
+            "longitude": request.POST.get("longitude", ""),
+        }
+    )
+
+    if not form.is_valid():
+        return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
+
+    if (
+        form.cleaned_data["latitude"] is None
+        or form.cleaned_data["longitude"] is None
+    ):
+        return JsonResponse(
+            {"errors": {"coordinates": [{"message": "Choose a point on the map."}]}},
+            status=400,
+        )
+
+    position = form.save(commit=False)
+    position.location = location
+    position.save()
+
+    return JsonResponse(
+        {
+            "id": position.pk,
+            "location_id": location.pk,
+            "name": position.name,
+            "description": position.description,
+            "latitude": float(position.latitude),
+            "longitude": float(position.longitude),
+        },
+        status=201,
     )
 
 
@@ -345,6 +416,27 @@ def edit_adventure(request, slug):
     else:
         form = AdventureForm(instance=adventure)
 
+    operating_positions = [
+        {
+            "id": position.pk,
+            "location_id": position.location_id,
+            "name": position.name,
+            "latitude": (
+                float(position.latitude)
+                if position.latitude is not None
+                else None
+            ),
+            "longitude": (
+                float(position.longitude)
+                if position.longitude is not None
+                else None
+            ),
+        }
+        for position in OperatingLocation.objects.order_by(
+            "location__name", "name"
+        )
+    ]
+
     return render(
         request,
         "adventures/adventure_form.html",
@@ -352,6 +444,7 @@ def edit_adventure(request, slug):
             "form": form,
             "page_title": "Edit Adventure",
             "adventure": adventure,
+            "operating_positions": operating_positions,
         },
     )
 
@@ -472,7 +565,13 @@ def add_journal_entry(request, slug):
         )
 
     if request.method == "POST":
-        form = JournalEntryForm(request.POST, request.FILES)
+        form_data = request.POST.copy()
+        if (
+            "journal_visibility_present" not in form_data
+            and "is_public" not in form_data
+        ):
+            form_data["is_public"] = "on"
+        form = JournalEntryForm(form_data, request.FILES)
 
         if form.is_valid():
             entry = form.save(commit=False)
@@ -1056,6 +1155,14 @@ def create_location(request):
                 operating_location.save()
 
             messages.success(request, "Location and first Operating Position saved.")
+            if request.POST.get("return_to") == "adventure":
+                params = {
+                    "location": location.pk,
+                    "operating": operating_location.pk,
+                    "title": request.POST.get("draft_title", ""),
+                    "public": request.POST.get("draft_public", "1"),
+                }
+                return redirect(f"{reverse('add_adventure')}?{urlencode(params)}")
             return redirect("location_detail", location_id=location.pk)
     else:
         initial_location = {}

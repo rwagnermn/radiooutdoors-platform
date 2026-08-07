@@ -228,6 +228,30 @@ def map_explorer(request):
             "can_start_adventure": request.user.is_authenticated,
         }
 
+        unassigned_current_adventure = any(
+            adventure.is_currently_operating
+            for adventure in visible_adventures.filter(
+                operating_location__isnull=True
+            )
+        )
+
+        if (
+            unassigned_current_adventure
+            and location.latitude is not None
+            and location.longitude is not None
+        ):
+            map_points.append(
+                {
+                    **shared,
+                    "currently_operating": True,
+                    "kind": "location",
+                    "operating_location_id": None,
+                    "latitude": float(location.latitude),
+                    "longitude": float(location.longitude),
+                    "title": location.name,
+                    "subtitle": location.get_location_type_display(),
+                }
+            )
 
         for operating_location in location.operating_locations.all():
             if (

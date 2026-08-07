@@ -33,7 +33,7 @@ async function initPositionMap(){
  const lat=document.getElementById("{{ form.latitude.id_for_label }}");
  const lng=document.getElementById("{{ form.longitude.id_for_label }}");
  const initial=(lat.value&&lng.value)?{lat:parseFloat(lat.value),lng:parseFloat(lng.value)}:{lat:45,lng:-93};
- const map=new Map(document.getElementById("position-map"),{center:initial,zoom:(lat.value&&lng.value)?16:8,mapId:"DEMO_MAP_ID"});
+ const map=new Map(document.getElementById("position-map"),radioOutdoorsMapOptions({center:initial,zoom:(lat.value&&lng.value)?16:8,mapId:"DEMO_MAP_ID"}));
  let marker;
  function place(pos){if(marker)marker.map=null;const pin=new PinElement({background:"#2e6fd8",borderColor:"#fff",glyphColor:"#fff"});marker=new AdvancedMarkerElement({map,position:pos,content:pin.element});}
  if(lat.value&&lng.value)place(initial);

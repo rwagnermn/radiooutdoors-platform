@@ -50,7 +50,9 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 {% if entry.photos.all %}
 <section class="journal-view-section"><h2>Photos</h2><div class="journal-photo-grid journal-view-photos">
 {% for photo in entry.photos.all %}<figure class="journal-photo">
+<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'journal photo' }} at original size">
 <img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">
+</button>
 {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}</figure>{% endfor %}
 </div></section>
 {% endif %}

@@ -328,7 +328,7 @@ async function initLocationDetailMap() {
     const {AdvancedMarkerElement, PinElement} =
         await google.maps.importLibrary("marker");
 
-    const map = new Map(mapElement, {
+    const map = new Map(mapElement, radioOutdoorsMapOptions({
         center: {
             lat: points[0].latitude,
             lng: points[0].longitude
@@ -338,7 +338,7 @@ async function initLocationDetailMap() {
         mapTypeControl: true,
         streetViewControl: true,
         fullscreenControl: true
-    });
+    }));
 
     const bounds = new google.maps.LatLngBounds();
     const infoWindow = new InfoWindow();

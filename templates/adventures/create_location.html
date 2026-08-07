@@ -239,13 +239,13 @@ async function initLocationEditor() {
         lng: parseFloat(positionLng.value || locationLng.value) || -93.0
     };
 
-    const map = new Map(document.getElementById("position-map"), {
+    const map = new Map(document.getElementById("position-map"), radioOutdoorsMapOptions({
         center: startingPosition,
         zoom: (positionLat.value || locationLat.value) ? 15 : 7,
         mapId: "DEMO_MAP_ID",
         streetViewControl: true,
         mapTypeControl: true
-    });
+    }));
 
     let marker = null;
     function placePosition(pos, pan) {
