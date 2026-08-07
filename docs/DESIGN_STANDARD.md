@@ -23,6 +23,7 @@ This is the permanent UI standard for Radio Outdoors. New pages and components m
 - Make checkboxes and radio buttons larger where practical.
 - Do not reduce typography below these standards without owner approval.
 - Preserve semantic markup, keyboard navigation, visible focus, and assistive-technology behavior.
+- Radio Outdoors must not rely on hover alone to communicate that an element is actionable. Important navigation/actions must have an obvious visible affordance because touch devices do not provide hover.
 
 ## Shared implementation
 
@@ -45,6 +46,8 @@ This is the permanent UI standard for Radio Outdoors. New pages and components m
 ## Target environments
 
 Design first for outdoor use, laptop and tablet screens, glare, and older eyes. Responsive layouts may reduce outer spacing, but must not reduce the typography or minimum click targets above.
+
+On shared devices, Radio Outdoors should always make the active signed-in identity obvious.
 
 ## UI verification checklist
 

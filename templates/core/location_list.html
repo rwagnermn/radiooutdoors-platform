@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Locations | Radio Outdoors{% endblock %}
 
@@ -11,7 +12,7 @@
             <p>Find places where operators have shared Radio Outdoors Adventures.</p>
         </div>
 
-        {% if user.is_authenticated %}
+        {% if is_verified_member %}
             <a href="{% url 'create_location' %}" class="button-primary">
                 Add New Location
             </a>
@@ -74,6 +75,7 @@
         <table class="location-table">
             <thead>
                 <tr>
+                    <th aria-label="Photo"></th>
                     <th>Location</th>
                     <th>Type</th>
                     <th>City</th>
@@ -92,6 +94,10 @@
                         onclick="window.location='{% url 'location_detail' location.pk %}';"
                         onkeydown="if(event.key==='Enter'){window.location='{% url 'location_detail' location.pk %}';}"
                     >
+                        <td class="location-photo-cell">
+                            {% if location.display_photo_url %}<img src="{{ location.display_photo_url }}{% if location.photo %}?v={{ location.updated_at|date:'U' }}{% endif %}" alt="">
+                            {% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="location-photo-placeholder">{% endif %}
+                        </td>
                         <td>
                             <a
                                 href="{% url 'location_detail' location.pk %}"
@@ -133,7 +139,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="6" class="empty-table-message">
+                        <td colspan="7" class="empty-table-message">
                             No locations match these filters.
                         </td>
                     </tr>

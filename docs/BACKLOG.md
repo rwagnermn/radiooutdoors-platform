@@ -21,6 +21,18 @@ Every requested bug, enhancement, or feature must be recorded here before implem
 | B-015 | Add original-size journal photo viewer | Testing | Medium |
 | B-016 | Build Support page structure | Testing | Medium |
 | B-017 | Integrate hosted payment provider | Open | Low |
+| B-018 | Improve Member onboarding and profiles | Testing | High |
+| B-019 | Improve staff Member verification and management | Testing | High |
+| B-020 | Preview Member and Journal photos before save | Testing | Medium |
+| B-021 | Create rich development test data and refine header identity | Testing | Medium |
+| B-022 | Establish Radio Outdoors and Adventure Book brand hierarchy | Testing | Medium |
+| B-023 | Add selective trademark marking and visible Member Adventure actions | Testing | Medium |
+| B-024 | Standardize compact Journal browsing lists | Testing | Medium |
+| B-025 | Populate missing development demo photos | Testing | Medium |
+| B-026 | Add a primary Location photo | Testing | Medium |
+| B-027 | Add licensed Wikimedia Location defaults | Testing | Medium |
+| B-028 | Manage Default Location Images in staff UI | Testing | Medium |
+| B-029 | Refine compact Journal selection tables | Testing | Medium |
 
 ## B-001 — Fix My Adventures status control
 
@@ -140,3 +152,87 @@ Every requested bug, enhancement, or feature must be recorded here before implem
 - **Status:** Open
 - **Priority:** Low
 - **Acceptance criteria:** Provider and legal requirements are approved first; checkout is hosted or provider-managed; no raw card number, expiration date, or CVV enters Radio Outdoors systems; credentials, webhooks, persistence, failure handling, privacy, and security are independently reviewed and tested.
+
+## B-018 — Improve Member onboarding and profiles
+
+- **Description:** Standardize the existing Home CTA family, provide a concise post-registration Welcome page, and add optional optimized Member profile photos.
+- **Status:** Testing
+- **Priority:** High
+- **Acceptance criteria:** Verified registration signs the Member in and opens the Welcome page; its three actions work; Home CTA typography is consistent; Members can upload, replace, remove, and display an optimized profile photo; existing Members receive a consistent placeholder; QRZ identity and email privacy remain protected.
+
+## B-019 — Improve staff Member verification and management
+
+- **Description:** Add staff-only existing-Member QRZ verification, a development-only verification override, and accessible row action menus to Member management.
+- **Status:** Testing
+- **Priority:** High
+- **Acceptance criteria:** Staff can reverify an existing callsign through the shared QRZ service; development profiles can only be overridden by staff while DEBUG is enabled; public verification rules remain strict; management rows show photos and clear verification status; actions are consolidated into an accessible hamburger menu.
+
+## B-020 — Preview Member and Journal photos before save
+
+- **Description:** Add a shared client-side Load/Change/Clear preview workflow for Member and Journal photo selections without uploading before normal form submission.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Selected Member and Journal images can be previewed, changed, and cleared locally; saved media remains unchanged until the normal Save action; canceling creates no records; existing duplicate-photo protection remains intact.
+
+## B-021 — Create rich development test data and refine header identity
+
+- **Description:** Provide repeatable, development-only realistic Member activity data and display signed-in Member identity as callsign followed by first name.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Each `demo_` Member has approximately 10 varied Adventures and 15 realistic Journals; reruns do not duplicate data; removal cannot delete non-demo user content; production verification remains unchanged; the header shows `CALLSIGN - First Name`, callsign-only fallback, and an explicit Follower identity.
+
+## B-022 — Establish Radio Outdoors and Adventure Book brand hierarchy
+
+- **Description:** Apply the approved Radio Outdoors, Adventure Book, Adventure, and Journal terminology to the Home page, public Member story collections, concise Help copy, and product documentation.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Home clearly states the product tagline without added marketing clutter; public Member profiles present only public Adventures under a dynamic possessive Adventure Book heading; management remains My Adventures; internal models, routes, tables, classes, forms, and migrations remain unchanged.
+
+## B-023 — Add selective trademark marking and visible Member Adventure actions
+
+- **Description:** Mark prominent Radio Outdoors branding with the TM symbol and add an explicit View Adventure affordance to every public Member Adventure Book entry.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Trademark marking is selective and never uses the registered symbol or marks Adventure Book; every Member Adventure entry has an always-visible, keyboard-accessible, touch-friendly View Adventure action; card presentation and public visibility behavior remain unchanged.
+
+## B-024 — Standardize compact Journal browsing lists
+
+- **Description:** Replace oversized multi-entry Journal cards with one shared, responsive, compact table/list presentation while preserving full Journal stories on their detail pages.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Public and management Journal lists show compact date/time, prominent title, one-line summary, photo count, and an always-visible View Journal action; management actions remain available; mobile rows stack cleanly; Lessons Learned and Journal detail presentation remain unchanged.
+
+## B-025 — Populate missing development demo photos
+
+- **Description:** Add safe DEBUG-only tooling that copies optimized random local images into missing demo Journal photo slots and assigns supported Adventure covers.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Existing photos and source files are preserved; only missing demo photo slots are populated; images are copied under ignored media storage and resized; missing/invalid sources fail safely; supported missing Adventure covers are assigned; Location population uses the single-photo support tracked in B-026.
+
+## B-026 — Add a primary Location photo
+
+- **Description:** Add one optional optimized Location image with preview-before-save, replacement/removal, compact list display, detail display, map-popup support, and development-only demo population.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Existing Locations remain valid without photos; authorized add/edit forms validate and optimize one image and support preview, replacement, and removal; list/detail/map surfaces show a photo or branded placeholder without oversized rows; demo tooling fills only clearly development-only missing Location photos; media remains ignored and all tests pass.
+
+## B-027 — Add licensed Wikimedia Location defaults
+
+- **Description:** Provide a small curated Wikimedia Commons fallback-image library, kept separate from Member Location photos, with validated reusable licenses, local optimized storage, type mapping, and accessible attribution.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Member photos always win; installed type defaults appear for no-photo Locations; the built-in placeholder remains the final fallback; unclear licenses are rejected; attribution remains accessible; files are stored locally without hotlinking or entering Git; checks and tests pass.
+
+## B-028 — Manage Default Location Images in staff UI
+
+- **Description:** Add a discoverable staff-only menu entry and compact management/edit workflow for default Location images, attribution, replacement, and enable/disable controls.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Only staff can access the menu and routes; all configured defaults appear with thumbnail, credit, license, status, and accessible action menu; image and attribution edits work with preview-before-save; disabling preserves the record and falls through to the built-in placeholder; Member Location photos retain priority; actual port-8000 HTML is verified.
+
+## B-029 — Refine compact Journal selection tables
+
+- **Description:** Bring every multi-entry Journal selection list to Contacts-table density while retaining a distinct table area, one-line summaries, obvious actions, and responsive stacking.
+- **Status:** Testing
+- **Priority:** Medium
+- **Acceptance criteria:** Journal rows reuse the Contacts table container/cell treatment; desktop date, title, and summary stay on one compact line with clean ellipsis; separators and the dark-green header distinguish the list from surrounding content; all multi-entry lists use the shared partial; obsolete Journal-card list markup/styles are removed; mobile records remain compact and usable.

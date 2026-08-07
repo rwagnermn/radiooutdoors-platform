@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}All Adventures | Radio Outdoors{% endblock %}
+{% block title %}Adventure Book | Radio Outdoors{% endblock %}
 
 {% block content %}
 <section class="content">
 
-    <div style="margin-bottom:24px;">
-        <h1>All Adventures</h1>
-        <p>Browse the adventures shared by all operators.</p>
+    <div class="adventure-book-heading">
+        <h1>Adventure Book</h1>
+        <p>Explore the stories and experiences shared by Radio Outdoors members.</p>
     </div>
 
-    <form method="get" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:24px;">
-        <div>
-            <label for="q">Search</label>
+    <p class="adventure-book-search-instruction">Search for an Adventure or select one below.</p>
+    <form method="get" class="adventure-book-filter-form">
+        <div class="adventure-book-search-field">
+            <label for="q">Adventure Search</label>
             <input id="q" name="q" value="{{ search }}" placeholder="Title, operator or place">
         </div>
 
@@ -65,9 +66,17 @@
             </select>
         </div>
 
-        <button type="submit" class="button-primary">Apply</button>
-        <a href="{% url 'all_adventures' %}">Clear</a>
+        <div class="adventure-book-filter-actions">
+            <button type="submit" class="button-primary">Apply</button>
+            <a href="{% url 'all_adventures' %}" class="filter-clear-link">Clear</a>
+        </div>
     </form>
+
+    {% if is_verified_member %}
+    <nav class="adventure-view-switch" aria-label="Adventure views">
+        <a href="{% url 'my_adventures' %}" class="ro-small-action">View My Adventures</a>
+    </nav>
+    {% endif %}
 
     <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;min-width:1000px;background:#fff;">

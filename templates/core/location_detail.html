@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ location.name }} | Radio Outdoors{% endblock %}
 
@@ -11,7 +12,7 @@
         </a>
 
         <div class="location-toolbar-actions">
-            {% if user.is_staff %}
+            {% if is_verified_member %}
                 <a
                     href="{% url 'edit_location' location.pk %}"
                     class="button-secondary-dark"
@@ -20,7 +21,7 @@
                 </a>
             {% endif %}
 
-            {% if user.is_authenticated %}
+            {% if is_verified_member %}
                 <form
                     method="post"
                     action="{% url 'start_adventure_here' location.pk %}"
@@ -36,6 +37,9 @@
     </div>
 
     <header class="location-detail-header">
+        {% if location.display_photo_url %}<img src="{{ location.display_photo_url }}{% if location.photo %}?v={{ location.updated_at|date:'U' }}{% endif %}" alt="{{ location.name }}" class="location-primary-photo">
+        {% else %}<div class="location-primary-photo location-primary-photo-placeholder"><img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors Location photo placeholder"></div>{% endif %}
+        {% if location.uses_default_photo %}<p class="location-photo-credit">Representative default photo: <a href="{{ location.default_photo_info.source_url }}" target="_blank" rel="noopener noreferrer">{{ location.default_photo_info.credit_text }}</a> · <a href="{{ location.default_photo_info.license_url }}" target="_blank" rel="noopener noreferrer">{{ location.default_photo_info.license_name }}</a> · resized by Radio Outdoors.</p>{% endif %}
         <p class="location-type-label">
             {{ location.get_location_type_display }}
         </p>
@@ -160,7 +164,7 @@
             <div>
                 <p class="section-kicker">Exact places to set up</p>
                 <h2>Operating Positions</h2>
-                {% if user.is_authenticated %}<a href="{% url 'add_operating_position' location.pk %}" class="button-primary compact-action">Add Operating Position</a>{% endif %}
+                {% if is_verified_member %}<a href="{% url 'add_operating_position' location.pk %}" class="button-primary compact-action">Add Operating Position</a>{% endif %}
             </div>
         </div>
 
@@ -170,7 +174,7 @@
                     <div class="operating-location-title-row">
                         <h3>{{ operating_location.name }}</h3>
 
-                        {% if user.is_authenticated %}
+                        {% if is_verified_member %}
                             <form
                                 method="post"
                                 action="{% url 'start_adventure_here' location.pk %}"

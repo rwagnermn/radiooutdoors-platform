@@ -35,7 +35,7 @@
         <button type="button" id="fit-visible-pins">
             Show All Visible Pins
         </button>
-        {% if user.is_authenticated %}
+        {% if is_verified_member %}
             <button
                 type="button"
                 id="add-location-pin-mode"
@@ -48,7 +48,7 @@
     </div>
 
 
-    {% if user.is_authenticated %}
+    {% if is_verified_member %}
         <div
             id="global-map-pin-instruction"
             class="global-map-pin-instruction"

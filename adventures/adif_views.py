@@ -6,11 +6,12 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+
+from core.auth import verified_member_required
 
 from core.models import JournalContact, JournalEntry
 
@@ -81,7 +82,7 @@ def _owned_entry(request, entry_id):
     return entry, None
 
 
-@login_required
+@verified_member_required
 def import_adif(request, entry_id):
     entry, forbidden = _owned_entry(request, entry_id)
 
@@ -138,7 +139,7 @@ def import_adif(request, entry_id):
     )
 
 
-@login_required
+@verified_member_required
 def preview_adif_import(request, entry_id, token):
     entry, forbidden = _owned_entry(request, entry_id)
 
@@ -183,7 +184,7 @@ def preview_adif_import(request, entry_id, token):
     )
 
 
-@login_required
+@verified_member_required
 @require_POST
 def confirm_adif_import(request, entry_id, token):
     entry, forbidden = _owned_entry(request, entry_id)
@@ -265,7 +266,7 @@ def confirm_adif_import(request, entry_id, token):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def cancel_adif_import(request, entry_id, token):
     entry, forbidden = _owned_entry(request, entry_id)

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Welcome to Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content welcome-page">
+<div class="location-card welcome-card">
+<h1>Welcome to Radio Outdoors</h1>
+<p>Your callsign is verified. What would you like to do next?</p>
+<div class="welcome-actions">
+<a href="{% url 'add_adventure' %}" class="btn-ro-primary">Create My First Adventure</a>
+<a href="{% url 'my_member_profile' %}" class="ro-small-action">Add Your Photo &amp; Profile</a>
+<a href="{% url 'all_adventures' %}" class="ro-small-action">Explore Adventure Book</a>
+</div>
+</div>
+</section>
+{% endblock %}

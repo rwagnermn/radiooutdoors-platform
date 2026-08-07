@@ -9,7 +9,7 @@
 <div class="compact-meta-row">
 <span>{{ entry.entry_at|date:"F j, Y — g:i A" }}</span>
 
-{% if user == adventure.owner %}
+{% if user == adventure.owner and is_verified_member %}
 <form
     method="post"
     action="{% url 'toggle_journal_visibility' entry.pk %}"
@@ -32,7 +32,7 @@
 </div>
 <h1>{{ entry.title|default:"Journal Entry" }}</h1>
 </div>
-{% if user == adventure.owner %}
+{% if user == adventure.owner and is_verified_member %}
 <div class="journal-heading-actions">
 <a href="{% url 'import_adif' entry.pk %}" class="button-secondary-dark">Import Contacts</a>
 <a href="{% url 'edit_journal_entry' entry.pk %}" class="ro-small-action">Edit Journal</a>
@@ -70,17 +70,17 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 {% csrf_token %}
 <div class="contact-toolbar">
 <input id="contact-search" class="contact-search" type="search" placeholder="Find callsign or place">
-{% if user == adventure.owner %}
+{% if user == adventure.owner and is_verified_member %}
 <button type="button" id="select-visible-contacts">Select Visible</button>
 <button type="button" id="clear-contact-selection">Clear</button>
 <button type="submit" id="delete-selected-contacts" class="contact-delete-button" disabled>Delete Selected</button>
 {% endif %}
 </div>
-<div class="contact-table-scroll"><table id="journal-contact-table" class="compact-contact-table">
-<thead><tr>{% if user == adventure.owner %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
+<div class="contact-table-scroll"><table id="journal-contact-table" class="compact-contact-table ro-data-table">
+<thead><tr>{% if user == adventure.owner and is_verified_member %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
 <th>Date</th><th>Time</th><th>Callsign</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Miles</th><th>Comment</th></tr></thead>
 <tbody>{% for contact in contacts %}<tr>
-{% if user == adventure.owner %}<td class="contact-select-column"><input type="checkbox" name="contact_ids" value="{{ contact.pk }}" class="contact-row-checkbox"></td>{% endif %}
+{% if user == adventure.owner and is_verified_member %}<td class="contact-select-column"><input type="checkbox" name="contact_ids" value="{{ contact.pk }}" class="contact-row-checkbox"></td>{% endif %}
 <td>{{ contact.qso_date|date:"M j, Y" }}</td>
 <td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
 <td class="contact-call">{{ contact.callsign }}</td><td>{{ contact.mode|default:"—" }}</td>

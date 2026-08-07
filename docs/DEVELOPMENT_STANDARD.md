@@ -52,6 +52,24 @@ Every implementation handoff must include:
 
 The `tools/push.bat` helper requires explicit file selection, shows the staged files, creates no commit when nothing is staged, displays the branch and outgoing commits, and requires `YES` before pushing.
 
+## Development demo data
+
+Create or refresh realistic local-only activity with:
+
+```text
+python manage.py create_demo_data
+```
+
+Each run recreates activity for the marker-owned `demo_` accounts, so repeated runs do not duplicate the data. The command uses the existing DEBUG-only development verification method and refuses to run when `DEBUG=False`.
+
+Remove only those demo accounts, their related content, generated photo files, and unused explicitly prefixed demo Locations with:
+
+```text
+python manage.py remove_demo_data
+```
+
+Neither command runs automatically. Never enable these commands in production.
+
 ## Payment integration safety
 
 - Payment processing is intentionally deferred until it is approved as a separate backlog item.

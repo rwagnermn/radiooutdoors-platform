@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponseForbidden, JsonResponse
@@ -18,6 +17,7 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 from core.models import Adventure, Comment, JournalContact, JournalEntry, Location, OperatingLocation, Photo
+from core.auth import verified_member_required
 
 from .adif_parser import parse_adif_bytes
 
@@ -105,7 +105,7 @@ def _save_entry_photos(entry, uploaded_files):
     return saved_count, duplicate_count
 
 
-@login_required
+@verified_member_required
 def my_adventures(request):
     adventures = (
         Adventure.objects.filter(owner=request.user)
@@ -257,7 +257,7 @@ def adventure_detail(request, slug):
     )
 
 
-@login_required
+@verified_member_required
 @require_POST
 def start_adventure_here(request, location_id):
     location = get_object_or_404(Location, pk=location_id)
@@ -280,7 +280,7 @@ def start_adventure_here(request, location_id):
     return redirect("edit_adventure", slug=adventure.slug)
 
 
-@login_required
+@verified_member_required
 def add_adventure(request):
     selected_location_id = request.GET.get("location")
     selected_operating_id = request.GET.get("operating")
@@ -343,7 +343,6 @@ def add_adventure(request):
             "location__name", "name"
         )
     ]
-
     return render(
         request,
         "adventures/adventure_form.html",
@@ -356,7 +355,7 @@ def add_adventure(request):
     )
 
 
-@login_required
+@verified_member_required
 @require_POST
 def create_operating_position_inline(request, location_id):
     location = get_object_or_404(Location, pk=location_id)
@@ -398,7 +397,7 @@ def create_operating_position_inline(request, location_id):
     )
 
 
-@login_required
+@verified_member_required
 def edit_adventure(request, slug):
     adventure = get_object_or_404(Adventure, slug=slug)
 
@@ -436,6 +435,7 @@ def edit_adventure(request, slug):
             "location__name", "name"
         )
     ]
+    journal_entries = adventure.journal_entries.prefetch_related("photos").all()
 
     return render(
         request,
@@ -445,12 +445,13 @@ def edit_adventure(request, slug):
             "page_title": "Edit Adventure",
             "adventure": adventure,
             "operating_positions": operating_positions,
+            "journal_entries": journal_entries,
         },
     )
 
 
 
-@login_required
+@verified_member_required
 @require_POST
 def toggle_adventure_visibility(request, slug):
     adventure = get_object_or_404(
@@ -463,7 +464,7 @@ def toggle_adventure_visibility(request, slug):
     return redirect(request.POST.get("next") or adventure.get_absolute_url())
 
 
-@login_required
+@verified_member_required
 @require_POST
 def delete_adventure(request, slug):
     adventure = get_object_or_404(
@@ -476,7 +477,7 @@ def delete_adventure(request, slug):
     return redirect("my_adventures")
 
 
-@login_required
+@verified_member_required
 @require_POST
 def toggle_journal_visibility(request, entry_id):
     entry = get_object_or_404(
@@ -495,7 +496,7 @@ def toggle_journal_visibility(request, entry_id):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def delete_selected_contacts(request, entry_id):
     entry = get_object_or_404(
@@ -529,7 +530,7 @@ def delete_selected_contacts(request, entry_id):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def mark_adventure_done(request, slug):
     adventure = get_object_or_404(
@@ -542,7 +543,7 @@ def mark_adventure_done(request, slug):
     return redirect(request.POST.get("next") or "my_adventures")
 
 
-@login_required
+@verified_member_required
 @require_POST
 def mark_adventure_in_progress(request, slug):
     adventure = get_object_or_404(
@@ -555,7 +556,7 @@ def mark_adventure_in_progress(request, slug):
     return redirect(request.POST.get("next") or "my_adventures")
 
 
-@login_required
+@verified_member_required
 def add_journal_entry(request, slug):
     adventure = get_object_or_404(Adventure, slug=slug)
 
@@ -684,7 +685,7 @@ def journal_entry_detail(request, entry_id):
     )
 
 
-@login_required
+@verified_member_required
 def edit_journal_entry(request, entry_id):
     entry = get_object_or_404(
         JournalEntry.objects.select_related("adventure"),
@@ -784,7 +785,7 @@ def _contact_fingerprint(contact):
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
-@login_required
+@verified_member_required
 def import_adif(request, entry_id):
     entry = get_object_or_404(
         JournalEntry.objects.select_related(
@@ -853,7 +854,7 @@ def import_adif(request, entry_id):
     )
 
 
-@login_required
+@verified_member_required
 def preview_adif_import(request, entry_id, token):
     entry = get_object_or_404(
         JournalEntry.objects.select_related("adventure"),
@@ -903,7 +904,7 @@ def preview_adif_import(request, entry_id, token):
     )
 
 
-@login_required
+@verified_member_required
 @require_POST
 def confirm_adif_import(request, entry_id, token):
     entry = get_object_or_404(
@@ -995,7 +996,7 @@ def confirm_adif_import(request, entry_id, token):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def cancel_adif_import(request, entry_id, token):
     entry = get_object_or_404(
@@ -1013,7 +1014,7 @@ def cancel_adif_import(request, entry_id, token):
     return redirect("import_adif", entry_id=entry.pk)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def delete_journal_entry(request, entry_id):
     entry = get_object_or_404(
@@ -1048,7 +1049,7 @@ def delete_journal_entry(request, entry_id):
     return redirect("edit_adventure", slug=adventure.slug)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def make_cover_photo(request, photo_id):
     photo = get_object_or_404(
@@ -1067,7 +1068,7 @@ def make_cover_photo(request, photo_id):
     return redirect("edit_adventure", slug=adventure.slug)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def delete_photo(request, photo_id):
     photo = get_object_or_404(
@@ -1098,7 +1099,7 @@ def delete_photo(request, photo_id):
     return redirect("edit_adventure", slug=adventure.slug)
 
 
-@login_required
+@verified_member_required
 @require_POST
 def add_comment(request, slug):
     adventure = get_object_or_404(Adventure, slug=slug)
@@ -1113,7 +1114,7 @@ def add_comment(request, slug):
     return redirect(adventure.get_absolute_url())
 
 
-@login_required
+@verified_member_required
 @require_POST
 def delete_comment(request, comment_id):
     comment = get_object_or_404(Comment, pk=comment_id)
@@ -1128,10 +1129,14 @@ def delete_comment(request, comment_id):
     return redirect(adventure_url)
 
 
-@login_required
+@verified_member_required
 def create_location(request):
     if request.method == "POST":
-        location_form = LocationForm(request.POST, prefix="location")
+        location_form = LocationForm(
+            request.POST,
+            request.FILES,
+            prefix="location",
+        )
         operating_form = OperatingLocationForm(
             request.POST,
             prefix="operating",
@@ -1205,11 +1210,16 @@ def create_location(request):
     )
 
 
-@user_passes_test(lambda user: user.is_staff)
+@verified_member_required
 def edit_location(request, location_id):
     location = get_object_or_404(Location, pk=location_id)
     if request.method == "POST":
-        location_form = LocationForm(request.POST, instance=location, prefix="location")
+        location_form = LocationForm(
+            request.POST,
+            request.FILES,
+            instance=location,
+            prefix="location",
+        )
         if location_form.is_valid():
             location_form.save()
             return redirect("location_detail", location_id=location.pk)
@@ -1224,7 +1234,7 @@ def edit_location(request, location_id):
     })
 
 
-@login_required
+@verified_member_required
 def add_operating_position(request, location_id):
     location = get_object_or_404(Location, pk=location_id)
     if request.method == "POST":

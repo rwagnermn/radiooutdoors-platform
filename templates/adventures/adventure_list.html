@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Adventures | Radio Outdoors{% endblock %}
+{% block title %}Adventure Book | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:35px;">
-    <div><h1>Adventures</h1><p>Explore outdoor radio stories shared by operators.</p></div>
-    {% if user.is_authenticated %}
+    <div><h1>Adventure Book</h1><p>Explore outdoor radio stories shared by operators.</p></div>
+    {% if is_verified_member %}
       <a href="{% url 'start_adventure' %}" class="button-primary">Start the Adventure</a>
     {% endif %}
   </div>
@@ -26,7 +26,7 @@
   {% else %}
     <div class="location-card">
       <h2>No adventures yet.</h2>
-      {% if user.is_authenticated %}
+      {% if is_verified_member %}
         <p style="margin-top:20px;"><a href="{% url 'start_adventure' %}" class="button-primary">Start the Adventure</a></p>
       {% else %}
         <p>Sign in to start the first adventure.</p>

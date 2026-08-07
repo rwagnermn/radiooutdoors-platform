@@ -1,37 +1,44 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}My Member Profile | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
 <div class="location-card member-form-card">
-<h1>My Member Profile</h1><section class="profile-role-guide"><h2>Your Radio Outdoors account</h2><p><strong>Registered Member / Follower:</strong> has an account, can request to follow Members, receive notifications, and later become a publishing Member.</p><p><strong>Member:</strong> a Registered Member with a QRZ-verified callsign who can publish Adventures and manage Followers.</p></section>
-<p>Enter your current callsign. QRZ verification supports United States and foreign operators.</p>
+<h1>My Member Profile</h1>
+<p>Your QRZ-verified callsign is your Radio Outdoors identity and cannot be changed here.</p>
 
-<form method="post">
+<form method="post" enctype="multipart/form-data">
 {% csrf_token %}
 {{ form.non_field_errors }}
 
-<div class="member-callsign-entry">
-<div>
-<label for="{{ form.callsign.id_for_label }}">Current Callsign</label>
-{{ form.callsign }}{{ form.callsign.errors }}
-</div>
-<button type="submit" name="action" value="verify" class="ro-small-action">Check QRZ</button>
-</div>
-
-{% if qrz_preview %}
 <div class="qrz-preview">
-<strong>{{ qrz_preview.callsign }} found</strong>
-<span>{{ qrz_preview.first_name }} {{ qrz_preview.last_name }}</span>
-<span>{{ qrz_preview.city }}{% if qrz_preview.state %}, {{ qrz_preview.state }}{% endif %} {{ qrz_preview.country }}</span>
-<span>Class {{ qrz_preview.license_class|default:"—" }} · Grid {{ qrz_preview.grid|default:"—" }}</span>
-</div>
-{% elif profile.callsign_verified %}
-<div class="qrz-preview">
-<strong>{{ profile.callsign }} · QRZ Verified</strong>
+<strong>{{ profile.callsign }} · {{ profile.get_verification_method_display }}</strong>
 <span>{{ profile.qrz_first_name }} {{ profile.qrz_last_name }}</span>
 <span>Class {{ profile.qrz_license_class|default:"—" }} · Grid {{ profile.qrz_grid|default:"—" }}</span>
 </div>
+
+<div class="member-photo-editor photo-preview-control" data-photo-preview data-photo-preview-mode="single">
+<div class="photo-preview-stage" data-photo-preview-stage data-original-src="{% if profile.profile_photo %}{{ profile.profile_photo.url }}?v={{ profile.updated_at|date:'U' }}{% else %}{% static 'images/radiooutdoors-logo-white.png' %}{% endif %}" data-placeholder-src="{% static 'images/radiooutdoors-logo-white.png' %}">
+{% if profile.profile_photo %}
+<img src="{{ profile.profile_photo.url }}?v={{ profile.updated_at|date:'U' }}" alt="Current profile picture for {{ profile.callsign }}" class="member-profile-photo member-profile-photo-large" data-photo-preview-image>
+{% else %}
+<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors profile picture placeholder" class="member-profile-photo member-profile-photo-large member-profile-photo-placeholder" data-photo-preview-image>
 {% endif %}
+</div>
+<div>
+<label for="{{ form.profile_photo.id_for_label }}">Profile Picture <span class="optional-label">(optional)</span></label>
+{{ form.profile_photo }}{{ form.profile_photo.errors }}
+{{ form.remove_profile_photo }}
+<div class="photo-preview-actions">
+<button type="button" class="ro-small-action" data-photo-preview-load>Load Photo</button>
+<button type="button" class="ro-small-action" data-photo-preview-change>Change Photo</button>
+<button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button>
+{% if profile.profile_photo %}<button type="button" class="ro-small-action ro-danger-action" data-photo-preview-remove>Remove Saved Photo</button>{% endif %}
+</div>
+<p class="photo-preview-status" data-photo-preview-status aria-live="polite">Choose a file, then select Load Photo. Nothing is saved until Save Profile.</p>
+<p class="helptext">JPEG, PNG, GIF, or WebP. Large images are resized automatically when saved.</p>
+</div>
+</div>
 
 <div class="two-column-fields">
 <div><label for="{{ form.display_name.id_for_label }}">Display Name</label>{{ form.display_name }}{{ form.display_name.errors }}</div>
@@ -46,8 +53,9 @@
 
 <label for="{{ form.bio.id_for_label }}">About Me</label>{{ form.bio }}{{ form.bio.errors }}
 <label class="member-public-choice">{{ form.profile_is_public }} <span>Show my profile in the Members directory</span></label>
+<label class="member-public-choice">{{ form.email_visible_to_members }} <span>Show my email address to signed-in Radio Outdoors Members</span></label>
 
-<button type="submit" name="action" value="save" class="button-primary">Verify and Save Profile</button>
+<button type="submit" class="button-primary">Save Profile</button>
 </form>
 </div>
 </section>

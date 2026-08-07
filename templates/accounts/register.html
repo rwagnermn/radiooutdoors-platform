@@ -1,56 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Create Account | Radio Outdoors{% endblock %}
+{% block title %}Join Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
 <div class="location-card registration-card">
-
-{% if invitation %}
-<p class="registration-kicker">Invitation from {{ invitation.member.callsign }}</p>
-<h1>Create a free Radio Outdoors Follower account</h1>
+<p class="registration-kicker">Verified amateur-radio membership</p>
+<h1>Join Radio Outdoors</h1>
 <p>
-{{ invitation.member.public_name }} invited you to follow
-{{ invitation.member.callsign }}. After registration you will be connected
-automatically and can stop following at any time.
+Radio Outdoors Members use their amateur-radio callsign as their primary
+identity. Your callsign must be verified through QRZ before an account is
+created.
 </p>
-{% elif follow_callsign %}
-<p class="registration-kicker">Follow {{ follow_callsign }}</p>
-<h1>Create a free Radio Outdoors Follower account</h1>
-<p>
-After registration, a follow request will be sent to {{ follow_callsign }}.
-The Member will see your name and email and may approve, decline, or block it.
-</p>
-{% else %}
-<h1>Create a free Radio Outdoors Follower account</h1>
-<p>
-Follow one or more Members and receive email when an approved Member publishes
-a new public Adventure. You can stop following at any time.
-</p>
-{% endif %}
 
 <form method="post" class="registration-form">
 {% csrf_token %}
-<input type="hidden" name="follow" value="{{ follow_callsign }}">
-<input type="hidden" name="invite" value="{{ invite_token }}">
-<input type="hidden" name="next" value="{{ next_url }}">
 {{ form.non_field_errors }}
-
 <div class="two-column-fields">
-<div><label for="{{ form.first_name.id_for_label }}">First name</label>{{ form.first_name }}{{ form.first_name.errors }}</div>
-<div><label for="{{ form.last_name.id_for_label }}">Last name</label>{{ form.last_name }}{{ form.last_name.errors }}</div>
-<div><label for="{{ form.email.id_for_label }}">Email address</label>{{ form.email }}{{ form.email.errors }}{% if form.email.help_text %}<small>{{ form.email.help_text }}</small>{% endif %}</div>
-<div><label for="{{ form.username.id_for_label }}">Username</label>{{ form.username }}{{ form.username.errors }}</div>
-<div><label for="{{ form.password1.id_for_label }}">Password</label>{{ form.password1 }}{{ form.password1.errors }}</div>
-<div><label for="{{ form.password2.id_for_label }}">Confirm password</label>{{ form.password2 }}{{ form.password2.errors }}</div>
+<div><label for="{{ form.callsign.id_for_label }}">Callsign <span class="required-field-text">Required Field</span></label>{{ form.callsign }}{{ form.callsign.errors }}</div>
+<div><label for="{{ form.email.id_for_label }}">Email address <span class="required-field-text">Required Field</span></label>{{ form.email }}{{ form.email.errors }}{% if form.email.help_text %}<small>{{ form.email.help_text }}</small>{% endif %}</div>
+<div><label for="{{ form.password1.id_for_label }}">Password <span class="required-field-text">Required Field</span></label>{{ form.password1 }}{{ form.password1.errors }}</div>
+<div><label for="{{ form.password2.id_for_label }}">Confirm password <span class="required-field-text">Required Field</span></label>{{ form.password2 }}{{ form.password2.errors }}</div>
 </div>
-
-<button type="submit" class="button-primary registration-submit">
-Create Follower Account
-</button>
+<button type="submit" class="btn-ro-primary">Verify Callsign and Join</button>
 </form>
 
-<p class="registration-signin">
-Already have an account? <a href="{% url 'login' %}">Sign in</a>
-</p>
+<p>Follower accounts are invitation-only and are created from the private link in a Member's invitation email.</p>
+<p class="registration-signin">Already have an account? <a href="{% url 'login' %}">Log In</a></p>
 </div>
 </section>
 {% endblock %}

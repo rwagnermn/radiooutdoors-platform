@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Sign In | Radio Outdoors{% endblock %}
+{% block title %}Log In | Radio Outdoors{% endblock %}
 
 {% block content %}
 <section class="content">
     <div class="location-card auth-card">
-        <h1>Sign In</h1>
+        <h1>Log In</h1>
 
         {% if form.errors %}
             <p class="form-error">
@@ -15,7 +15,7 @@
 
         {% if next %}
             <p class="auth-help">
-                Sign in to continue to your Adventures.
+                Log in to continue to your Adventures.
             </p>
         {% endif %}
 
@@ -38,8 +38,8 @@
 
             <input type="hidden" name="next" value="{{ next }}">
 
-            <button type="submit" class="button-primary">
-                Sign In
+            <button type="submit" class="btn-ro-primary">
+                Log In
             </button>
         </form>
     </div>

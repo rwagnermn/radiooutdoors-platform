@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Edit Default Location Image | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><div class="view-page-toolbar"><a href="{% url 'default_location_image_detail' default_image.pk %}" class="back-link-button">← Back to Default Image</a></div>
+<div class="location-card default-image-form-card"><h1>Edit {{ default_image.get_key_display }}</h1>
+<form method="post" enctype="multipart/form-data" id="default-image-editor">{% csrf_token %}{{ form.non_field_errors }}
+<div class="location-photo-editor photo-preview-control" data-photo-preview data-photo-preview-mode="single" data-photo-preview-save-label="Default Image">
+<div class="photo-preview-stage" data-photo-preview-stage data-original-src="{% if default_image.image %}{{ default_image.image.url }}?v={{ default_image.updated_at|date:'U' }}{% endif %}" data-placeholder-src="">
+{% if default_image.image %}<img src="{{ default_image.image.url }}?v={{ default_image.updated_at|date:'U' }}" alt="Current {{ default_image.get_key_display }} default" class="location-photo-preview" data-photo-preview-image>{% else %}<img src="" alt="No default image installed" class="location-photo-preview" data-photo-preview-image>{% endif %}</div>
+<div class="location-photo-controls"><label for="{{ form.image.id_for_label }}">Default Image</label>{{ form.image }}{% for error in form.image.errors %}<p class="form-error">{{ error }}</p>{% endfor %}<div class="photo-preview-actions"><button type="button" class="ro-small-action" data-photo-preview-load>Load Photo</button><button type="button" class="ro-small-action" data-photo-preview-change>Change Photo</button><button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button></div><p class="photo-preview-status" data-photo-preview-status aria-live="polite">Choose a file, then select Load Photo. Nothing is saved until Save Default Image.</p></div>
+</div>
+<div id="attribution-fields" class="default-image-form-grid">
+<div><label for="{{ form.source_title.id_for_label }}">Source Title</label>{{ form.source_title }}{{ form.source_title.errors }}</div>
+<div><label for="{{ form.creator.id_for_label }}">Creator / Photographer</label>{{ form.creator }}{{ form.creator.errors }}</div>
+<div class="field-span-two"><label for="{{ form.source_url.id_for_label }}">Source URL</label>{{ form.source_url }}{{ form.source_url.errors }}</div>
+<div><label for="{{ form.license_name.id_for_label }}">License Name</label>{{ form.license_name }}{{ form.license_name.errors }}</div>
+<div><label for="{{ form.license_url.id_for_label }}">License URL</label>{{ form.license_url }}{{ form.license_url.errors }}</div>
+<div class="field-span-two"><label for="{{ form.displayed_credit.id_for_label }}">Displayed Credit Text</label>{{ form.displayed_credit }}{{ form.displayed_credit.errors }}</div>
+<div class="field-span-two"><label for="{{ form.active.id_for_label }}">{{ form.active }} Active</label></div>
+</div>
+<button type="submit" class="button-primary">Save Default Image</button>
+</form></div></section>
+{% endblock %}

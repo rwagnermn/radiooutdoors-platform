@@ -231,11 +231,11 @@ People should never feel overwhelmed.
 
 ---
 
-# Explore Adventures
+# Explore Adventure Book
 
 Visitors come to:
 
-## Explore Adventures
+## Explore Adventure Book
 
 Members come to:
 
@@ -295,7 +295,7 @@ Browse Posts
 
 We say...
 
-Explore Adventures
+Explore Adventure Book
 
 ---
 

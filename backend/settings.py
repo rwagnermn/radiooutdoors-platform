@@ -66,6 +66,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.google_maps',
+                'core.context_processors.account_roles',
             ],
         },
     },
@@ -149,5 +150,5 @@ if not GOOGLE_MAPS_API_KEY and _google_maps_key_file.exists():
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "Radio Outdoors <noreply@radiooutdoors.org>"
 
-LOGIN_REDIRECT_URL = "/accounts/"
+LOGIN_REDIRECT_URL = "/adventures/all/"
 LOGOUT_REDIRECT_URL = "/"

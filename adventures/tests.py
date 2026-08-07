@@ -1,9 +1,14 @@
+from io import BytesIO
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
-from core.models import Adventure, JournalEntry, Location, OperatingLocation, Photo
+from core.models import Adventure, JournalEntry, Location, MemberProfile, OperatingLocation, Photo
 
 
 class AddAdventureWorkflowTests(TestCase):
@@ -11,6 +16,12 @@ class AddAdventureWorkflowTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username="workflow-test",
             password="test-password",
+        )
+        MemberProfile.objects.create(
+            user=self.user,
+            callsign="W5FLOW",
+            callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
         )
         self.client.force_login(self.user)
         self.location = Location.objects.create(name="Workflow Park")
@@ -201,6 +212,51 @@ class AddAdventureWorkflowTests(TestCase):
 
         self.assertFalse(adventure.journal_entries.get().is_public)
 
+    def test_journal_photo_preview_controls_do_not_create_records(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Preview Controls",
+            location=self.location,
+            operating_location=self.mapped_position,
+        )
+        response = self.client.get(
+            reverse("add_journal_entry", kwargs={"slug": adventure.slug})
+        )
+        self.assertContains(response, "data-photo-preview")
+        self.assertContains(response, "Load Photos")
+        self.assertContains(response, "Change Photos")
+        self.assertContains(response, "Clear Selection")
+        self.assertContains(response, "photo-preview.js")
+        self.assertEqual(Photo.objects.count(), 0)
+        self.assertEqual(JournalEntry.objects.count(), 0)
+
+    def test_duplicate_journal_photo_selection_saves_only_once(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Duplicate Photo Preview",
+            location=self.location,
+            operating_location=self.mapped_position,
+        )
+        image = Image.new("RGB", (80, 60), "orange")
+        output = BytesIO()
+        image.save(output, format="JPEG")
+        image_bytes = output.getvalue()
+
+        response = self.client.post(
+            reverse("add_journal_entry", kwargs={"slug": adventure.slug}),
+            {
+                "entry_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
+                "body": "Duplicate photo protection.",
+                "photos": [
+                    SimpleUploadedFile("same-one.jpg", image_bytes, "image/jpeg"),
+                    SimpleUploadedFile("same-two.jpg", image_bytes, "image/jpeg"),
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        entry = adventure.journal_entries.get()
+        self.assertEqual(entry.photos.count(), 1)
+
     def test_status_endpoints_toggle_and_edit_save_preserves_status(self):
         adventure = Adventure.objects.create(
             owner=self.user,
@@ -323,3 +379,139 @@ class AddAdventureWorkflowTests(TestCase):
         )
         self.assertContains(response, "View Summit station at original size")
         self.assertContains(response, "journal-photo-viewer.js")
+
+    def test_journal_browsing_lists_use_compact_shared_rows(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Compact Journal List",
+            location=self.location,
+            operating_location=self.mapped_position,
+            lessons_learned="Keep Lessons Learned separate.",
+        )
+        long_body = "A long Journal story that belongs on the detail page. " * 12
+        entries = [
+            JournalEntry.objects.create(
+                adventure=adventure,
+                title=f"Journal title {index}",
+                body=long_body,
+            )
+            for index in range(11)
+        ]
+        Photo.objects.create(
+            journal_entry=entries[0],
+            image="adventure_photos/compact-list.jpg",
+        )
+
+        detail_response = self.client.get(adventure.get_absolute_url())
+        self.assertContains(
+            detail_response,
+            'class="contact-table-scroll journal-list-wrap"',
+        )
+        self.assertContains(
+            detail_response,
+            'class="compact-contact-table ro-data-table journal-list-table"',
+        )
+        self.assertContains(detail_response, "View Journal", count=11)
+        self.assertContains(detail_response, "Journal title 10")
+        self.assertNotContains(detail_response, long_body)
+        self.assertContains(detail_response, "Keep Lessons Learned separate.")
+        self.assertContains(detail_response, '<td class="journal-list-photo-count center-column">1</td>')
+
+        edit_response = self.client.get(
+            reverse("edit_adventure", kwargs={"slug": adventure.slug})
+        )
+        self.assertContains(
+            edit_response,
+            'class="compact-contact-table ro-data-table journal-list-table"',
+        )
+        self.assertContains(edit_response, "View Journal", count=11)
+        self.assertContains(edit_response, ">Edit</a>", count=11)
+
+        journal_response = self.client.get(
+            reverse("journal_entry_detail", kwargs={"entry_id": entries[0].pk})
+        )
+        self.assertContains(journal_response, long_body)
+        self.assertNotContains(journal_response, "journal-list-table")
+
+    def location_image(self, name="location.png", color="green"):
+        image = Image.new("RGB", (2200, 1100), color)
+        output = BytesIO()
+        image.save(output, format="PNG")
+        return SimpleUploadedFile(name, output.getvalue(), "image/png")
+
+    def test_location_photo_create_preview_replace_remove_and_display(self):
+        with patch(
+            "core.location_default_images.default_storage.exists",
+            return_value=False,
+        ):
+            no_photo_detail = self.client.get(
+                reverse("location_detail", kwargs={"location_id": self.location.pk})
+            )
+        self.assertContains(no_photo_detail, "location-primary-photo-placeholder")
+
+        create_page = self.client.get(reverse("create_location"))
+        self.assertContains(create_page, "data-photo-preview")
+        self.assertContains(create_page, "Load Photo")
+        self.assertContains(create_page, "Nothing is saved until Save Location")
+        self.assertContains(create_page, 'enctype="multipart/form-data"')
+
+        response = self.client.post(
+            reverse("create_location"),
+            {
+                "location-name": "Photo Workflow Location",
+                "location-location_type": Location.LocationType.PARK,
+                "location-country": "USA",
+                "location-photo": self.location_image(),
+                "operating-name": "First Position",
+            },
+        )
+        location = Location.objects.get(name="Photo Workflow Location")
+        self.assertRedirects(
+            response,
+            reverse("location_detail", kwargs={"location_id": location.pk}),
+        )
+        self.assertTrue(location.photo)
+        original_name = location.photo.name
+        with Image.open(location.photo.path) as stored:
+            self.assertLessEqual(max(stored.size), 1600)
+
+        list_response = self.client.get(reverse("locations"))
+        self.assertContains(list_response, location.photo.url)
+        detail_response = self.client.get(
+            reverse("location_detail", kwargs={"location_id": location.pk})
+        )
+        self.assertContains(detail_response, location.photo.url)
+        self.assertContains(detail_response, 'class="location-primary-photo"')
+
+        self.client.post(
+            reverse("edit_location", kwargs={"location_id": location.pk}),
+            {
+                "location-name": location.name,
+                "location-location_type": location.location_type,
+                "location-country": location.country,
+                "location-photo": self.location_image("replacement.png", "blue"),
+            },
+        )
+        location.refresh_from_db()
+        self.assertTrue(location.photo)
+        self.assertNotEqual(location.photo.name, original_name)
+
+        self.client.post(
+            reverse("edit_location", kwargs={"location_id": location.pk}),
+            {
+                "location-name": location.name,
+                "location-location_type": location.location_type,
+                "location-country": location.country,
+                "location-remove_location_photo": "on",
+            },
+        )
+        location.refresh_from_db()
+        self.assertFalse(location.photo)
+        with patch(
+            "core.location_default_images.default_storage.exists",
+            return_value=False,
+        ):
+            removed_detail = self.client.get(
+                reverse("location_detail", kwargs={"location_id": location.pk})
+            )
+        self.assertContains(removed_detail, "location-primary-photo-placeholder")

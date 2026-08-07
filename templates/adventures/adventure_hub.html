@@ -21,7 +21,7 @@
                     Continue an active Adventure Journal or revisit completed adventures.
                 </p>
 
-                {% if user.is_authenticated %}
+                {% if is_verified_member %}
                     <p style="margin-top:25px;">
                         <a href="{% url 'my_adventures' %}"
                            class="button-primary">
@@ -36,7 +36,7 @@
             </article>
 
             <article class="location-card">
-                <h2>All Adventures</h2>
+                <h2>Adventure Book</h2>
                 <p>
                     Browse the outdoor radio stories shared by all operators.
                 </p>
@@ -44,14 +44,14 @@
                 <p style="margin-top:25px;">
                     <a href="{% url 'all_adventures' %}"
                        class="button-primary">
-                        Explore All Adventures
+                        Explore Adventure Book
                     </a>
                 </p>
             </article>
 
         </div>
 
-        {% if user.is_authenticated %}
+        {% if is_verified_member %}
             <p style="text-align:center;margin-top:35px;">
                 <a href="{% url 'start_adventure' %}"
                    class="button-secondary">

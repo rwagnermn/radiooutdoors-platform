@@ -1,34 +1,37 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ profile.callsign }} | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
 <div class="member-profile-heading">
+{% if profile.profile_photo %}
+<img src="{{ profile.profile_photo.url }}?v={{ profile.updated_at|date:'U' }}" alt="{{ profile.callsign }} profile picture" class="member-profile-photo member-profile-photo-large">
+{% else %}
+<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors profile picture placeholder" class="member-profile-photo member-profile-photo-large member-profile-photo-placeholder">
+{% endif %}
 <div>
-<div class="member-callsign-row"><h1>{{ profile.callsign }}</h1>{% if profile.callsign_verified %}<span class="member-verified">QRZ Verified</span>{% endif %}</div>
+<div class="member-callsign-row"><h1>{{ profile.callsign }}</h1>{% if profile.callsign_verified %}<span class="member-verified">{{ profile.get_verification_method_display }}</span>{% endif %}</div>
 <h2>{{ profile.public_name }}</h2>
 {% if profile.home_label %}<p>{{ profile.home_label }}</p>{% endif %}
-{% if user.is_authenticated and user.member_profile.callsign and profile.email_visible_to_members and profile.user.email %}<p class="member-profile-email"><strong>Email:</strong> <a class="member-email-link" href="mailto:{{ profile.user.email }}">{{ profile.user.email }}</a></p>{% endif %}
+{% if is_verified_member and profile.email_visible_to_members and profile.user.email %}<p class="member-profile-email"><strong>Email:</strong> <a class="member-email-link" href="mailto:{{ profile.user.email }}">{{ profile.user.email }}</a></p>{% endif %}
 
 <p>Class {{ profile.qrz_license_class|default:"—" }} · Grid {{ profile.qrz_grid|default:"—" }}{% if profile.qrz_expiration %} · Expires {{ profile.qrz_expiration }}{% endif %}</p>
 </div>
-{% if is_owner %}<a href="{% url 'my_member_profile' %}" class="ro-small-action">Edit Profile</a> <a href="{% url 'follower_management' %}" class="ro-small-action">My Followers</a>{% elif user.is_authenticated %}<form method="post" action="{% url 'request_follow' profile.callsign %}">{% csrf_token %}<button type="submit" class="button-primary">Request to Follow</button></form>{% else %}<a href="{% url 'login' %}?next={% url 'member_detail' profile.callsign %}" class="button-primary">Sign In</a> <a href="{% url 'register' %}?follow={{ profile.callsign }}" class="button-primary">Create Account to Follow</a>{% endif %}
+{% if is_owner %}<a href="{% url 'my_member_profile' %}" class="ro-small-action">Edit Profile</a> <a href="{% url 'follower_management' %}" class="ro-small-action">My Followers</a>{% elif user.is_authenticated %}<form method="post" action="{% url 'request_follow' profile.callsign %}">{% csrf_token %}<button type="submit" class="button-primary">Request to Follow</button></form>{% else %}<div class="ro-page-actions"><a href="{% url 'login' %}?next={% url 'member_detail' profile.callsign %}" class="ro-small-action">Log In</a><a href="{% url 'register' %}" class="btn-ro-primary">Join Radio Outdoors</a></div><p>Follower accounts are invitation-only. Ask this Member for an invitation if you would like to follow their Adventures.</p>{% endif %}
 </div>
 {% if profile.bio %}<div class="location-card">{{ profile.bio|linebreaks }}</div>{% endif %}
 <div class="member-count-summary">
-<div><strong>{{ profile.adventure_count }}</strong><span>Public Adventures</span></div>
+<div><strong>{{ profile.adventure_count }}</strong><span>Adventures</span></div>
 <div><strong>{{ profile.journal_count }}</strong><span>Public Journals</span></div>
 <div><strong>{{ profile.photo_count }}</strong><span>Public Photos</span></div>
 </div>
-{% include "members/account_types.html" %}
-
-
-<h2>Adventures</h2>
+<h2>{{ profile.public_name }}'s Adventure Book</h2>
 <div class="member-adventure-list">
 {% for adventure in adventures %}
-<a href="{{ adventure.get_absolute_url }}" class="location-card member-adventure-row">
-<div><strong>{{ adventure.title }}</strong><p>{% if adventure.location %}{{ adventure.location.name }}{% else %}Location not entered{% endif %}</p></div>
-<div>{{ adventure.journal_count }} Journals · {{ adventure.photo_count }} Photos</div>
-</a>
+<article class="location-card member-adventure-row">
+<div class="member-adventure-summary"><strong><a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></strong><p>{% if adventure.location %}{{ adventure.location.name }}{% else %}Location not entered{% endif %}</p></div>
+<div class="member-adventure-actions"><span>{{ adventure.journal_count }} Journals · {{ adventure.photo_count }} Photos</span><a href="{{ adventure.get_absolute_url }}" class="ro-small-action member-adventure-view-action">View Adventure</a></div>
+</article>
 {% empty %}<div class="location-card">No Adventures to show.</div>{% endfor %}
 </div>
 </section>

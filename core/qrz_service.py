@@ -17,6 +17,14 @@ class QRZConfigurationError(QRZError):
     pass
 
 
+class QRZNotFoundError(QRZError):
+    pass
+
+
+class QRZUnavailableError(QRZError):
+    pass
+
+
 @dataclass
 class QRZResult:
     callsign: str
@@ -52,14 +60,14 @@ def _request(params):
         with urllib.request.urlopen(request, timeout=12) as response:
             return response.read()
     except Exception as exc:
-        raise QRZError(f"QRZ could not be reached: {exc}") from exc
+        raise QRZUnavailableError(f"QRZ could not be reached: {exc}") from exc
 
 
 def _nodes(xml_bytes):
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as exc:
-        raise QRZError("QRZ returned unreadable XML.") from exc
+        raise QRZUnavailableError("QRZ returned unreadable XML.") from exc
 
     def node(name):
         for element in root.iter():
@@ -120,10 +128,12 @@ def lookup_callsign(callsign):
 
     error = _text(session, "Error")
     if error and call is None:
+        if "not found" in error.lower():
+            raise QRZNotFoundError("Callsign not found in QRZ.")
         raise QRZError(error)
 
     if call is None:
-        raise QRZError("Callsign not found in QRZ.")
+        raise QRZNotFoundError("Callsign not found in QRZ.")
 
     returned_call = _text(call, "call") or normalized
 

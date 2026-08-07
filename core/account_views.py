@@ -1,78 +1,142 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .account_forms import RadioOutdoorsRegistrationForm
-from .models import (
-    FollowerInvitation,
-    FollowRelationship,
-    MemberProfile,
-)
+from .account_forms import FollowerRegistrationForm, MemberRegistrationForm
+from .models import FollowerInvitation, FollowRelationship, MemberProfile
+from .qrz_service import QRZError, QRZNotFoundError, QRZUnavailableError, lookup_callsign
 
 
 def register(request):
+    """Public registration for QRZ-verified Radio Outdoors Members."""
     if request.user.is_authenticated:
         return redirect("account_home")
 
-    follow_callsign = (
-        request.POST.get("follow")
-        or request.GET.get("follow")
-        or ""
-    ).strip().upper()
-
-    invite_token = (
-        request.POST.get("invite")
-        or request.GET.get("invite")
-        or ""
-    ).strip()
-
-    invitation = None
+    invite_token = (request.GET.get("invite") or "").strip()
     if invite_token:
-        invitation = (
-            FollowerInvitation.objects.select_related(
-                "member", "member__user"
-            )
-            .filter(
-                token=invite_token,
-                status=FollowerInvitation.Status.PENDING,
-            )
-            .first()
-        )
-
-    next_url = (
-        request.POST.get("next")
-        or request.GET.get("next")
-        or ""
-    ).strip()
+        return redirect("follower_register", token=invite_token)
 
     if request.method == "POST":
-        form = RadioOutdoorsRegistrationForm(request.POST)
-
+        form = MemberRegistrationForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            login(request, user)
+            callsign = form.cleaned_data["callsign"]
+            try:
+                result = lookup_callsign(callsign)
+            except QRZNotFoundError:
+                form.add_error(
+                    "callsign",
+                    "That callsign was not found in QRZ. Check it and try again.",
+                )
+            except QRZUnavailableError:
+                form.add_error(
+                    None,
+                    "QRZ is temporarily unavailable. No account was created; please try again later.",
+                )
+            except QRZError as exc:
+                form.add_error(
+                    None,
+                    f"QRZ verification could not be completed. No account was created. {exc}",
+                )
+            else:
+                if MemberProfile.objects.filter(
+                    callsign__iexact=result.callsign
+                ).exists():
+                    form.add_error(
+                        "callsign", "That callsign is already registered."
+                    )
+                else:
+                    with transaction.atomic():
+                        user = form.save(commit=False)
+                        user.username = result.callsign
+                        user.first_name = result.first_name
+                        user.last_name = result.last_name
+                        user.save()
+                        profile = MemberProfile.objects.create(
+                            user=user,
+                            callsign=result.callsign,
+                            display_name=" ".join(
+                                value
+                                for value in [result.first_name, result.last_name]
+                                if value
+                            ),
+                            home_city=result.city,
+                            home_state=result.state,
+                            home_country=result.country or "USA",
+                            email_visible_to_members=False,
+                            callsign_verified=True,
+                            verification_method=MemberProfile.VerificationMethod.QRZ,
+                            verification_at=timezone.now(),
+                            qrz_verified_at=timezone.now(),
+                            qrz_first_name=result.first_name,
+                            qrz_last_name=result.last_name,
+                            qrz_city=result.city,
+                            qrz_state=result.state,
+                            qrz_country=result.country,
+                            qrz_grid=result.grid,
+                            qrz_license_class=result.license_class,
+                            qrz_expiration=result.expires,
+                        )
 
-            if invitation:
+                    login(request, user)
+                    messages.success(
+                        request,
+                        f"Welcome to Radio Outdoors, {profile.callsign}. Your callsign was verified through QRZ.",
+                    )
+                    return redirect("member_welcome")
+    else:
+        form = MemberRegistrationForm()
+
+    return render(request, "accounts/register.html", {"form": form})
+
+
+@login_required
+def member_welcome(request):
+    profile = getattr(request.user, "member_profile", None)
+    if not profile or not profile.has_valid_verification(
+        allow_development=settings.DEBUG
+    ):
+        return redirect("account_home")
+    return render(request, "accounts/member_welcome.html")
+
+
+def follower_register(request, token):
+    """Create a callsign-free Follower from a valid pending invitation."""
+    if request.user.is_authenticated:
+        return redirect("account_home")
+
+    invitation = get_object_or_404(
+        FollowerInvitation.objects.select_related("member", "member__user"),
+        token=token,
+        status=FollowerInvitation.Status.PENDING,
+    )
+
+    if request.method == "POST":
+        form = FollowerRegistrationForm(request.POST, invitation=invitation)
+        if form.is_valid():
+            with transaction.atomic():
+                locked_invitation = get_object_or_404(
+                    FollowerInvitation.objects.select_for_update(),
+                    pk=invitation.pk,
+                    status=FollowerInvitation.Status.PENDING,
+                )
+                user = form.save()
                 relationship, _ = FollowRelationship.objects.get_or_create(
-                    member=invitation.member,
+                    member=locked_invitation.member,
                     follower=user,
                 )
                 relationship.status = FollowRelationship.Status.APPROVED
                 relationship.responded_at = timezone.now()
                 relationship.save(
-                    update_fields=[
-                        "status",
-                        "responded_at",
-                        "updated_at",
-                    ]
+                    update_fields=["status", "responded_at", "updated_at"]
                 )
-
-                invitation.status = FollowerInvitation.Status.ACCEPTED
-                invitation.accepted_by = user
-                invitation.accepted_at = timezone.now()
-                invitation.save(
+                locked_invitation.status = FollowerInvitation.Status.ACCEPTED
+                locked_invitation.accepted_by = user
+                locked_invitation.accepted_at = timezone.now()
+                locked_invitation.save(
                     update_fields=[
                         "status",
                         "accepted_by",
@@ -81,90 +145,34 @@ def register(request):
                     ]
                 )
 
-                messages.success(
-                    request,
-                    f"Account created. You now follow "
-                    f"{invitation.member.callsign}.",
-                )
-                return redirect(
-                    "member_detail",
-                    callsign=invitation.member.callsign,
-                )
-
-            if follow_callsign:
-                member = MemberProfile.objects.filter(
-                    callsign__iexact=follow_callsign,
-                    profile_is_public=True,
-                    user__is_active=True,
-                ).first()
-
-                if member and member.user != user:
-                    FollowRelationship.objects.get_or_create(
-                        member=member,
-                        follower=user,
-                        defaults={
-                            "status": FollowRelationship.Status.PENDING
-                        },
-                    )
-                    messages.success(
-                        request,
-                        f"Account created. Your request to follow "
-                        f"{member.callsign} was sent.",
-                    )
-                    return redirect(
-                        "member_detail",
-                        callsign=member.callsign,
-                    )
-
+            login(request, user)
             messages.success(
                 request,
-                "Your Radio Outdoors account was created.",
+                f"Your Follower account was created. You now follow {invitation.member.callsign}.",
             )
-
-            if next_url.startswith("/"):
-                return redirect(next_url)
-
-            return redirect("account_home")
+            return redirect(
+                "member_detail", callsign=invitation.member.callsign
+            )
     else:
-        initial = {}
-        if invitation:
-            name_parts = invitation.name.split(maxsplit=1)
-            initial["first_name"] = name_parts[0] if name_parts else ""
-            initial["last_name"] = (
-                name_parts[1] if len(name_parts) > 1 else ""
-            )
-            initial["email"] = invitation.email
-
-        form = RadioOutdoorsRegistrationForm(initial=initial)
+        form = FollowerRegistrationForm(invitation=invitation)
 
     return render(
         request,
-        "accounts/register.html",
-        {
-            "form": form,
-            "follow_callsign": follow_callsign,
-            "invite_token": invite_token,
-            "invitation": invitation,
-            "next_url": next_url,
-        },
+        "accounts/follower_register.html",
+        {"form": form, "invitation": invitation},
     )
 
 
 @login_required
 def account_home(request):
     profile = getattr(request.user, "member_profile", None)
-
     following = (
         FollowRelationship.objects.filter(follower=request.user)
         .select_related("member", "member__user")
         .order_by("status", "member__callsign")
     )
-
     return render(
         request,
         "accounts/account_home.html",
-        {
-            "profile": profile,
-            "following": following,
-        },
+        {"profile": profile, "following": following},
     )

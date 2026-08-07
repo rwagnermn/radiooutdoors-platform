@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Default Location Images | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+<div class="section-heading-row"><div><h1>Default Location Images</h1><p>Representative fallback images shown only when a Location has no uploaded photo.</p></div></div>
+<div class="member-table-scroll default-image-table-wrap">
+<table class="member-directory-table ro-data-table default-image-table">
+<thead><tr><th>Location Type</th><th>Thumbnail</th><th>Photo Credit / Source</th><th>License</th><th>Status</th><th class="ro-actions-column">Actions</th></tr></thead>
+<tbody>{% for default_image in default_images %}
+<tr>
+<td><strong>{{ default_image.get_key_display }}</strong></td>
+<td>{% if default_image.image %}<img src="{{ default_image.image.url }}?v={{ default_image.updated_at|date:'U' }}" alt="" class="default-location-image-thumbnail">{% else %}<span>No image</span>{% endif %}</td>
+<td><a href="{{ default_image.source_url }}" target="_blank" rel="noopener noreferrer">{{ default_image.credit_text }}</a></td>
+<td><a href="{{ default_image.license_url }}" target="_blank" rel="noopener noreferrer">{{ default_image.license_name }}</a></td>
+<td>{% if default_image.active %}<span class="member-verification-status verified">Active</span>{% else %}<span class="member-verification-status not-verified">Disabled</span>{% endif %}</td>
+<td class="ro-actions-column">
+<details class="ro-action-menu member-admin-menu">
+<summary aria-label="Actions for {{ default_image.get_key_display }}" aria-expanded="false"><span class="ro-row-menu-icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
+<div class="ro-action-menu-panel">
+<a href="{% url 'default_location_image_detail' default_image.pk %}">View</a>
+<a href="{% url 'default_location_image_edit' default_image.pk %}">Edit</a>
+<a href="{% url 'default_location_image_edit' default_image.pk %}#default-image-editor">Replace Image</a>
+<a href="{% url 'default_location_image_edit' default_image.pk %}#attribution-fields">Edit Attribution</a>
+<form method="post" action="{% url 'default_location_image_toggle' default_image.pk %}">{% csrf_token %}<button type="submit">{% if default_image.active %}Disable{% else %}Enable{% endif %}</button></form>
+</div></details>
+</td></tr>
+{% empty %}<tr><td colspan="6">No default Location images are configured.</td></tr>{% endfor %}</tbody>
+</table></div>
+</section>
+{% endblock %}

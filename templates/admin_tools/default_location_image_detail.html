@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ default_image.get_key_display }} Default | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content default-image-detail-page">
+<div class="view-page-toolbar"><a href="{% url 'default_location_image_list' %}" class="back-link-button">← Default Location Images</a><a href="{% url 'default_location_image_edit' default_image.pk %}" class="button-primary">Edit Default</a></div>
+<article class="location-card"><h1>{{ default_image.get_key_display }}</h1>
+{% if default_image.image %}<img src="{{ default_image.image.url }}?v={{ default_image.updated_at|date:'U' }}" alt="{{ default_image.source_title }}" class="default-location-image-large">{% endif %}
+<dl class="default-image-metadata"><div><dt>Status</dt><dd>{% if default_image.active %}Active{% else %}Disabled{% endif %}</dd></div><div><dt>Displayed credit</dt><dd>{{ default_image.credit_text }}</dd></div><div><dt>Source</dt><dd><a href="{{ default_image.source_url }}" target="_blank" rel="noopener noreferrer">{{ default_image.source_title }}</a></dd></div><div><dt>Creator</dt><dd>{{ default_image.creator }}</dd></div><div><dt>License</dt><dd><a href="{{ default_image.license_url }}" target="_blank" rel="noopener noreferrer">{{ default_image.license_name }}</a></dd></div></dl>
+</article></section>
+{% endblock %}

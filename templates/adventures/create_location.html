@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ page_title }} | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
@@ -36,7 +37,7 @@
         </div>
         {% endif %}
 
-        <form method="post" id="location-form" novalidate>
+        <form method="post" enctype="multipart/form-data" id="location-form" novalidate>
             {% csrf_token %}
             <input type="hidden" name="return_to" value="{{ return_to }}">
             <input type="hidden" name="draft_title" value="{{ draft_title }}">
@@ -90,6 +91,26 @@
                     <div class="field-span-two">
                         <label for="{{ location_form.description.id_for_label }}">Location Notes (optional)</label>
                         {{ location_form.description }}
+                    </div>
+                </div>
+
+                <div class="location-photo-editor photo-preview-control" data-photo-preview data-photo-preview-mode="single" data-photo-preview-save-label="Location" data-photo-preview-remove-field="remove_location_photo">
+                    <div class="photo-preview-stage" data-photo-preview-stage data-original-src="{% if editing_location.photo %}{{ editing_location.photo.url }}?v={{ editing_location.updated_at|date:'U' }}{% else %}{% static 'images/radiooutdoors-logo-white.png' %}{% endif %}" data-placeholder-src="{% static 'images/radiooutdoors-logo-white.png' %}">
+                        {% if editing_location.photo %}<img src="{{ editing_location.photo.url }}?v={{ editing_location.updated_at|date:'U' }}" alt="Current photo for {{ editing_location.name }}" class="location-photo-preview" data-photo-preview-image>
+                        {% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors Location photo placeholder" class="location-photo-preview member-profile-photo-placeholder" data-photo-preview-image>{% endif %}
+                    </div>
+                    <div class="location-photo-controls">
+                        <label for="{{ location_form.photo.id_for_label }}">Location Photo (optional)</label>
+                        {{ location_form.photo }}
+                        {{ location_form.remove_location_photo }}
+                        {% for error in location_form.photo.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                        <div class="photo-preview-actions">
+                            <button type="button" class="ro-small-action" data-photo-preview-load>Load Photo</button>
+                            <button type="button" class="ro-small-action" data-photo-preview-change>Change Photo</button>
+                            <button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button>
+                            {% if editing_location.photo %}<button type="button" class="ro-small-action ro-danger-action" data-photo-preview-remove>Remove Saved Photo</button>{% endif %}
+                        </div>
+                        <p class="photo-preview-status" data-photo-preview-status aria-live="polite">Choose a file, then select Load Photo. Nothing is saved until Save Location.</p>
                     </div>
                 </div>
 

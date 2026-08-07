@@ -13,10 +13,8 @@
                     <span class="white">MAKE CONTACT.</span>
                 </h1>
 
-                <p class="hero-story">
-                    Some contacts are measured in signal reports.<br>
-                    <strong>The best contacts are remembered for a lifetime.</strong>
-                </p>
+                <p class="hero-product-name">Radio Outdoors™</p>
+                <p class="hero-story">Your storybook of ham radio adventures.</p>
 
                 <div class="hero-tagline" aria-label="Any place, any park, anywhere">
                     <span>ANY PLACE</span><b>&bull;</b>
@@ -25,13 +23,15 @@
                 </div>
 
                 <div class="hero-buttons">
-                    <a href="{% url 'all_adventures' %}" class="button-primary">
-                        Explore Adventures
+                    <a href="{% url 'all_adventures' %}" class="btn-ro-primary home-cta">
+                        Explore The Adventure Book
                     </a>
 
-                    <a href="{% url 'locations' %}" class="button-secondary">
-                        Explore Locations
+                    {% if not user.is_authenticated %}
+                    <a href="{% url 'register' %}" class="btn-ro-primary home-cta">
+                        Join Radio Outdoors
                     </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

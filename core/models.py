@@ -5,6 +5,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
+from django.utils.functional import cached_property
 
 
 class Location(models.Model):
@@ -54,6 +55,10 @@ class Location(models.Model):
         help_text="Optional POTA, WWFF, park, airport, or other reference.",
     )
     description = models.TextField(blank=True)
+    photo = models.ImageField(
+        upload_to="location_photos/%Y/%m/",
+        blank=True,
+    )
     has_operating_advisory = models.BooleanField(
         default=False,
         help_text="Show this Location with a red map pin.",
@@ -82,6 +87,55 @@ class Location(models.Model):
 
     def __str__(self):
         return self.name
+
+    @cached_property
+    def default_photo_info(self):
+        from .location_default_images import default_image_for_location
+
+        return default_image_for_location(self)
+
+    @property
+    def display_photo_url(self):
+        if self.photo:
+            return self.photo.url
+        if self.default_photo_info:
+            return self.default_photo_info["url"]
+        return ""
+
+    @property
+    def uses_default_photo(self):
+        return not self.photo and bool(self.default_photo_info)
+
+
+class DefaultLocationImage(models.Model):
+    class Key(models.TextChoices):
+        PARK = "park", "Park / General Outdoor Site"
+        CAMPGROUND = "campground", "Campground / Cabin"
+        WILDLIFE = "wildlife", "WMA / Wildlife Area"
+        AIRPORT = "airport", "Airport / Aviation Site"
+        BOAT_LAUNCH = "boat_launch", "Boat Launch / Marina"
+        SCENIC = "scenic", "Scenic Overlook / Other"
+
+    key = models.CharField(max_length=30, choices=Key.choices, unique=True)
+    image = models.ImageField(upload_to="location_defaults/", blank=True)
+    source_title = models.CharField(max_length=240)
+    source_url = models.URLField()
+    creator = models.CharField(max_length=180)
+    license_name = models.CharField(max_length=100)
+    license_url = models.URLField()
+    displayed_credit = models.CharField(max_length=320, blank=True)
+    active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["key"]
+
+    @property
+    def credit_text(self):
+        return self.displayed_credit or f"{self.source_title} by {self.creator}"
+
+    def __str__(self):
+        return self.get_key_display()
 
 
 class OperatingLocation(models.Model):
@@ -355,8 +409,18 @@ class Comment(models.Model):
 
 
 class MemberProfile(models.Model):
+    class VerificationMethod(models.TextChoices):
+        NONE = "none", "Not Verified"
+        QRZ = "qrz", "QRZ Verified"
+        ADMIN = "admin", "Admin Verified"
+        DEVELOPMENT = "development", "Development Only"
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="member_profile")
     callsign = models.CharField(max_length=20, unique=True, blank=True)
+    profile_photo = models.ImageField(
+        upload_to="member_profiles/%Y/%m/",
+        blank=True,
+    )
     display_name = models.CharField(max_length=120, blank=True)
     bio = models.TextField(blank=True)
     home_city = models.CharField(max_length=100, blank=True)
@@ -365,10 +429,17 @@ class MemberProfile(models.Model):
     website = models.URLField(blank=True)
     profile_is_public = models.BooleanField(default=True)
     email_visible_to_members = models.BooleanField(
-        default=True,
+        default=False,
         help_text="Show my email address to signed-in Radio Outdoors Members.",
     )
     callsign_verified = models.BooleanField(default=False)
+    verification_method = models.CharField(
+        max_length=12,
+        choices=VerificationMethod.choices,
+        default=VerificationMethod.NONE,
+        db_index=True,
+    )
+    verification_at = models.DateTimeField(null=True, blank=True)
     qrz_verified_at = models.DateTimeField(null=True, blank=True)
     qrz_first_name = models.CharField(max_length=120, blank=True)
     qrz_last_name = models.CharField(max_length=120, blank=True)
@@ -388,6 +459,19 @@ class MemberProfile(models.Model):
     def save(self, *args, **kwargs):
         self.callsign = self.callsign.strip().upper()
         super().save(*args, **kwargs)
+
+    def has_valid_verification(self, allow_development=False):
+        if not self.callsign or not self.callsign_verified:
+            return False
+        if self.verification_method in {
+            self.VerificationMethod.QRZ,
+            self.VerificationMethod.ADMIN,
+        }:
+            return True
+        return bool(
+            allow_development
+            and self.verification_method == self.VerificationMethod.DEVELOPMENT
+        )
 
     @property
     def public_name(self):

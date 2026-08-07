@@ -1,0 +1,25 @@
+{% if journal_entries %}
+<div class="contact-table-scroll journal-list-wrap">
+    <table class="compact-contact-table ro-data-table journal-list-table">
+        <thead><tr>
+            <th scope="col">Date / Time</th><th scope="col">Journal Entry</th><th scope="col">Summary</th>
+            <th scope="col" class="center-column">Photos</th><th scope="col">Action</th>
+        </tr></thead>
+        <tbody>
+        {% for entry in journal_entries %}
+            <tr>
+                <td class="journal-list-date"><time datetime="{{ entry.entry_at|date:'c' }}"><span>{{ entry.entry_at|date:"M j" }}</span><span>{{ entry.entry_at|date:"g:i A" }}</span></time></td>
+                <td class="journal-list-entry"><a class="journal-list-title" href="{% url 'journal_entry_detail' entry.pk %}" title="{{ entry.title|default:'Journal Entry' }}">{{ entry.title|default:"Journal Entry" }}</a>{% if manage_journals and not entry.is_public %}<span class="visibility-badge">Private</span>{% endif %}</td>
+                <td class="journal-list-summary" title="{{ entry.body|striptags|truncatechars:300 }}">{{ entry.body|striptags|truncatechars:150 }}</td>
+                <td class="journal-list-photo-count center-column">{{ entry.photos.count }}</td>
+                <td class="journal-list-actions">
+                    <a class="ro-small-action" href="{% url 'journal_entry_detail' entry.pk %}">View Journal</a>
+                    {% if manage_journals %}<a class="ro-small-action" href="{% url 'edit_journal_entry' entry.pk %}">Edit</a>
+                    <form method="post" action="{% url 'delete_journal_entry' entry.pk %}" onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">{% csrf_token %}<button type="submit" class="ro-small-action ro-danger-action">Delete</button></form>{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}<div class="location-card journal-list-empty">No journal entries yet.</div>{% endif %}

@@ -2,47 +2,24 @@
 {% block title %}My Account | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
-<div class="section-heading-row">
-<div>
-<h1>My Account</h1>
-<p>{{ user.get_full_name|default:user.username }} · {{ user.email }}</p>
-</div>
-
-{% if profile and profile.callsign %}
-<a href="{% url 'member_detail' profile.callsign %}" class="ro-small-action">View My Member Profile</a>
-{% else %}
-<a href="{% url 'my_member_profile' %}" class="button-primary">Verify a Callsign and Become a Member</a>
-{% endif %}
-</div>
+<div class="section-heading-row"><div><h1>My Account</h1><p>{{ user.get_full_name|default:user.username }} · {{ user.email }}</p></div>
+{% if is_verified_member %}<a href="{% url 'member_detail' profile.callsign %}" class="ro-small-action">View My Member Profile</a>{% endif %}</div>
 
 <section class="location-card">
-<h2>Registered Member / Follower</h2>
-<p>Your account can follow publishing Members. Follow requests require their approval. You can stop following at any time.</p>
-<div class="account-shortcuts">
-<a href="{% url 'following_list' %}" class="ro-small-action">Members I Follow</a>
-{% if profile and profile.callsign %}
-<a href="{% url 'follower_management' %}" class="ro-small-action">My Followers</a>
-<a href="{% url 'my_adventures' %}" class="ro-small-action">My Adventures</a>
+{% if is_verified_member %}
+<h2>Radio Outdoors Member</h2>
+<p>Your callsign {{ profile.callsign }} is {{ profile.get_verification_method_display }}. You can publish Adventures and manage Followers.</p>
+<div class="account-shortcuts"><a href="{% url 'following_list' %}" class="ro-small-action">Members I Follow</a><a href="{% url 'follower_management' %}" class="ro-small-action">My Followers</a><a href="{% url 'my_adventures' %}" class="ro-small-action">My Adventures</a></div>
+{% else %}
+<h2>Radio Outdoors Follower</h2>
+<p>Your invitation-only Follower account can view and follow Members according to existing permissions. It is not a Member account and cannot publish content.</p>
+<div class="account-shortcuts"><a href="{% url 'following_list' %}" class="ro-small-action">Members I Follow</a></div>
 {% endif %}
-</div>
 </section>
 
 <h2>Following</h2>
-<div class="member-table-scroll">
-<table class="member-directory-table">
-<thead><tr><th>Callsign</th><th>Member</th><th>Status</th></tr></thead>
-<tbody>
-{% for relationship in following %}
-<tr>
-<td><a href="{% url 'member_detail' relationship.member.callsign %}"><strong>{{ relationship.member.callsign }}</strong></a></td>
-<td>{{ relationship.member.public_name }}</td>
-<td>{{ relationship.get_status_display }}</td>
-</tr>
-{% empty %}
-<tr><td colspan="3">You are not following anyone yet. Visit Members to find someone.</td></tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
+<div class="member-table-scroll"><table class="member-directory-table"><thead><tr><th>Callsign</th><th>Member</th><th>Status</th></tr></thead><tbody>
+{% for relationship in following %}<tr><td><a href="{% url 'member_detail' relationship.member.callsign %}"><strong>{{ relationship.member.callsign }}</strong></a></td><td>{{ relationship.member.public_name }}</td><td>{{ relationship.get_status_display }}</td></tr>{% empty %}<tr><td colspan="3">You are not following anyone yet.</td></tr>{% endfor %}
+</tbody></table></div>
 </section>
 {% endblock %}

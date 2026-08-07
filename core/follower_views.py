@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .auth import verified_member_required
 from .follower_forms import FollowerInvitationForm
 from .models import (
     FollowerInvitation,
@@ -97,7 +98,7 @@ def request_follow(request, callsign):
     return redirect("member_detail", callsign=member.callsign)
 
 
-@login_required
+@verified_member_required
 def follower_management(request):
     profile = get_object_or_404(MemberProfile, user=request.user)
     relationships = (
@@ -122,7 +123,7 @@ def follower_management(request):
     )
 
 
-@login_required
+@verified_member_required
 @require_POST
 def invite_follower(request):
     profile = get_object_or_404(MemberProfile, user=request.user)
@@ -158,6 +159,13 @@ def invite_follower(request):
     existing_user = User.objects.filter(email__iexact=email).first()
 
     if existing_user:
+        if not existing_user.is_active:
+            messages.error(
+                request,
+                "That account is inactive and was not added as a Follower.",
+            )
+            return redirect("follower_management")
+
         relationship, _ = FollowRelationship.objects.get_or_create(
             member=profile,
             follower=existing_user,
@@ -215,8 +223,7 @@ def invite_follower(request):
         invitation.save()
 
     invite_url = request.build_absolute_uri(
-        reverse("register")
-        + f"?invite={invitation.token}"
+        reverse("follower_register", kwargs={"token": invitation.token})
     )
 
     send_mail(
@@ -240,7 +247,7 @@ def invite_follower(request):
     return redirect("follower_management")
 
 
-@login_required
+@verified_member_required
 @require_POST
 def invitation_action(request, invitation_id, action):
     invitation = get_object_or_404(
@@ -261,8 +268,7 @@ def invitation_action(request, invitation_id, action):
         invitation.save()
 
         invite_url = request.build_absolute_uri(
-            reverse("register")
-            + f"?invite={invitation.token}"
+            reverse("follower_register", kwargs={"token": invitation.token})
         )
         send_mail(
             subject=(
@@ -300,7 +306,7 @@ def following_list(request):
     )
 
 
-@login_required
+@verified_member_required
 @require_POST
 def respond_to_follow(request, relationship_id, action):
     relationship = get_object_or_404(

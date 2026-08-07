@@ -12,3 +12,26 @@
 10. Design for sustainability beyond the original developer or administrator.
 
 These principles guide scope and product decisions. When a proposed feature conflicts with them, document the tradeoff before implementation.
+
+## Product Language
+
+Radio Outdoors is your storybook of ham radio adventures.
+
+Radio Outdoors™ may use the TM symbol in prominent brand-identification locations. Do not repeat the symbol excessively throughout ordinary application text.
+
+- **Radio Outdoors** is the overall platform and amateur-radio community.
+- **Adventure Book** is the collection of shared ham-radio stories where people discover and browse Adventures.
+- **Adventure** is an individual ham-radio experience and story.
+- **Journal** is the set of entries that tells the story within an Adventure.
+- **Contacts** are radio contacts associated with an Adventure.
+- **Photos** are visual memories associated with an Adventure.
+- **My Adventures** is the signed-in Member's management workspace for creating, editing, filtering, and administering Adventures.
+- **My Adventure Book** describes a Member's Adventures when they are presented as that Member's story collection.
+
+## The 15-Second Rule
+
+A first-time visitor should understand what Radio Outdoors is, why it matters, and what to do next within approximately 15 seconds.
+
+If a page cannot communicate its purpose and next action quickly, simplify it.
+
+A new verified Member should be able to create their first Adventure within five minutes of deciding to join, without reading instructions.

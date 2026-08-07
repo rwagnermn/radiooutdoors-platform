@@ -1,6 +1,9 @@
 from django import forms
+from django.core.files.uploadedfile import UploadedFile
+from PIL import Image, UnidentifiedImageError
 
 from core.models import Adventure, Comment, JournalEntry, Location, OperatingLocation
+from core.profile_images import MAX_PROFILE_PHOTO_BYTES, optimize_location_photo
 
 
 class AdventureForm(forms.ModelForm):
@@ -55,6 +58,41 @@ class AdventureForm(forms.ModelForm):
             )
 
 class LocationForm(forms.ModelForm):
+    remove_location_photo = forms.BooleanField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._original_photo_name = (
+            self.instance.photo.name
+            if self.instance and self.instance.photo
+            else ""
+        )
+
+    def clean_photo(self):
+        photo = self.cleaned_data.get("photo")
+        if not photo or photo is False or not isinstance(photo, UploadedFile):
+            return photo
+        if photo.size > MAX_PROFILE_PHOTO_BYTES:
+            raise forms.ValidationError("Choose an image smaller than 12 MB.")
+        try:
+            photo.seek(0)
+            with Image.open(photo) as image:
+                image.verify()
+            photo.seek(0)
+        except (
+            Image.DecompressionBombError,
+            UnidentifiedImageError,
+            OSError,
+            ValueError,
+        ):
+            raise forms.ValidationError(
+                "Choose a valid JPEG, PNG, GIF, or WebP image."
+            )
+        return optimize_location_photo(photo)
+
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("has_operating_advisory") and not cleaned.get("operating_advisory", "").strip():
@@ -63,6 +101,18 @@ class LocationForm(forms.ModelForm):
                 "Add a short note explaining the Operating Advisory.",
             )
         return cleaned
+
+    def save(self, commit=True):
+        old_photo_name = self._original_photo_name
+        location = super().save(commit=False)
+        if self.cleaned_data.get("remove_location_photo"):
+            location.photo = ""
+        if commit:
+            location.save()
+            new_photo_name = location.photo.name if location.photo else ""
+            if old_photo_name and old_photo_name != new_photo_name:
+                location.photo.storage.delete(old_photo_name)
+        return location
 
     class Meta:
         model = Location
@@ -80,10 +130,14 @@ class LocationForm(forms.ModelForm):
             "official_website",
             "reference_code",
             "description",
+            "photo",
             "has_operating_advisory",
             "operating_advisory",
         ]
         widgets = {
+            "photo": forms.FileInput(
+                attrs={"accept": "image/jpeg,image/png,image/gif,image/webp"}
+            ),
             "street_address": forms.TextInput(
                 attrs={
                     "placeholder": "Street address",

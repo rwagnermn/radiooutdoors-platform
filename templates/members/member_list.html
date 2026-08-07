@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Members | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
 <div class="section-heading-row">
 <div><h1>Members</h1><p>Radio Outdoors operators and their public activity.</p></div>
-{% if user.is_authenticated %}<a href="{% url 'my_member_profile' %}" class="button-primary">My Profile</a>{% endif %}
+{% if is_verified_member %}<a href="{% url 'my_member_profile' %}" class="button-primary">My Profile</a>{% elif not user.is_authenticated %}<a href="{% url 'register' %}" class="btn-ro-primary">Join Radio Outdoors</a>{% endif %}
 </div>
 
 <form method="get" class="member-search">
@@ -13,15 +14,16 @@
 </form>
 
 <div class="member-table-scroll">
-<table class="member-directory-table">
+<table class="member-directory-table ro-data-table">
 <thead><tr>
-<th>Callsign</th><th>Name</th><th>Location</th><th>Class</th>
+<th><span class="visually-hidden">Photo</span></th><th>Callsign</th><th>Name</th><th>Location</th><th>Class</th>
 <th>Adventures</th><th>Journals</th><th>Photos</th>
 </tr></thead>
 <tbody>
 {% for profile in members %}
 <tr onclick="window.location='{% url 'member_detail' profile.callsign %}';" tabindex="0">
-<td><strong>{{ profile.callsign }}</strong>{% if profile.callsign_verified %}<span class="member-verified">QRZ ✓</span>{% endif %}</td>
+<td>{% if profile.profile_photo %}<img src="{{ profile.profile_photo.url }}?v={{ profile.updated_at|date:'U' }}" alt="" class="member-profile-photo member-profile-photo-thumbnail">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-thumbnail member-profile-photo-placeholder">{% endif %}</td>
+<td><strong>{{ profile.callsign }}</strong>{% if profile.callsign_verified %}<span class="member-verified">{{ profile.get_verification_method_display }}</span>{% endif %}</td>
 <td>{{ profile.public_name }}</td>
 <td>{{ profile.home_label|default:"—" }}</td>
 <td>{{ profile.qrz_license_class|default:"—" }}</td>
@@ -29,7 +31,7 @@
 <td>{{ profile.journal_count }}</td>
 <td>{{ profile.photo_count }}</td>
 </tr>
-{% empty %}<tr><td colspan="7">No public member profiles found.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="8">No public member profiles found.</td></tr>{% endfor %}
 </tbody>
 </table>
 </div>

@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
 from .models import Adventure, Location, OperatingLocation
+from .auth import is_verified_member
 
 
 def _visible_adventure_q(request, prefix=""):
@@ -191,7 +192,7 @@ def map_explorer(request):
             for adventure in visible_adventures
         )
 
-        cover_photo_url = ""
+        cover_photo_url = location.display_photo_url
         latest_title = ""
         latest_status = ""
         latest_updated = ""
@@ -203,7 +204,7 @@ def map_explorer(request):
             latest_updated = latest_adventure.updated_at.isoformat()
             latest_url = latest_adventure.get_absolute_url()
 
-            if latest_adventure.cover_photo_id:
+            if not cover_photo_url and latest_adventure.cover_photo_id:
                 cover_photo_url = latest_adventure.cover_photo.image.url
 
         shared = {
@@ -225,7 +226,7 @@ def map_explorer(request):
                 "start_adventure_here",
                 kwargs={"location_id": location.pk},
             ),
-            "can_start_adventure": request.user.is_authenticated,
+            "can_start_adventure": is_verified_member(request.user),
         }
 
         unassigned_current_adventure = any(

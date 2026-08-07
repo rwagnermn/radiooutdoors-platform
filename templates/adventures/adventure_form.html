@@ -131,7 +131,8 @@
                 </a>
             </div>
 
-            {% for entry in adventure.journal_entries.all %}
+            {% include "adventures/_journal_entry_list.html" with journal_entries=journal_entries manage_journals=True %}
+            {% comment %}{% for entry in adventure.journal_entries.all %}
                 <article
                     class="location-card journal-entry-editor journal-entry-clickable"
                     style="margin-top:18px;"
@@ -237,7 +238,7 @@
                 <div class="location-card" style="margin-top:18px;">
                     No journal entries yet.
                 </div>
-            {% endfor %}
+            {% endfor %}{% endcomment %}
         </section>
 
     {% endif %}
