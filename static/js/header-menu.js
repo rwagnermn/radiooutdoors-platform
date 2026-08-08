@@ -24,7 +24,7 @@
         }
 
         function positionRowMenu() {
-            if (!menu.classList.contains("adventure-row-menu") || !menu.open) return;
+            if (!(menu.classList.contains("adventure-row-menu") || menu.classList.contains("moderation-row-menu")) || !menu.open) return;
 
             const trigger = summary.getBoundingClientRect();
             const panelRect = panel.getBoundingClientRect();

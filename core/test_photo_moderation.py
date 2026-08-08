@@ -346,7 +346,7 @@ class PhotoModerationTests(TestCase):
         staff = get_user_model().objects.create_user("compact-reviewer", password="secret", is_staff=True)
         self.client.force_login(staff)
         response = self.client.get(reverse("photo_moderation_queue"))
-        self.assertContains(response, 'aria-label="Photo actions"')
+        self.assertContains(response, 'aria-label="Actions for ')
         self.assertContains(response, "0 selected")
         self.assertContains(response, 'data-select-page')
         self.assertNotContains(response, "omni-moderation-latest")
@@ -364,11 +364,27 @@ class PhotoModerationTests(TestCase):
         self.assertContains(preview, first.journal_entry.adventure.title)
         self.assertContains(preview, "Remove from batch", count=2)
         self.assertNotContains(preview, "Blurred thumbnail")
-        self.client.post(reverse("photo_moderation_bulk_apply"), {
+        applied = self.client.post(reverse("photo_moderation_bulk_apply"), {
             "bulk_action": "approve", "selected": [f"photo:{first.pk}"],
-        })
+        }, follow=True)
         first.refresh_from_db(); second.refresh_from_db()
         self.assertEqual(first.moderation_status, "approved")
+        self.assertEqual(second.moderation_status, "pending")
+        self.assertContains(applied, "1 photo approved successfully.")
+
+    def test_return_from_bulk_confirmation_makes_no_changes(self):
+        first = self.make_safe_recommendation("return-one.png")
+        second = self.make_safe_recommendation("return-two.png")
+        staff = get_user_model().objects.create_user("batch-returner", password="secret", is_staff=True)
+        self.client.force_login(staff)
+        preview = self.client.post(reverse("photo_moderation_bulk_preview"), {
+            "bulk_action": "approve", "status_filter": "all",
+            "selected": [f"photo:{first.pk}", f"photo:{second.pk}"],
+        })
+        self.assertContains(preview, "Return to Review Queue")
+        self.client.get(reverse("photo_moderation_queue"))
+        first.refresh_from_db(); second.refresh_from_db()
+        self.assertEqual(first.moderation_status, "pending")
         self.assertEqual(second.moderation_status, "pending")
 
     def test_bulk_queue_controls_and_safe_count_are_visible(self):
@@ -376,12 +392,33 @@ class PhotoModerationTests(TestCase):
         staff = get_user_model().objects.create_user("bulk-ui", password="secret", is_staff=True)
         self.client.force_login(staff)
         response = self.client.get(reverse("photo_moderation_queue"))
-        self.assertContains(response, "Select photos on this page")
+        self.assertContains(response, "Select all photos on this page")
         self.assertContains(response, "Clear Selection")
         self.assertContains(response, "Approve Selected")
         self.assertContains(response, "Reject Selected")
         self.assertContains(response, "Approve All Safe Recommendations")
         self.assertContains(response, "1 safe recommendation on this page")
+        self.assertContains(response, "ro-scroll-table-region")
+        self.assertContains(response, "ro-record-table")
+        self.assertContains(response, "photo-checkbox-target")
+        self.assertContains(response, "Actions for ")
+        self.assertContains(response, "account-menu-icon")
+
+    def test_empty_bulk_selection_has_exact_persistent_feedback(self):
+        staff = get_user_model().objects.create_user(
+            "empty-bulk-reviewer", password="secret", is_staff=True
+        )
+        self.client.force_login(staff)
+        response = self.client.post(
+            reverse("photo_moderation_bulk_preview"),
+            {"bulk_action": "approve", "status_filter": "all"},
+            follow=True,
+        )
+        self.assertContains(
+            response,
+            "Select at least one photo before applying a bulk action.",
+        )
+        self.assertContains(response, "persistent bulk-selection-error")
 
     def test_safe_bulk_approval_requires_counted_confirmation_and_records_audit(self):
         first = self.make_safe_recommendation("safe-one.png")
@@ -402,8 +439,9 @@ class PhotoModerationTests(TestCase):
             "bulk_action": "approve_safe",
             "scope": "page",
             "selected": [f"photo:{first.pk}", f"photo:{second.pk}"],
-        })
+        }, follow=True)
         self.assertRedirects(apply_response, reverse("photo_moderation_queue"))
+        self.assertContains(apply_response, "2 photos approved successfully.")
         self.assertEqual(
             Photo.objects.filter(pk__in=[first.pk, second.pk], moderation_status="approved").count(),
             2,
@@ -479,10 +517,34 @@ class PhotoModerationTests(TestCase):
         }, follow=True)
         photo.refresh_from_db()
         self.assertEqual(photo.moderation_status, "approved")
+        self.assertContains(response, "1 photo approved; 1 could not be processed.")
         self.assertContains(response, "Could not process: photo:999999")
         audit = PhotoModerationActionAudit.objects.get(decision_source="bulk-manual")
         self.assertEqual(audit.successful_target_ids, [f"photo:{photo.pk}"])
         self.assertEqual(audit.failed_targets[0]["target"], "photo:999999")
+
+    def test_bulk_confirmation_has_no_second_dialog_and_guards_double_submit(self):
+        script = (settings.BASE_DIR / "static" / "js" / "photo-moderation-bulk.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("window.confirm", script)
+        self.assertIn("if (submitting", script)
+        self.assertIn('button.textContent = confirmForm.dataset.actionKind === "approve"', script)
+        self.assertIn('button.setAttribute("aria-busy", "true")', script)
+        self.assertIn("button.disabled = true", script)
+        self.assertIn('"Approving…"', script)
+
+    def test_duplicate_bulk_tokens_are_processed_once(self):
+        photo = self.make_safe_recommendation("duplicate-submit.png")
+        staff = get_user_model().objects.create_user("bulk-deduplicate", password="secret", is_staff=True)
+        self.client.force_login(staff)
+        token = f"photo:{photo.pk}"
+        response = self.client.post(reverse("photo_moderation_bulk_apply"), {
+            "bulk_action": "approve", "selected": [token, token],
+        }, follow=True)
+        self.assertContains(response, "1 photo approved successfully.")
+        audit = PhotoModerationActionAudit.objects.get(decision_source="bulk-manual")
+        self.assertEqual(audit.successful_target_ids, [token])
 
     def test_moderation_queue_requires_staff(self):
         self.assertEqual(self.client.get(reverse("photo_moderation_queue")).status_code, 302)

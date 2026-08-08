@@ -302,7 +302,11 @@ def photo_moderation_bulk_preview(request):
         tokens = list(dict.fromkeys(request.POST.getlist("selected")))
         rows = _rows_for_tokens(tokens, status_filter)
     if not rows:
-        messages.warning(request, "No eligible photos were selected.")
+        messages.warning(
+            request,
+            "Select at least one photo before applying a bulk action.",
+            extra_tags="persistent bulk-selection-error",
+        )
         return redirect("photo_moderation_queue")
     if action == "retry":
         return _bulk_retry(request, rows)
@@ -362,9 +366,21 @@ def photo_moderation_bulk_apply(request):
             logger.warning("Bulk photo moderation target failed actor_id=%s target=%s exception=%s", request.user.pk, token, type(exc).__name__)
             failed.append({"target": token, "error": "Could not process this photo."})
     _record_audit(request, action=action, source="bulk-safe-recommendation" if action_name == "approve_safe" else "bulk-manual", scope="page", requested=requested, succeeded=succeeded, failed=failed)
-    messages.success(request, f"{len(succeeded)} photo(s) marked {action}d.")
-    if failed:
+    successful_count, failed_count = len(succeeded), len(failed)
+    past_tense = "approved" if action == "approve" else "rejected"
+    photo_word = "photo" if successful_count == 1 else "photos"
+    if failed_count:
+        messages.warning(
+            request,
+            f"{successful_count} {photo_word} {past_tense}; "
+            f"{failed_count} could not be processed.",
+        )
         messages.error(request, "Could not process: " + ", ".join(item["target"] for item in failed))
+    else:
+        messages.success(
+            request,
+            f"{successful_count} {photo_word} {past_tense} successfully.",
+        )
     return redirect("photo_moderation_queue")
 
 
