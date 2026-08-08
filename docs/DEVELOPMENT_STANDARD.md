@@ -70,6 +70,15 @@ python manage.py remove_demo_data
 
 Neither command runs automatically. Never enable these commands in production.
 
+## Django server network access and QRZ verification
+
+- Any development server used for Member registration must be started with outbound network access. This includes every restart or replacement performed by an IDE, sandbox, automation tool, or coding agent.
+- Never leave the browser connected to a deliberately network-restricted diagnostic server. If a restricted server is used for isolated testing, stop it and restore the outbound-enabled development server before handoff.
+- A QRZ `URLError` caused by `PermissionError` or the `network_permission_denied` diagnostic category means the server launcher blocked outbound traffic; it is not a QRZ outage. Stop only that development-server process and restart it with outbound permission. Do not change credentials.
+- After every development-server restart, and before completing a task, verify the live registration lookup path can reach QRZ. Confirm only sanitized stages: DNS/network connection succeeded, TLS/HTTPS produced an HTTP response, authentication succeeded, a session key was returned, and the callsign lookup was reached.
+- Use a project-approved, known non-account-creating lookup when probing the live registration path. Do not select the manual fallback or create a diagnostic account.
+- Never print or log QRZ usernames, passwords, session keys, credential-bearing URLs, or secret-bearing response content. Report only sanitized stage and error categories.
+
 ## Payment integration safety
 
 - Payment processing is intentionally deferred until it is approved as a separate backlog item.

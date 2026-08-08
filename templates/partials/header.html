@@ -8,7 +8,7 @@
 
 <nav class="main-nav" aria-label="Public navigation">
 <a href="{% url 'home' %}">Home</a>
-<a href="{% url 'all_adventures' %}">Adventure Book</a>
+<a href="{% if is_verified_member %}{% url 'my_adventures' %}{% else %}{% url 'all_adventures' %}{% endif %}">Adventure Book</a>
 <a href="{% url 'locations' %}">Locations</a>
 <a href="{% url 'map_explorer' %}">Map</a>
 <a href="{% url 'members' %}">Members</a>
@@ -20,6 +20,11 @@
 <span class="account-menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
 </summary>
 <div class="account-menu-panel">
+{% if is_pending_member %}
+<a href="{% url 'manual_verification_status' %}">Verification Status</a>
+<a href="{% url 'manual_verification_request' %}">Complete/Edit Verification Request</a>
+<a href="{% url 'password_change' %}">Change Password</a>
+{% else %}
 <a href="{% url 'account_home' %}">My Account</a>
 {% if is_verified_member %}
 <a href="{% url 'my_adventures' %}">My Adventures</a>
@@ -29,22 +34,24 @@
 <a href="{% url 'stewardship_dashboard' %}">Stewardship</a>
 <a href="{% url 'member_admin_list' %}">Manage Members</a>
 <a href="{% url 'default_location_image_list' %}">Default Location Images</a>
+<a href="{% url 'location_type_list' %}">Manage Location Types</a>
+<a href="{% url 'manual_verification_queue' %}">Manual Verification Queue</a>
+<a href="{% url 'photo_moderation_queue' %}">Photo Moderation</a>
+{% endif %}
 {% endif %}
 <hr class="account-menu-separator">
+{% if not is_pending_member %}
 <a href="{% url 'about' %}">About</a>
 <a href="{% url 'help_center' %}">Help</a>
 <a href="{% url 'support_radio_outdoors' %}">Support Radio Outdoors</a>
 <hr class="account-menu-separator">
+{% endif %}
 <form method="post" action="{% url 'logout' %}">
 {% csrf_token %}
 <button type="submit">Sign Out</button>
 </form>
 </div>
 </details>
-<p class="signed-in-identity" aria-label="Active signed-in identity">
-<span class="signed-in-identity-full">{{ header_identity.full }}</span>
-<span class="signed-in-identity-compact">{{ header_identity.compact }}</span>
-</p>
 {% else %}
 <nav class="account-nav" aria-label="Account navigation">
 <a href="{% url 'login' %}" class="btn-ro-primary">Sign In</a>
@@ -60,5 +67,9 @@
 </div>
 </details>
 {% endif %}
+<p class="signed-in-identity{% if is_pending_member %} pending-member-identity{% endif %}" aria-label="Active account identity">
+<span class="signed-in-identity-full">{{ header_identity.full }}</span>
+<span class="signed-in-identity-compact">{{ header_identity.compact }}</span>
+</p>
 </div>
 </header>

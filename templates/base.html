@@ -5,15 +5,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Radio Outdoors{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'css/style.css' %}?v=043">
+<link rel="stylesheet" href="{% static 'css/style.css' %}?v=069">
 <script src="{% static 'js/radiooutdoors-maps.js' %}?v=001"></script>
 </head>
-<body>
+<body class="{% block body_class %}interior-page{% endblock %}">
 {% include "partials/header.html" %}
 <main>
 {% if messages %}
 <div class="flash-messages">
-{% for message in messages %}<div class="flash-message {{ message.tags }}">{{ message }}</div>{% endfor %}
+{% for message in messages %}<div class="flash-message {{ message.tags }}">{{ message }}{% if "persistent" in message.tags %}<br><button type="button" class="flash-continue" onclick="this.closest('.flash-message').remove()">Continue</button>{% endif %}</div>{% endfor %}
 </div>
 {% endif %}
 {% block content %}{% endblock %}
@@ -21,10 +21,15 @@
 {% include "partials/footer.html" %}
 <script src="{% static 'js/journal-photo-viewer.js' %}?v=001"></script>
 <script src="{% static 'js/header-menu.js' %}?v=001"></script>
-<script src="{% static 'js/photo-preview.js' %}?v=002"></script>
+<script src="{% static 'js/adventure-status.js' %}?v=003"></script>
+<script src="{% static 'js/table-scroll.js' %}?v=001"></script>
+<script src="{% static 'js/photo-preview.js' %}?v=004"></script>
+<script src="{% static 'js/password-visibility.js' %}?v=001"></script>
+<script src="{% static 'js/password-requirements.js' %}?v=001"></script>
+{% block extra_scripts %}{% endblock %}
 <script>
 setTimeout(function(){
- document.querySelectorAll(".flash-message").forEach(function(m){
+ document.querySelectorAll(".flash-message:not(.persistent)").forEach(function(m){
   m.classList.add("flash-message-hiding");
   setTimeout(function(){m.remove();},300);
  });

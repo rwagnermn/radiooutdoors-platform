@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{% if location_type %}Edit{% else %}Add{% endif %} Location Type | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page admin-page{% endblock %}
+{% block content %}
+<section class="content">
+    <div class="view-page-toolbar"><a href="{% url 'location_type_list' %}" class="back-link-button">← Manage Location Types</a></div>
+    <div class="location-card member-form-card">
+        <h1>{% if location_type %}Edit Location Type{% else %}Add Location Type{% endif %}</h1>
+        {% if location_type %}<p>Stable identifier: <code>{{ location_type.key }}</code></p>{% endif %}
+        <form method="post">
+            {% csrf_token %}{{ form.non_field_errors }}
+            <label for="{{ form.name.id_for_label }}">Name <span class="required-field-label">Required Field</span></label>
+            {{ form.name }}{% for error in form.name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+            <label for="{{ form.is_active.id_for_label }}">{{ form.is_active }} Active</label>
+            {% for error in form.is_active.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+            <button type="submit" class="button-primary">Save Location Type</button>
+        </form>
+    </div>
+</section>
+{% endblock %}

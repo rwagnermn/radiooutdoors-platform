@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Members | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page members-page{% endblock %}
 {% block content %}
 <section class="content">
 <div class="section-heading-row">
@@ -13,8 +14,8 @@
 <button type="submit">Search</button>
 </form>
 
-<div class="member-table-scroll">
-<table class="member-directory-table ro-data-table">
+<div class="member-table-scroll ro-scroll-table-region" role="region" aria-label="Member results" tabindex="0">
+<table class="member-directory-table ro-data-table ro-record-table">
 <thead><tr>
 <th><span class="visually-hidden">Photo</span></th><th>Callsign</th><th>Name</th><th>Location</th><th>Class</th>
 <th>Adventures</th><th>Journals</th><th>Photos</th>
@@ -22,7 +23,7 @@
 <tbody>
 {% for profile in members %}
 <tr onclick="window.location='{% url 'member_detail' profile.callsign %}';" tabindex="0">
-<td>{% if profile.profile_photo %}<img src="{{ profile.profile_photo.url }}?v={{ profile.updated_at|date:'U' }}" alt="" class="member-profile-photo member-profile-photo-thumbnail">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-thumbnail member-profile-photo-placeholder">{% endif %}</td>
+<td>{% if profile.public_profile_photo_url %}<img src="{{ profile.public_profile_photo_url }}?v={{ profile.updated_at|date:'U' }}" alt="" class="member-profile-photo member-profile-photo-thumbnail">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-thumbnail member-profile-photo-placeholder">{% endif %}</td>
 <td><strong>{{ profile.callsign }}</strong>{% if profile.callsign_verified %}<span class="member-verified">{{ profile.get_verification_method_display }}</span>{% endif %}</td>
 <td>{{ profile.public_name }}</td>
 <td>{{ profile.home_label|default:"—" }}</td>

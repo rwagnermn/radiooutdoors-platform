@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Manage Location Types | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page admin-page{% endblock %}
+{% block content %}
+<section class="content">
+    <div class="section-heading-row">
+        <div><h1>Manage Location Types</h1><p>Control the choices available when Members create or edit Locations.</p></div>
+        <a href="{% url 'location_type_add' %}" class="button-primary">Add Location Type</a>
+    </div>
+    <div class="member-table-scroll ro-scroll-table-region" role="region" aria-label="Location Types" tabindex="0">
+        <table class="ro-record-table">
+            <thead><tr><th>Name</th><th>Status</th><th>Locations</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for item in location_types %}
+                <tr>
+                    <td><strong>{{ item.name }}</strong><br><small>{{ item.key }}</small></td>
+                    <td>{% if item.is_active %}<span class="member-verification-status verified">Active</span>{% else %}<span class="member-verification-status not-verified">Inactive</span>{% endif %}</td>
+                    <td>{{ item.location_count }}</td>
+                    <td>
+                        <div class="member-admin-actions">
+                            <a href="{% url 'location_type_edit' item.pk %}" class="ro-small-action">Edit</a>
+                            <form method="post" action="{% url 'location_type_toggle' item.pk %}">{% csrf_token %}<button type="submit" class="ro-small-action">{% if item.is_active %}Deactivate{% else %}Activate{% endif %}</button></form>
+                            {% if item.location_count == 0 %}
+                            <form method="post" action="{% url 'location_type_delete' item.pk %}" onsubmit="return confirm('Permanently delete this unused Location Type?');">{% csrf_token %}<button type="submit" class="ro-small-action ro-danger-action">Delete</button></form>
+                            {% else %}<span class="field-help">In use — deactivate instead</span>{% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}<tr><td colspan="4">No Location Types are configured.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

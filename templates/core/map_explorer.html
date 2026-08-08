@@ -19,18 +19,28 @@
     </div>
 
     <div class="radio-map-controls">
+        <fieldset class="radio-map-filter-group">
+            <legend>Map Filters</legend>
+            <label>
+                <input type="checkbox" id="show-operating-pins" checked>
+                Operating Positions
+            </label>
 
-        <label>
-            <input type="checkbox" id="show-operating-pins" checked>
-            <span class="radio-map-control-dot operating-dot"></span>
-            Operating Positions
-        </label>
+            <label>
+                <input type="checkbox" id="show-current-only">
+                Open Adventures Only
+            </label>
+        </fieldset>
 
-        <label>
-            <input type="checkbox" id="show-current-only">
-            <span class="radio-map-control-dot current-dot"></span>
-            Currently Operating Only
-        </label>
+        <div class="radio-map-legend" aria-label="Map Legend">
+            <h2>Map Legend</h2>
+            <div class="radio-map-legend-items">
+                <span><i class="map-legend-pin map-legend-pin-red" aria-hidden="true"><b>!</b></i>Operating advisory</span>
+                <span><i class="map-legend-pin map-legend-pin-blue" aria-hidden="true"><b>O</b></i>Operating Position</span>
+                <span><i class="map-legend-pin map-legend-pin-yellow" aria-hidden="true"><b>OPEN</b></i>Open Adventure</span>
+            </div>
+            <p>Red advisory pins take precedence when an Open Adventure is also present.</p>
+        </div>
 
         <button type="button" id="fit-visible-pins">
             Show All Visible Pins
@@ -41,7 +51,7 @@
                 id="add-location-pin-mode"
                 class="map-add-pin-button"
             >
-                Add Location Pin
+                Add New Location
             </button>
         {% endif %}
 
@@ -54,8 +64,11 @@
             class="global-map-pin-instruction"
             hidden
         >
-            Click the map where the Location belongs.
-            The Add Location form will open with that pin already filled in.
+            Click the map where the Location belongs. Click again to adjust the temporary orange pin.
+            <div class="map-pin-placement-actions">
+                <button type="button" id="continue-location-pin" disabled>Continue</button>
+                <button type="button" id="cancel-location-pin">Cancel</button>
+            </div>
         </div>
     {% endif %}
 
@@ -180,6 +193,10 @@ async function initRadioOutdoorsMap() {
     );
 
     let addingLocationPin = false;
+    let pendingLocationMarker = null;
+    let pendingLocationCoordinates = null;
+    const continueLocationPin = document.getElementById("continue-location-pin");
+    const cancelLocationPin = document.getElementById("cancel-location-pin");
 
     const infoWindow = new InfoWindow();
     const markerRecords = [];
@@ -197,8 +214,8 @@ async function initRadioOutdoorsMap() {
             )
             : "<div class='radio-map-popup-photo-placeholder'>Radio Outdoors</div>";
 
-        const currentBadge = point.currently_operating
-            ? "<span class='radio-map-live-badge'>Currently Operating</span>"
+        const currentBadge = point.has_open_adventure
+            ? "<span class='radio-map-live-badge'>Open</span>"
             : "";
 
         const latest = point.latest_title
@@ -260,7 +277,7 @@ async function initRadioOutdoorsMap() {
         const kindVisible = showOperating.checked;
 
         const activityVisible = !showCurrentOnly.checked
-            || record.point.currently_operating;
+            || record.point.has_open_adventure;
 
         return kindVisible && activityVisible;
     }
@@ -297,7 +314,7 @@ async function initRadioOutdoorsMap() {
     points.forEach(function (point) {
         let background = "#2e6fd8";
 
-        if (point.currently_operating) {
+        if (point.has_open_adventure) {
             background = "#f0b429";
         }
 
@@ -309,12 +326,12 @@ async function initRadioOutdoorsMap() {
             background: background,
             borderColor: "#ffffff",
             glyphColor: "#ffffff",
-            glyph: point.currently_operating
-                ? "LIVE"
+            glyph: point.has_open_adventure
+                ? "OPEN"
                 : (
                     "O"
                 ),
-            scale: point.currently_operating ? 1.32 : 1.10
+            scale: point.has_open_adventure ? 1.32 : 1.10
         });
 
         const marker = new AdvancedMarkerElement({
@@ -373,8 +390,8 @@ async function initRadioOutdoorsMap() {
                 );
 
                 addLocationPinButton.textContent = addingLocationPin
-                    ? "Cancel Pin Placement"
-                    : "Add Location Pin";
+                    ? "Placing New Location"
+                    : "Add New Location";
 
                 if (addLocationInstruction) {
                     addLocationInstruction.hidden = !addingLocationPin;
@@ -393,15 +410,36 @@ async function initRadioOutdoorsMap() {
                 return;
             }
 
-            const latitude = event.latLng.lat().toFixed(6);
-            const longitude = event.latLng.lng().toFixed(6);
+            pendingLocationCoordinates = {
+                latitude: event.latLng.lat().toFixed(6),
+                longitude: event.latLng.lng().toFixed(6)
+            };
+            if (pendingLocationMarker) pendingLocationMarker.map = null;
+            const temporaryPin = new PinElement({background:"#f28c28", borderColor:"#fff", glyphColor:"#fff", glyph:"+", scale:1.25});
+            pendingLocationMarker = new AdvancedMarkerElement({
+                map: map, position: event.latLng, content: temporaryPin.element,
+                title: "Temporary new Location pin"
+            });
+            if (continueLocationPin) continueLocationPin.disabled = false;
+        });
 
-            const url =
-                "{% url 'create_location' %}"
-                + "?latitude=" + encodeURIComponent(latitude)
-                + "&longitude=" + encodeURIComponent(longitude);
-
-            window.location.href = url;
+        function cancelLocationPlacement() {
+            addingLocationPin = false;
+            pendingLocationCoordinates = null;
+            if (pendingLocationMarker) pendingLocationMarker.map = null;
+            pendingLocationMarker = null;
+            if (continueLocationPin) continueLocationPin.disabled = true;
+            addLocationPinButton.classList.remove("active");
+            addLocationPinButton.textContent = "Add New Location";
+            addLocationInstruction.hidden = true;
+            map.setOptions({draggableCursor:null});
+        }
+        if (cancelLocationPin) cancelLocationPin.addEventListener("click", cancelLocationPlacement);
+        if (continueLocationPin) continueLocationPin.addEventListener("click", function () {
+            if (!pendingLocationCoordinates) return;
+            window.location.href = "{% url 'create_location' %}?latitude=" +
+                encodeURIComponent(pendingLocationCoordinates.latitude) + "&longitude=" +
+                encodeURIComponent(pendingLocationCoordinates.longitude);
         });
     }
 

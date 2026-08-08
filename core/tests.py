@@ -7,8 +7,6 @@ from tempfile import TemporaryDirectory
 # Create your tests here.
 
 
-from datetime import timedelta
-
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
@@ -32,6 +30,7 @@ from .models import (
 )
 from .qrz_service import (
     QRZConfigurationError,
+    QRZError,
     QRZNotFoundError,
     QRZResult,
     QRZUnavailableError,
@@ -45,26 +44,14 @@ class AdventureDisplayStatusTests(TestCase):
             password="test-password",
         )
 
-    def test_recent_active_adventure_is_currently_operating(self):
+    def test_active_adventure_is_open(self):
         adventure = Adventure.objects.create(
             owner=self.operator,
-            title="Recent Adventure",
+            title="Open Adventure",
         )
-        self.assertEqual(adventure.display_status_key, "operating")
-        self.assertEqual(adventure.display_status_label, "Currently Operating")
-
-    def test_old_active_adventure_is_in_progress(self):
-        adventure = Adventure.objects.create(
-            owner=self.operator,
-            title="Older Adventure",
-        )
-        Adventure.objects.filter(pk=adventure.pk).update(
-            updated_at=timezone.now() - timedelta(hours=25)
-        )
-        adventure.refresh_from_db()
-
-        self.assertEqual(adventure.display_status_key, "progress")
-        self.assertEqual(adventure.display_status_label, "In Progress")
+        self.assertEqual(adventure.display_status_key, "open")
+        self.assertEqual(adventure.display_status_label, "Open")
+        self.assertEqual(adventure.get_status_display(), "Open")
 
     def test_completed_adventure_is_complete(self):
         adventure = Adventure.objects.create(
@@ -73,11 +60,12 @@ class AdventureDisplayStatusTests(TestCase):
             status=Adventure.Status.COMPLETED,
         )
         self.assertEqual(adventure.display_status_key, "complete")
-        self.assertEqual(adventure.display_status_label, "Adventure Complete")
+        self.assertEqual(adventure.display_status_label, "Complete")
+        self.assertEqual(adventure.get_status_display(), "Complete")
 
 
-class MapExplorerCurrentAdventureTests(TestCase):
-    def test_current_adventure_without_operating_position_gets_yellow_location_pin(self):
+class MapExplorerOpenAdventureTests(TestCase):
+    def test_open_adventure_without_operating_position_gets_yellow_location_pin(self):
         operator = get_user_model().objects.create_user(
             username="W5MAP",
             password="test-password",
@@ -101,7 +89,7 @@ class MapExplorerCurrentAdventureTests(TestCase):
         self.assertEqual(len(response.context["map_points"]), 1)
         point = response.context["map_points"][0]
         self.assertEqual(point["kind"], "location")
-        self.assertTrue(point["currently_operating"])
+        self.assertTrue(point["has_open_adventure"])
         self.assertIsNone(point["operating_location_id"])
 
 
@@ -297,11 +285,14 @@ class LoginRedirectTests(TestCase):
         self.assertNotContains(header, f'href="{reverse("login")}?next=')
 
         response = self.client.post(reverse("login"), self.login_data())
-        self.assertRedirects(response, reverse("all_adventures"))
+        self.assertRedirects(response, reverse("my_adventures"))
+        destination = self.client.get(reverse("my_adventures"))
+        self.assertContains(destination, "W5LOGIN")
+        self.assertContains(destination, "Add Adventure")
 
     def test_direct_login_uses_adventure_book_default(self):
         response = self.client.post(reverse("login"), self.login_data())
-        self.assertRedirects(response, reverse("all_adventures"))
+        self.assertRedirects(response, reverse("my_adventures"))
 
     def test_protected_page_login_preserves_valid_next(self):
         protected_url = reverse("add_adventure")
@@ -322,7 +313,7 @@ class LoginRedirectTests(TestCase):
             reverse("login"),
             self.login_data(next="https://evil.example/steal"),
         )
-        self.assertRedirects(response, reverse("all_adventures"))
+        self.assertRedirects(response, reverse("my_adventures"))
 
 
 class DevelopmentDemoDataTests(TestCase):
@@ -432,6 +423,10 @@ class MemberRegistrationTests(TestCase):
             expires="2032-01-01",
         )
 
+    def test_each_registration_field_has_one_explicit_required_indicator(self):
+        response = self.client.get(reverse("register"))
+        self.assertContains(response, 'class="required-field-text"', count=4)
+
     @patch("core.account_views.lookup_callsign")
     def test_valid_qrz_registration_creates_verified_member(self, lookup):
         lookup.return_value = self.qrz_result()
@@ -455,18 +450,23 @@ class MemberRegistrationTests(TestCase):
         self.assertEqual(profile.qrz_grid, "EM10")
         lookup.assert_called_once_with("W5NEW")
 
+        destination = self.client.get(reverse("my_adventures"))
+        self.assertContains(destination, "W5NEW - Casey")
+        self.assertContains(destination, ">Add Adventure</a>")
+
         welcome = self.client.get(reverse("member_welcome"))
         self.assertContains(welcome, "Welcome to Radio Outdoors")
         self.assertContains(welcome, reverse("add_adventure"))
-        self.assertContains(welcome, reverse("my_member_profile"))
-        self.assertContains(welcome, reverse("all_adventures"))
+        self.assertContains(welcome, reverse("locations"))
+        self.assertContains(welcome, reverse("create_location"))
+        self.assertContains(welcome, reverse("my_adventures"))
 
     @patch("core.account_views.lookup_callsign")
     def test_invalid_callsign_creates_nothing(self, lookup):
         lookup.side_effect = QRZNotFoundError("not found")
         response = self.client.post(reverse("register"), self.registration_data())
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "not found in QRZ")
+        self.assertContains(response, "Callsign not found")
         self.assertFalse(get_user_model().objects.exists())
 
     @patch("core.account_views.lookup_callsign")
@@ -492,7 +492,101 @@ class MemberRegistrationTests(TestCase):
             "someone", email="operator@example.com"
         )
         response = self.client.post(reverse("register"), self.registration_data())
-        self.assertContains(response, "account already uses")
+        message = "That email address is already connected to a Radio Outdoors account. Log in or use Forgot callsign or password."
+        self.assertContains(response, message, count=2)
+        self.assertContains(response, reverse("login"))
+        self.assertContains(response, reverse("account_recovery"))
+        self.assertContains(response, "registration-error-summary")
+
+    @patch("core.account_views.lookup_callsign")
+    def test_international_qrz_callsign_is_accepted(self, lookup):
+        lookup.return_value = QRZResult(
+            callsign="DL1ABC",
+            first_name="Anna",
+            last_name="Funk",
+            city="Berlin",
+            state="",
+            country="Germany",
+            grid="JO62",
+            license_class="A",
+            expires="2031-12-31",
+        )
+        response = self.client.post(
+            reverse("register"),
+            self.registration_data(callsign="dl1abc"),
+        )
+        self.assertRedirects(response, reverse("member_welcome"))
+        profile = MemberProfile.objects.get(callsign="DL1ABC")
+        self.assertEqual(profile.home_country, "Germany")
+        self.assertTrue(profile.callsign_verified)
+        lookup.assert_called_once_with("DL1ABC")
+
+    def test_password_mismatch_preserves_identity_fields_and_clears_passwords(self):
+        response = self.client.post(
+            reverse("register"),
+            self.registration_data(password2="DifferentPass!742"),
+        )
+        self.assertContains(response, "The two password fields didn’t match.")
+        self.assertContains(response, 'value="w5new"')
+        self.assertContains(response, 'value="operator@example.com"')
+        self.assertNotContains(response, self.password)
+        self.assertNotContains(response, "DifferentPass!742")
+
+    def test_weak_password_is_listed_in_summary_and_below_field(self):
+        response = self.client.post(
+            reverse("register"),
+            self.registration_data(password1="password", password2="password"),
+        )
+        self.assertContains(response, "This password is too common.", count=2)
+        self.assertContains(response, 'class="field-error-list"')
+
+    def test_duplicate_callsign_has_summary_and_field_error(self):
+        user = get_user_model().objects.create_user("W5NEW")
+        MemberProfile.objects.create(
+            user=user,
+            callsign="W5NEW",
+            callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
+        )
+        response = self.client.post(reverse("register"), self.registration_data())
+        self.assertContains(response, "That callsign is already registered.", count=2)
+        self.assertContains(response, "registration-error-summary")
+
+    def test_visible_error_summary_is_focusable_and_lists_all_errors(self):
+        response = self.client.post(
+            reverse("register"),
+            {"callsign": "", "email": "invalid", "password1": "", "password2": ""},
+        )
+        self.assertContains(
+            response,
+            "We could not create your account. Please correct the following:",
+        )
+        self.assertContains(response, 'role="alert"')
+        self.assertContains(response, 'tabindex="-1"')
+        self.assertContains(response, "js/registration-errors.js")
+        self.assertContains(response, "Callsign:")
+        self.assertContains(response, "Email address:")
+
+    @patch("core.account_views.lookup_callsign")
+    def test_qrz_failures_are_clearly_distinguished(self, lookup):
+        cases = [
+            (QRZNotFoundError("missing"), "Callsign not found"),
+            (QRZUnavailableError("timeout"), "QRZ is temporarily unavailable"),
+            (
+                QRZConfigurationError("missing credentials"),
+                "QRZ configuration or connection failure",
+            ),
+            (QRZError("connection rejected"), "QRZ configuration or connection failure"),
+        ]
+        for error, expected in cases:
+            with self.subTest(error=type(error).__name__):
+                lookup.side_effect = error
+                response = self.client.post(
+                    reverse("register"), self.registration_data()
+                )
+                self.assertContains(response, expected)
+                self.assertContains(response, "registration-error-summary")
+                self.assertFalse(get_user_model().objects.exists())
 
     def test_blocked_email_domain_is_rejected(self):
         BlockedDomain.objects.create(domain="example.com")
@@ -795,7 +889,27 @@ class MemberSignupDiscoverabilityTests(TestCase):
         self.assertContains(response, "Help")
         self.assertContains(response, "Support Radio Outdoors")
         self.assertContains(response, "header-menu.js")
-        self.assertNotContains(response, "signed-in-identity")
+        self.assertContains(response, "Visitor")
+        self.assertContains(response, "signed-in-identity")
+
+    def test_adventure_book_link_and_add_action_follow_login_state(self):
+        signed_out = self.client.get(reverse("all_adventures"))
+        self.assertContains(
+            signed_out,
+            f'<a href="{reverse("all_adventures")}">Adventure Book</a>',
+        )
+        self.assertNotContains(signed_out, ">Add Adventure</a>")
+
+        self.client.force_login(self.member_user)
+        public_book = self.client.get(reverse("all_adventures"))
+        self.assertContains(
+            public_book,
+            f'<a href="{reverse("my_adventures")}">Adventure Book</a>',
+        )
+        self.assertContains(public_book, ">Add Adventure</a>")
+
+        my_book = self.client.get(reverse("my_adventures"))
+        self.assertContains(my_book, ">Add Adventure</a>")
 
     def test_signed_in_header_uses_accessible_account_menu(self):
         self.client.force_login(self.member_user)
@@ -886,6 +1000,7 @@ class MemberSignupDiscoverabilityTests(TestCase):
                     self.assertNotContains(response, "Join Radio Outdoors")
 
 
+@override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.SafeProvider")
 class MemberOnboardingAndPhotoTests(TestCase):
     def setUp(self):
         self.media_directory = TemporaryDirectory()

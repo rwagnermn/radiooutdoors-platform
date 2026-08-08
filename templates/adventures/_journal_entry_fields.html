@@ -5,6 +5,13 @@
 </div>
 
 <div class="journal-form-section story-first-section">
+<label for="{{ form.operating_callsign.id_for_label }}">Operating Callsign <span class="required-field-label">Required Field</span></label>
+{{ form.operating_callsign }}
+<p class="field-help">Defaults to this Adventure's operating callsign. Change it only when this Journal entry used another authorized callsign.</p>
+{% for error in form.operating_callsign.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+</div>
+
+<div class="journal-form-section story-first-section">
 <label for="{{ form.title.id_for_label }}">Journal title <span class="optional-label">(optional)</span></label>
 {{ form.title }}
 {% for error in form.title.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
@@ -35,6 +42,7 @@
 <summary>{% if entry %}Add more photos (optional){% else %}Photos (optional){% endif %}</summary>
 <div class="photo-upload-box photo-preview-control" data-photo-preview data-photo-preview-mode="multiple">
 <p class="field-help">No photos? No problem. The story is what matters.</p>
+<div class="photo-paste-zone" data-photo-paste-zone tabindex="0">Paste photo here or use the file picker</div>
 {{ form.photos }}
 <div class="photo-preview-actions">
 <button type="button" class="ro-small-action" data-photo-preview-load>Load Photos</button>

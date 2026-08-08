@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Verification Status | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+<div class="location-card verification-status-panel">
+<h1>Verification Status</h1>
+<p><strong>{{ profile.callsign }}</strong> is a Pending Member account.</p>
+{% if verification_request %}
+<p><strong>Status:</strong> {{ verification_request.get_status_display }}</p>
+<p><strong>Last updated:</strong> {{ verification_request.updated_at|date:"F j, Y, g:i a" }}</p>
+{% if verification_request.reviewer_message %}<div class="verification-review-message"><strong>Message from the reviewing administrator:</strong><p>{{ verification_request.reviewer_message }}</p></div>{% endif %}
+<p><a href="{% url 'manual_verification_request' %}" class="btn-ro-primary">Complete/Edit Verification Request</a></p>
+{% else %}
+<p>No manual verification request has been submitted yet.</p>
+<p><a href="{% url 'manual_verification_request' %}" class="btn-ro-primary">Complete Verification Request</a></p>
+{% endif %}
+<p>Until approved, you may browse public Adventures and Locations but cannot publish or use verified-Member features.</p>
+</div>
+</section>
+{% endblock %}

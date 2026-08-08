@@ -1,8 +1,9 @@
 from django.db.models import Count, Q
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
-from .models import Adventure, Location, OperatingLocation
+from .models import Adventure, Location, LocationType, OperatingLocation
 from .auth import is_verified_member
 
 
@@ -65,7 +66,10 @@ def location_list(request):
         locations = locations.filter(state=state)
 
     if location_type:
-        locations = locations.filter(location_type=location_type)
+        locations = locations.filter(
+            Q(location_type_record__key=location_type)
+            | Q(location_type_record__isnull=True, location_type=location_type)
+        )
 
     states = (
         Location.objects.exclude(state="")
@@ -80,7 +84,14 @@ def location_list(request):
         {
             "locations": locations,
             "states": states,
-            "location_types": Location.LocationType.choices,
+            "location_types": [
+                (item.key, item.name + (" (Inactive)" if not item.is_active else ""))
+                for item in LocationType.objects.annotate(
+                    location_count=Count("locations")
+                ).filter(
+                    Q(is_active=True) | Q(location_count__gt=0)
+                ).order_by(Lower("name"))
+            ],
             "search": search,
             "selected_state": state,
             "selected_type": location_type,
@@ -90,7 +101,7 @@ def location_list(request):
 
 def location_detail(request, location_id):
     location = get_object_or_404(
-        Location.objects.prefetch_related(
+        Location.objects.select_related("location_type_record").prefetch_related(
             "operating_locations",
             "adventures__owner",
             "adventures__cover_photo",
@@ -165,6 +176,7 @@ def map_explorer(request):
         Location.objects.annotate(
             adventure_count=Count("adventures", distinct=True),
         )
+        .select_related("location_type_record")
         .prefetch_related(
             "operating_locations",
             "adventures__owner",
@@ -187,11 +199,10 @@ def map_explorer(request):
             .first()
         )
 
-        currently_operating = any(
-            adventure.is_currently_operating
+        has_open_adventure = any(
+            adventure.status == Adventure.Status.ACTIVE
             for adventure in visible_adventures
         )
-
         cover_photo_url = location.display_photo_url
         latest_title = ""
         latest_status = ""
@@ -204,7 +215,11 @@ def map_explorer(request):
             latest_updated = latest_adventure.updated_at.isoformat()
             latest_url = latest_adventure.get_absolute_url()
 
-            if not cover_photo_url and latest_adventure.cover_photo_id:
+            if (
+                not cover_photo_url
+                and latest_adventure.cover_photo_id
+                and latest_adventure.cover_photo.is_publicly_visible
+            ):
                 cover_photo_url = latest_adventure.cover_photo.image.url
 
         shared = {
@@ -213,7 +228,7 @@ def map_explorer(request):
             "location_type": location.get_location_type_display(),
             "state": location.state,
             "adventure_count": visible_adventures.count(),
-            "currently_operating": currently_operating,
+            "has_open_adventure": has_open_adventure,
             "has_operating_advisory": location.has_operating_advisory,
             "operating_advisory": location.operating_advisory,
             "cover_photo_url": cover_photo_url,
@@ -229,22 +244,22 @@ def map_explorer(request):
             "can_start_adventure": is_verified_member(request.user),
         }
 
-        unassigned_current_adventure = any(
-            adventure.is_currently_operating
+        unassigned_open_adventure = any(
+            adventure.status == Adventure.Status.ACTIVE
             for adventure in visible_adventures.filter(
                 operating_location__isnull=True
             )
         )
 
         if (
-            unassigned_current_adventure
+            unassigned_open_adventure
             and location.latitude is not None
             and location.longitude is not None
         ):
             map_points.append(
                 {
                     **shared,
-                    "currently_operating": True,
+                    "has_open_adventure": True,
                     "kind": "location",
                     "operating_location_id": None,
                     "latitude": float(location.latitude),
@@ -261,8 +276,8 @@ def map_explorer(request):
             ):
                 continue
 
-            operating_current = any(
-                adventure.is_currently_operating
+            position_has_open_adventure = any(
+                adventure.status == Adventure.Status.ACTIVE
                 for adventure in visible_adventures.filter(
                     operating_location=operating_location
                 )
@@ -271,7 +286,7 @@ def map_explorer(request):
             map_points.append(
                 {
                     **shared,
-                    "currently_operating": operating_current,
+                    "has_open_adventure": position_has_open_adventure,
                     "kind": "operating",
                     "operating_location_id": operating_location.pk,
                     "latitude": float(operating_location.latitude),

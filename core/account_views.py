@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
@@ -8,7 +10,16 @@ from django.utils import timezone
 
 from .account_forms import FollowerRegistrationForm, MemberRegistrationForm
 from .models import FollowerInvitation, FollowRelationship, MemberProfile
-from .qrz_service import QRZError, QRZNotFoundError, QRZUnavailableError, lookup_callsign
+from .qrz_service import (
+    QRZConfigurationError,
+    QRZError,
+    QRZNotFoundError,
+    QRZUnavailableError,
+    lookup_callsign,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 def register(request):
@@ -20,26 +31,69 @@ def register(request):
     if invite_token:
         return redirect("follower_register", token=invite_token)
 
+    manual_available = False
     if request.method == "POST":
         form = MemberRegistrationForm(request.POST)
         if form.is_valid():
             callsign = form.cleaned_data["callsign"]
+            registration_action = request.POST.get("registration_action", "qrz")
             try:
                 result = lookup_callsign(callsign)
-            except QRZNotFoundError:
-                form.add_error(
-                    "callsign",
-                    "That callsign was not found in QRZ. Check it and try again.",
+            except QRZNotFoundError as exc:
+                logger.warning(
+                    "Registration QRZ verification failed category=not_found exception_type=%s",
+                    type(exc).__name__,
                 )
-            except QRZUnavailableError:
+                if registration_action == "manual":
+                    with transaction.atomic():
+                        user = form.save()
+                        profile = MemberProfile.objects.create(
+                            user=user,
+                            callsign=callsign,
+                            email_visible_to_members=False,
+                            profile_is_public=False,
+                            callsign_verified=False,
+                            verification_method=MemberProfile.VerificationMethod.NONE,
+                            home_country="",
+                        )
+                    login(request, user)
+                    messages.info(
+                        request,
+                        "Your restricted Pending Member account was created. Complete your manual verification request next.",
+                    )
+                    return redirect("manual_verification_request")
+                manual_available = True
+                form.add_error("callsign", "QRZ could not verify this callsign.")
+                form.add_error(
+                    None,
+                    "Callsign not found: QRZ successfully responded, but this callsign was not found. If you are a licensed amateur-radio operator, you may request manual verification.",
+                )
+            except QRZUnavailableError as exc:
+                logger.warning(
+                    "Registration QRZ verification failed category=temporarily_unavailable exception_type=%s",
+                    type(exc).__name__,
+                )
                 form.add_error(
                     None,
                     "QRZ is temporarily unavailable. No account was created; please try again later.",
                 )
-            except QRZError as exc:
+            except QRZConfigurationError as exc:
+                logger.warning(
+                    "Registration QRZ verification failed category=configuration exception_type=%s",
+                    type(exc).__name__,
+                )
                 form.add_error(
                     None,
-                    f"QRZ verification could not be completed. No account was created. {exc}",
+                    "QRZ configuration or connection failure. No account was created; please contact Radio Outdoors support.",
+                )
+            except QRZError as exc:
+                logger.warning(
+                    "Registration QRZ verification failed category=qrz_rejected exception_type=%s",
+                    type(exc).__name__,
+                )
+                form.add_error(
+                    None,
+                    "QRZ configuration or connection failure. No account was created; please try again or contact Radio Outdoors support.",
                 )
             else:
                 if MemberProfile.objects.filter(
@@ -49,18 +103,21 @@ def register(request):
                         "callsign", "That callsign is already registered."
                     )
                 else:
+                    person_identity = result.is_person_identity
+                    first_name = result.first_name if person_identity else ""
+                    last_name = result.last_name if person_identity else ""
                     with transaction.atomic():
                         user = form.save(commit=False)
                         user.username = result.callsign
-                        user.first_name = result.first_name
-                        user.last_name = result.last_name
+                        user.first_name = first_name
+                        user.last_name = last_name
                         user.save()
                         profile = MemberProfile.objects.create(
                             user=user,
                             callsign=result.callsign,
                             display_name=" ".join(
                                 value
-                                for value in [result.first_name, result.last_name]
+                                for value in [first_name, last_name]
                                 if value
                             ),
                             home_city=result.city,
@@ -71,8 +128,8 @@ def register(request):
                             verification_method=MemberProfile.VerificationMethod.QRZ,
                             verification_at=timezone.now(),
                             qrz_verified_at=timezone.now(),
-                            qrz_first_name=result.first_name,
-                            qrz_last_name=result.last_name,
+                            qrz_first_name=first_name,
+                            qrz_last_name=last_name,
                             qrz_city=result.city,
                             qrz_state=result.state,
                             qrz_country=result.country,
@@ -90,7 +147,11 @@ def register(request):
     else:
         form = MemberRegistrationForm()
 
-    return render(request, "accounts/register.html", {"form": form})
+    return render(
+        request,
+        "accounts/register.html",
+        {"form": form, "manual_available": manual_available},
+    )
 
 
 @login_required
@@ -100,7 +161,12 @@ def member_welcome(request):
         allow_development=settings.DEBUG
     ):
         return redirect("account_home")
-    return render(request, "accounts/member_welcome.html")
+    welcome_name = request.user.first_name.strip() or profile.callsign
+    return render(
+        request,
+        "accounts/member_welcome.html",
+        {"profile": profile, "welcome_name": welcome_name},
+    )
 
 
 def follower_register(request, token):

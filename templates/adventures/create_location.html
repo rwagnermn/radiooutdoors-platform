@@ -100,6 +100,7 @@
                         {% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors Location photo placeholder" class="location-photo-preview member-profile-photo-placeholder" data-photo-preview-image>{% endif %}
                     </div>
                     <div class="location-photo-controls">
+                        <div class="photo-paste-zone" data-photo-paste-zone tabindex="0">Paste photo here or use the file picker</div>
                         <label for="{{ location_form.photo.id_for_label }}">Location Photo (optional)</label>
                         {{ location_form.photo }}
                         {{ location_form.remove_location_photo }}
@@ -150,9 +151,10 @@
                 <div class="amenities-editor-heading">
                     <h3>Amenities</h3>
                     <p class="section-help">Choose what is known. Leave anything else as Unknown.</p>
+                    <div class="amenity-bulk-actions"><button type="button" data-set-amenities="yes">Set All Yes</button><button type="button" data-set-amenities="no">Set All No</button></div>
                 </div>
 
-                <div class="location-editor-grid amenities-editor-grid">
+                <div class="location-editor-grid amenities-editor-grid" data-amenities-editor>
                     <div>
                         <label for="{{ operating_form.parking.id_for_label }}">Parking</label>
                         {{ operating_form.parking }}
@@ -332,4 +334,5 @@ window.initLocationEditor = initLocationEditor;
 </script>
 <script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker,places&callback=initLocationEditor"></script>
 {% endif %}
+<script src="{% static 'js/amenity-bulk.js' %}?v=001"></script>
 {% endblock %}

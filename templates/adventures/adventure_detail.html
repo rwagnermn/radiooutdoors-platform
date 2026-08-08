@@ -1,22 +1,23 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{{ adventure.title }} | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page adventure-story-page{% endblock %}
 {% block content %}
 <section class="content">
 {% if user == adventure.owner and is_verified_member %}
 <div class="view-page-toolbar"><a href="{% url 'my_adventures' %}" class="back-link-button">← Back to My Adventures</a></div>
 {% endif %}
-{% if adventure.cover_photo %}
+{% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
 <img src="{{ adventure.cover_photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ adventure.title }}" class="adventure-cover-image">
 {% endif %}
 <div class="adventure-detail-heading">
 <div class="adventure-detail-copy">
-<p><span class="adventure-status adventure-status-{{ adventure.display_status_key }}">{{ adventure.display_status_label }}</span>
+<p>{% include "adventures/_status_control.html" %}
 <span class="adventure-status-updated">Updated {{ adventure.updated_at|timesince }} ago</span></p>
 <h1>{{ adventure.title }}</h1>
 <div class="compact-meta-row">
 <span>{{ adventure.started_at|date:"F j, Y" }}</span>
-<span class="member-attribution">{% if adventure.owner.member_profile.profile_is_public and adventure.owner.member_profile.profile_photo %}<img src="{{ adventure.owner.member_profile.profile_photo.url }}" alt="" class="member-profile-photo member-profile-photo-inline">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-inline member-profile-photo-placeholder">{% endif %}{{ adventure.owner.member_profile.callsign|default:adventure.owner }}</span>
+<span class="member-attribution">{% if adventure.owner.member_profile.profile_is_public and adventure.owner.member_profile.public_profile_photo_url %}<img src="{{ adventure.owner.member_profile.public_profile_photo_url }}" alt="" class="member-profile-photo member-profile-photo-inline">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-inline member-profile-photo-placeholder">{% endif %}{{ adventure.owner.member_profile.callsign|default:adventure.owner }}</span>
 
 {% if user == adventure.owner and is_verified_member %}
 <form
@@ -40,6 +41,9 @@
 {% endif %}
 </div>
 <p>{% if adventure.location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}Location not entered{% endif %}</p>
+<p><strong>Operating as:</strong> {{ adventure.operating_callsign }}{% if adventure.operating_identity_name %} — {{ adventure.operating_identity_name }}{% endif %}</p>
+<p><strong>Adventure managed by:</strong> {{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</p>
+{% if adventure.operating_callsign_type != 'personal' %}<p><strong>Operating Callsign Type:</strong> {{ adventure.get_operating_callsign_type_display }}{% if adventure.operating_start_date %} · {{ adventure.operating_start_date|date:"M j, Y" }}{% if adventure.operating_end_date %}–{{ adventure.operating_end_date|date:"M j, Y" }}{% endif %}{% endif %}{% if adventure.operating_callsign_url %} · <a href="{{ adventure.operating_callsign_url }}" rel="noopener noreferrer">Event reference</a>{% endif %}</p>{% endif %}
 {% if adventure.operating_location %}<p><strong>Operating Location:</strong> {{ adventure.operating_location.name }}</p>{% endif %}
 </div>
 {% if user == adventure.owner and is_verified_member %}
@@ -52,6 +56,12 @@ onsubmit="return confirm('Delete this Adventure and all Journals, photos, contac
 </form>
 </div>
 {% endif %}
+</div>
+
+<div class="adventure-story-stats" aria-label="Adventure activity summary">
+<div><strong>{{ journal_entries|length }}</strong><span>Journals</span></div>
+<div><strong>{{ contact_count }}</strong><span>Contacts</span></div>
+<div><strong>{{ adventure_photos|length }}</strong><span>Photos</span></div>
 </div>
 
 {% if adventure.summary %}<section class="adventure-overview-card"><h2>Adventure Summary</h2><div>{{ adventure.summary|linebreaks }}</div></section>{% endif %}
@@ -67,5 +77,8 @@ onsubmit="return confirm('Delete this Adventure and all Journals, photos, contac
 {% endif %}
 </section>
 {% if adventure.lessons_learned %}<section class="adventure-lessons-card"><h2>Lessons Learned</h2><div>{{ adventure.lessons_learned|linebreaks }}</div></section>{% endif %}
+{% if adventure_photos %}<section class="adventure-photo-story-section"><div class="story-section-heading"><p class="section-kicker">Scenes from the Adventure</p><h2>Photos</h2></div><div class="journal-photo-grid adventure-photo-masonry">
+{% for photo in adventure_photos %}{% if photo.is_publicly_visible %}<figure class="journal-photo"><button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'Adventure photo' }} at original size"><img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}</figure>{% endif %}{% endfor %}
+</div></section>{% endif %}
 </section>
 {% endblock %}

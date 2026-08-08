@@ -5,6 +5,7 @@ from django.views.decorators.http import require_POST
 
 from .default_image_forms import DefaultLocationImageForm
 from .models import DefaultLocationImage
+from .photo_moderation import moderate_default_location_image
 
 
 @staff_member_required
@@ -35,7 +36,9 @@ def default_location_image_edit(request, image_id):
             instance=default_image,
         )
         if form.is_valid():
-            form.save()
+            saved = form.save()
+            if request.FILES.get("image"):
+                moderate_default_location_image(saved)
             messages.success(request, "Default Location Image saved.")
             return redirect("default_location_image_detail", image_id=default_image.pk)
     else:

@@ -5,11 +5,12 @@ from django.db.models import Count, Q
 from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 
 from PIL import Image
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 import hashlib
 import json
 from pathlib import Path
@@ -17,7 +18,13 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 from core.models import Adventure, Comment, JournalContact, JournalEntry, Location, OperatingLocation, Photo
-from core.auth import verified_member_required
+from core.photo_moderation import moderate_location_photo, moderate_photo
+from core.photo_upload_notices import add_photo_upload_notice
+from core.auth import (
+    is_verified_member,
+    verified_member_or_staff_required,
+    verified_member_required,
+)
 
 from .adif_parser import parse_adif_bytes
 
@@ -29,6 +36,31 @@ from .forms import (
     LocationForm,
     OperatingLocationForm,
 )
+
+
+def _can_manage_adventure(user, adventure):
+    return bool(
+        user.is_authenticated
+        and user.is_active
+        and (
+            user.is_staff
+            or (
+                adventure.owner_id == user.id
+                and is_verified_member(user)
+            )
+        )
+    )
+
+
+def _safe_next_url(request, default):
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return reverse(default) if isinstance(default, str) else default
 
 
 def _photo_taken_at(uploaded_file):
@@ -69,6 +101,7 @@ def _save_entry_photos(entry, uploaded_files):
     first_saved_photo = None
     saved_count = 0
     duplicate_count = 0
+    statuses = []
 
     existing_hashes = set(
         Photo.objects.filter(journal_entry__adventure=adventure)
@@ -91,6 +124,9 @@ def _save_entry_photos(entry, uploaded_files):
             file_hash=file_hash,
             moderation_status=Photo.ModerationStatus.PENDING,
         )
+        moderate_photo(photo)
+        photo.refresh_from_db(fields=["moderation_status"])
+        statuses.append(photo.moderation_status)
 
         existing_hashes.add(file_hash)
         saved_count += 1
@@ -102,7 +138,7 @@ def _save_entry_photos(entry, uploaded_files):
         adventure.cover_photo = first_saved_photo
         adventure.save(update_fields=["cover_photo", "updated_at"])
 
-    return saved_count, duplicate_count
+    return saved_count, duplicate_count, statuses
 
 
 @verified_member_required
@@ -174,18 +210,8 @@ def all_adventures(request):
     if place:
         adventures = adventures.filter(location_id=place)
 
-    if activity == "operating":
-        recent_cutoff = timezone.now() - timedelta(hours=24)
-        adventures = adventures.filter(
-            status=Adventure.Status.ACTIVE,
-            updated_at__gte=recent_cutoff,
-        )
-    elif activity == "progress":
-        recent_cutoff = timezone.now() - timedelta(hours=24)
-        adventures = adventures.filter(
-            status=Adventure.Status.ACTIVE,
-            updated_at__lt=recent_cutoff,
-        )
+    if activity in {"open", "operating", "progress"}:
+        adventures = adventures.filter(status=Adventure.Status.ACTIVE)
     elif activity == "complete":
         adventures = adventures.filter(
             status=Adventure.Status.COMPLETED,
@@ -250,10 +276,26 @@ def adventure_detail(request, slug):
     if adventure.owner != request.user:
         journal_entries = journal_entries.filter(is_public=True)
 
+    adventure_photos = Photo.objects.filter(
+        journal_entry__in=journal_entries,
+    ).select_related("journal_entry")
+    if adventure.owner != request.user and not request.user.is_staff:
+        adventure_photos = adventure_photos.filter(
+            moderation_status=Photo.ModerationStatus.APPROVED
+        )
+    contact_count = JournalContact.objects.filter(
+        journal_entry__in=journal_entries,
+    ).count()
+
     return render(
         request,
         "adventures/adventure_detail.html",
-        {"adventure": adventure, "journal_entries": journal_entries},
+        {
+            "adventure": adventure,
+            "journal_entries": journal_entries,
+            "adventure_photos": adventure_photos,
+            "contact_count": contact_count,
+        },
     )
 
 
@@ -289,19 +331,40 @@ def add_adventure(request):
 
     if request.method == "POST":
         form_data = request.POST.copy()
+        profile = getattr(request.user, "member_profile", None)
+        form_data.setdefault(
+            "operating_callsign",
+            profile.callsign if profile and profile.callsign else request.user.username,
+        )
+        form_data.setdefault(
+            "operating_callsign_type", Adventure.OperatingCallsignType.PERSONAL
+        )
         if (
             "adventure_visibility_present" not in form_data
             and "is_public" not in form_data
         ):
             form_data["is_public"] = "on"
-        form = AdventureForm(form_data)
+        form = AdventureForm(form_data, request.FILES, user=request.user)
 
         if form.is_valid():
             adventure = form.save(commit=False)
             adventure.owner = request.user
             adventure.status = Adventure.Status.ACTIVE
             adventure.save()
-            return redirect("edit_adventure", slug=adventure.slug)
+            uploaded_photos = request.FILES.getlist("photos")
+            if uploaded_photos:
+                entry = JournalEntry.objects.create(
+                    adventure=adventure,
+                    operating_callsign=adventure.operating_callsign,
+                    entry_at=timezone.now(),
+                    title="Adventure photos",
+                    body="Photos from this Adventure.",
+                    is_public=adventure.is_public,
+                )
+                _, _, statuses = _save_entry_photos(entry, uploaded_photos)
+                add_photo_upload_notice(request, statuses)
+            messages.success(request, "Adventure created successfully.")
+            return redirect("all_adventures")
     else:
         initial = {
             "title": draft_title,
@@ -314,7 +377,7 @@ def add_adventure(request):
         if selected_operating_id:
             initial["operating_location"] = selected_operating_id
 
-        form = AdventureForm(initial=initial)
+        form = AdventureForm(initial=initial, user=request.user)
 
         if selected_location_id:
             form.fields["operating_location"].queryset = (
@@ -327,6 +390,7 @@ def add_adventure(request):
         {
             "id": position.pk,
             "location_id": position.location_id,
+            "location_name": position.location.name,
             "name": position.name,
             "latitude": (
                 float(position.latitude)
@@ -339,7 +403,7 @@ def add_adventure(request):
                 else None
             ),
         }
-        for position in OperatingLocation.objects.order_by(
+        for position in OperatingLocation.objects.select_related("location").order_by(
             "location__name", "name"
         )
     ]
@@ -397,28 +461,34 @@ def create_operating_position_inline(request, location_id):
     )
 
 
-@verified_member_required
+@verified_member_or_staff_required
 def edit_adventure(request, slug):
     adventure = get_object_or_404(Adventure, slug=slug)
 
-    if adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, adventure):
         return HttpResponseForbidden(
-            "Only the operator who owns this adventure can edit it."
+            "Only the Adventure owner or an authorized administrator can edit it."
         )
 
     if request.method == "POST":
-        form = AdventureForm(request.POST, instance=adventure)
+        form_data = request.POST.copy()
+        form_data.setdefault("operating_callsign", adventure.operating_callsign)
+        form_data.setdefault(
+            "operating_callsign_type", adventure.operating_callsign_type
+        )
+        form = AdventureForm(form_data, instance=adventure, user=request.user)
 
         if form.is_valid():
             adventure = form.save()
             return redirect("edit_adventure", slug=adventure.slug)
     else:
-        form = AdventureForm(instance=adventure)
+        form = AdventureForm(instance=adventure, user=request.user)
 
     operating_positions = [
         {
             "id": position.pk,
             "location_id": position.location_id,
+            "location_name": position.location.name,
             "name": position.name,
             "latitude": (
                 float(position.latitude)
@@ -431,7 +501,7 @@ def edit_adventure(request, slug):
                 else None
             ),
         }
-        for position in OperatingLocation.objects.order_by(
+        for position in OperatingLocation.objects.select_related("location").order_by(
             "location__name", "name"
         )
     ]
@@ -464,17 +534,19 @@ def toggle_adventure_visibility(request, slug):
     return redirect(request.POST.get("next") or adventure.get_absolute_url())
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def delete_adventure(request, slug):
-    adventure = get_object_or_404(
-        Adventure,
-        slug=slug,
-        owner=request.user,
-    )
+    adventure = get_object_or_404(Adventure, slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or an authorized administrator can delete it."
+        )
+    owner_id = adventure.owner_id
     adventure.delete()
     messages.success(request, "Adventure deleted.")
-    return redirect("my_adventures")
+    default = "my_adventures" if owner_id == request.user.id else "all_adventures"
+    return redirect(_safe_next_url(request, default))
 
 
 @verified_member_required
@@ -530,30 +602,54 @@ def delete_selected_contacts(request, entry_id):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def mark_adventure_done(request, slug):
-    adventure = get_object_or_404(
-        Adventure,
-        slug=slug,
-        owner=request.user,
-    )
+    adventure = get_object_or_404(Adventure, slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or an authorized administrator can change its status."
+        )
     adventure.status = Adventure.Status.COMPLETED
     adventure.save()
-    return redirect(request.POST.get("next") or "my_adventures")
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse(
+            {
+                "status": adventure.status,
+                "label": adventure.display_status_label,
+                "key": adventure.display_status_key,
+                "toggle_url": reverse(
+                    "mark_adventure_in_progress",
+                    kwargs={"slug": adventure.slug},
+                ),
+            }
+        )
+    return redirect(_safe_next_url(request, "my_adventures"))
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def mark_adventure_in_progress(request, slug):
-    adventure = get_object_or_404(
-        Adventure,
-        slug=slug,
-        owner=request.user,
-    )
+    adventure = get_object_or_404(Adventure, slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or an authorized administrator can change its status."
+        )
     adventure.status = Adventure.Status.ACTIVE
     adventure.save()
-    return redirect(request.POST.get("next") or "my_adventures")
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse(
+            {
+                "status": adventure.status,
+                "label": adventure.display_status_label,
+                "key": adventure.display_status_key,
+                "toggle_url": reverse(
+                    "mark_adventure_done",
+                    kwargs={"slug": adventure.slug},
+                ),
+            }
+        )
+    return redirect(_safe_next_url(request, "my_adventures"))
 
 
 @verified_member_required
@@ -567,19 +663,20 @@ def add_journal_entry(request, slug):
 
     if request.method == "POST":
         form_data = request.POST.copy()
+        form_data.setdefault("operating_callsign", adventure.operating_callsign)
         if (
             "journal_visibility_present" not in form_data
             and "is_public" not in form_data
         ):
             form_data["is_public"] = "on"
-        form = JournalEntryForm(form_data, request.FILES)
+        form = JournalEntryForm(form_data, request.FILES, adventure=adventure)
 
         if form.is_valid():
             entry = form.save(commit=False)
             entry.adventure = adventure
             entry.save()
 
-            saved_count, duplicate_count = _save_entry_photos(
+            saved_count, duplicate_count, statuses = _save_entry_photos(
                 entry,
                 request.FILES.getlist("photos"),
             )
@@ -590,6 +687,7 @@ def add_journal_entry(request, slug):
                     request,
                     f"{saved_count} photo{'s' if saved_count != 1 else ''} added to the Journal Entry.",
                 )
+                add_photo_upload_notice(request, statuses)
             if duplicate_count:
                 messages.info(
                     request,
@@ -601,10 +699,11 @@ def add_journal_entry(request, slug):
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
         last_entry = adventure.journal_entries.order_by("-entry_at").first()
-        initial = {}
+        initial = {"operating_callsign": adventure.operating_callsign}
 
         if last_entry:
             initial = {
+                "operating_callsign": adventure.operating_callsign,
                 "radio": last_entry.radio,
                 "antenna": last_entry.antenna,
                 "portable": last_entry.portable,
@@ -624,7 +723,7 @@ def add_journal_entry(request, slug):
                 "mode_other": last_entry.mode_other,
             }
 
-        form = JournalEntryForm(initial=initial)
+        form = JournalEntryForm(initial=initial, adventure=adventure)
 
     return render(
         request,
@@ -699,12 +798,16 @@ def edit_journal_entry(request, entry_id):
         )
 
     if request.method == "POST":
-        form = JournalEntryForm(request.POST, request.FILES, instance=entry)
+        form_data = request.POST.copy()
+        form_data.setdefault("operating_callsign", entry.operating_callsign)
+        form = JournalEntryForm(
+            form_data, request.FILES, instance=entry, adventure=adventure
+        )
 
         if form.is_valid():
             entry = form.save()
 
-            saved_count, duplicate_count = _save_entry_photos(
+            saved_count, duplicate_count, statuses = _save_entry_photos(
                 entry,
                 request.FILES.getlist("photos"),
             )
@@ -715,6 +818,7 @@ def edit_journal_entry(request, entry_id):
                     request,
                     f"{saved_count} photo{'s' if saved_count != 1 else ''} added to the Journal Entry.",
                 )
+                add_photo_upload_notice(request, statuses)
             if duplicate_count:
                 messages.info(
                     request,
@@ -725,7 +829,7 @@ def edit_journal_entry(request, entry_id):
             adventure.save(update_fields=["updated_at"])
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
-        form = JournalEntryForm(instance=entry)
+        form = JournalEntryForm(instance=entry, adventure=adventure)
 
     return render(
         request,
@@ -1154,6 +1258,10 @@ def create_location(request):
                     location.operating_advisory = ""
                     location.advisory_updated_at = None
                 location.save()
+                if request.FILES.get("location-photo"):
+                    moderate_location_photo(location)
+                    location.refresh_from_db(fields=["photo_moderation_status"])
+                    add_photo_upload_notice(request, [location.photo_moderation_status])
 
                 operating_location = operating_form.save(commit=False)
                 operating_location.location = location
@@ -1221,7 +1329,11 @@ def edit_location(request, location_id):
             prefix="location",
         )
         if location_form.is_valid():
-            location_form.save()
+            location = location_form.save()
+            if request.FILES.get("location-photo"):
+                moderate_location_photo(location)
+                location.refresh_from_db(fields=["photo_moderation_status"])
+                add_photo_upload_notice(request, [location.photo_moderation_status])
             return redirect("location_detail", location_id=location.pk)
     else:
         location_form = LocationForm(instance=location, prefix="location")

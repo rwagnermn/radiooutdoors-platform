@@ -1,12 +1,40 @@
 from django import forms
 from django.core.files.uploadedfile import UploadedFile
+from django.db.models import Q
+from django.db.models.functions import Lower
 from PIL import Image, UnidentifiedImageError
 
-from core.models import Adventure, Comment, JournalEntry, Location, OperatingLocation
+from core.models import Adventure, Comment, JournalEntry, Location, LocationType as LocationTypeRecord, OperatingLocation
 from core.profile_images import MAX_PROFILE_PHOTO_BYTES, optimize_location_photo
+from core.photo_moderation import validate_image_file
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.ImageField):
+    widget = MultipleFileInput
+
+    def clean(self, data, initial=None):
+        single_clean = super().clean
+        files = data if isinstance(data, (list, tuple)) else [data]
+        cleaned = []
+        for item in files:
+            image = single_clean(item, initial)
+            if image and image.size > MAX_PROFILE_PHOTO_BYTES:
+                raise forms.ValidationError("Each image must be smaller than 12 MB.")
+            if image:
+                validate_image_file(image)
+                cleaned.append(optimize_location_photo(image))
+        return cleaned if isinstance(data, (list, tuple)) else (cleaned[0] if cleaned else None)
 
 
 class AdventureForm(forms.ModelForm):
+    photos = MultipleImageField(
+        required=False,
+        help_text="Select or paste one or more images.",
+    )
     location = forms.ModelChoiceField(
         queryset=Location.objects.all().order_by("name"),
         required=True,
@@ -25,7 +53,19 @@ class AdventureForm(forms.ModelForm):
 
     class Meta:
         model = Adventure
-        fields = ["title", "is_public", "location", "operating_location"]
+        fields = [
+            "title",
+            "is_public",
+            "operating_callsign",
+            "operating_callsign_type",
+            "operating_identity_name",
+            "operating_callsign_explanation",
+            "operating_callsign_url",
+            "operating_start_date",
+            "operating_end_date",
+            "location",
+            "operating_location",
+        ]
         widgets = {
             "title": forms.TextInput(
                 attrs={
@@ -33,13 +73,28 @@ class AdventureForm(forms.ModelForm):
                     "autocomplete": "off",
                 }
             ),
+            "operating_callsign": forms.TextInput(
+                attrs={"autocapitalize": "characters", "autocomplete": "off"}
+            ),
+            "operating_callsign_explanation": forms.Textarea(attrs={"rows": 3}),
+            "operating_start_date": forms.DateInput(attrs={"type": "date"}),
+            "operating_end_date": forms.DateInput(attrs={"type": "date"}),
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        self.fields["operating_callsign"].required = True
+        self.fields["operating_callsign_type"].required = True
 
         if not self.is_bound and not self.instance.pk:
             self.initial.setdefault("is_public", True)
+            if user:
+                profile = getattr(user, "member_profile", None)
+                self.initial.setdefault(
+                    "operating_callsign",
+                    profile.callsign if profile and profile.callsign else user.username,
+                )
 
         location_id = None
 
@@ -57,6 +112,20 @@ class AdventureForm(forms.ModelForm):
                 .order_by("name")
             )
 
+    def clean_operating_callsign(self):
+        callsign = self.cleaned_data["operating_callsign"].strip().upper()
+        if not callsign:
+            raise forms.ValidationError("Enter the callsign used for this Adventure.")
+        return callsign
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get("operating_start_date")
+        end = cleaned.get("operating_end_date")
+        if start and end and end < start:
+            self.add_error("operating_end_date", "End date cannot be before start date.")
+        return cleaned
+
 class LocationForm(forms.ModelForm):
     remove_location_photo = forms.BooleanField(
         required=False,
@@ -70,11 +139,33 @@ class LocationForm(forms.ModelForm):
             if self.instance and self.instance.photo
             else ""
         )
+        available_types = LocationTypeRecord.objects.filter(is_active=True)
+        current_key = self.instance.location_type if self.instance and self.instance.pk else ""
+        if current_key:
+            available_types = LocationTypeRecord.objects.filter(
+                Q(is_active=True) | Q(key=current_key)
+            )
+        self.fields["location_type"].choices = [
+            (item.key, item.name + (" (Inactive)" if not item.is_active else ""))
+            for item in available_types.order_by(Lower("name"))
+        ]
+
+    def clean_location_type(self):
+        key = self.cleaned_data["location_type"]
+        location_type = LocationTypeRecord.objects.filter(key=key).first()
+        if location_type is None:
+            raise forms.ValidationError("Choose a valid Location Type.")
+        current_key = self.instance.location_type if self.instance and self.instance.pk else ""
+        if not location_type.is_active and key != current_key:
+            raise forms.ValidationError("Choose an active Location Type.")
+        self._selected_location_type_record = location_type
+        return key
 
     def clean_photo(self):
         photo = self.cleaned_data.get("photo")
         if not photo or photo is False or not isinstance(photo, UploadedFile):
             return photo
+        validate_image_file(photo)
         if photo.size > MAX_PROFILE_PHOTO_BYTES:
             raise forms.ValidationError("Choose an image smaller than 12 MB.")
         try:
@@ -105,6 +196,17 @@ class LocationForm(forms.ModelForm):
     def save(self, commit=True):
         old_photo_name = self._original_photo_name
         location = super().save(commit=False)
+        if self.files.get(self.add_prefix("photo")):
+            location.photo_moderation_status = "pending"
+            location.photo_moderation_reason = ""
+            location.photo_moderation_categories = []
+            location.photo_moderation_confidence = None
+            location.photo_moderation_provider = ""
+            location.photo_moderation_provider_model = ""
+            location.photo_automated_decision = ""
+            location.photo_rejection_reason_code = ""
+            location.photo_rejection_explanation = ""
+        location.location_type_record = self._selected_location_type_record
         if self.cleaned_data.get("remove_location_photo"):
             location.photo = ""
         if commit:
@@ -253,22 +355,6 @@ class OperatingLocationForm(forms.ModelForm):
         }
 
 
-class MultipleFileInput(forms.ClearableFileInput):
-    allow_multiple_selected = True
-
-
-class MultipleImageField(forms.ImageField):
-    widget = MultipleFileInput
-
-    def clean(self, data, initial=None):
-        single_clean = super().clean
-
-        if isinstance(data, (list, tuple)):
-            return [single_clean(item, initial) for item in data]
-
-        return single_clean(data, initial)
-
-
 class JournalEntryForm(forms.ModelForm):
     photos = MultipleImageField(
         required=False,
@@ -280,6 +366,7 @@ class JournalEntryForm(forms.ModelForm):
         fields = [
             "entry_at",
             "is_public",
+            "operating_callsign",
             "title",
             "body",
             "radio",
@@ -288,6 +375,7 @@ class JournalEntryForm(forms.ModelForm):
         labels = {
             "entry_at": "When did this happen?",
             "is_public": "Visible to Everyone",
+            "operating_callsign": "Operating Callsign",
             "title": "Journal title (optional)",
             "body": "Tell the story",
             "radio": "Radio (optional)",
@@ -315,9 +403,15 @@ class JournalEntryForm(forms.ModelForm):
 
 
     def __init__(self, *args, **kwargs):
+        adventure = kwargs.pop("adventure", None)
         super().__init__(*args, **kwargs)
+        self.fields["operating_callsign"].required = True
         if not self.is_bound and not self.instance.pk:
             self.initial.setdefault("is_public", True)
+            if adventure:
+                self.initial.setdefault(
+                    "operating_callsign", adventure.operating_callsign
+                )
         self.fields["entry_at"].input_formats = ["%Y-%m-%dT%H:%M"]
         self.fields["body"].required = True
         self.fields["body"].help_text = (
@@ -329,6 +423,12 @@ class JournalEntryForm(forms.ModelForm):
             self.initial["entry_at"] = self.instance.entry_at.strftime(
                 "%Y-%m-%dT%H:%M"
             )
+
+    def clean_operating_callsign(self):
+        callsign = self.cleaned_data["operating_callsign"].strip().upper()
+        if not callsign:
+            raise forms.ValidationError("Enter the callsign used for this Journal entry.")
+        return callsign
 
 
 class CommentForm(forms.ModelForm):

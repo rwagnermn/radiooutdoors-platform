@@ -33,6 +33,8 @@ Every requested bug, enhancement, or feature must be recorded here before implem
 | B-027 | Add licensed Wikimedia Location defaults | Testing | Medium |
 | B-028 | Manage Default Location Images in staff UI | Testing | Medium |
 | B-029 | Refine compact Journal selection tables | Testing | Medium |
+| B-030 | Redesign Radio Outdoors interior pages | Testing | High |
+| B-031 | Fix the shared interior-page header panorama | Testing | High |
 
 ## B-001 — Fix My Adventures status control
 
@@ -236,3 +238,17 @@ Every requested bug, enhancement, or feature must be recorded here before implem
 - **Status:** Testing
 - **Priority:** Medium
 - **Acceptance criteria:** Journal rows reuse the Contacts table container/cell treatment; desktop date, title, and summary stay on one compact line with clean ellipsis; separators and the dark-green header distinguish the list from surrounding content; all multi-entry lists use the shared partial; obsolete Journal-card list markup/styles are removed; mobile records remain compact and usable.
+
+## B-030 — Redesign Radio Outdoors interior pages
+
+- **Description:** Bring interior pages into the Home page's outdoor visual family through one shared header/background/table/story/gallery/footer system without changing the Home hero or application behavior.
+- **Status:** Testing
+- **Priority:** High
+- **Acceptance criteria:** Shared interior pages use the forest-green, cream, orange, outdoor design language; record tables are compact and visibly actionable; Adventures and Journals retain story presentation; Contacts remain dense; photo galleries preserve varied aspect ratios and batch preview supports removing individual selections; decorative horizons vary without adding dead space; Home remains unchanged apart from inheriting the shared site header; desktop, tablet, signed-in/out, checks, and tests pass.
+
+## B-031 — Fix the shared interior-page header panorama
+
+- **Description:** Replace the nearly opaque interior-header overlay with one shared compact forest-green-to-mountain panorama treatment while preserving the existing logo, navigation, identity, and account behavior.
+- **Status:** Testing
+- **Priority:** High
+- **Acceptance criteria:** The project-owned mountain/forest photograph is plainly visible without a hard seam; logo and navigation remain readable, compact, centered, consistent across interior pages, and overlap-free for signed-in/out desktop and tablet layouts; the Home hero remains unchanged.

@@ -15,7 +15,7 @@ from core.location_default_images import (
     default_image_storage_name,
     reusable_license,
 )
-from core.models import Location
+from core.models import DefaultLocationImage, Location
 
 
 class _Response:
@@ -98,6 +98,9 @@ class LocationDefaultImageTests(TestCase):
                     default_image_storage_name("park"),
                     ContentFile(b"default", name="park.jpg"),
                 )
+                DefaultLocationImage.objects.filter(key="park").update(
+                    moderation_status="approved"
+                )
                 location = Location.objects.create(
                     name="Fallback Park",
                     location_type=Location.LocationType.PARK,
@@ -111,7 +114,8 @@ class LocationDefaultImageTests(TestCase):
                 self.assertContains(response, "Public domain")
 
                 location.photo = "location_photos/member.jpg"
-                location.save(update_fields=["photo"])
+                location.photo_moderation_status = "approved"
+                location.save(update_fields=["photo", "photo_moderation_status"])
                 location.__dict__.pop("default_photo_info", None)
                 self.assertFalse(location.uses_default_photo)
                 self.assertIn("location_photos/member.jpg", location.display_photo_url)

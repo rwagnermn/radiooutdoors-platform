@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Review Manual Verification | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page admin-page{% endblock %}
+{% block content %}
+<section class="content">
+<div class="location-card">
+<h1>Review Manual Verification</h1>
+<dl><dt>Callsign</dt><dd>{{ verification_request.member.callsign }}</dd><dt>Full name</dt><dd>{{ verification_request.full_name }}</dd><dt>Email</dt><dd>{{ verification_request.member.user.email }}</dd><dt>Country</dt><dd>{{ verification_request.country }}</dd><dt>Authority or callbook</dt><dd><a href="{{ verification_request.authority_url }}" rel="noopener noreferrer" target="_blank">Open submitted source</a></dd><dt>Explanation</dt><dd>{{ verification_request.explanation|default:"None provided" }}</dd><dt>Current status</dt><dd>{{ verification_request.get_status_display }}</dd></dl>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit" class="btn-ro-primary">Save Review Decision</button></form>
+<p><a href="{% url 'manual_verification_queue' %}">Return to queue</a></p>
+</div>
+</section>
+{% endblock %}

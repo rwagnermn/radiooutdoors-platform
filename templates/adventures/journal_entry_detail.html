@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page journal-story-page{% if contact_count %} contacts-page{% endif %}{% endblock %}
 {% block content %}
 <section class="content"><article class="journal-entry-view">
 <div class="journal-view-heading">
@@ -8,6 +9,7 @@
 <p class="journal-adventure-name">{{ adventure.title }}</p>
 <div class="compact-meta-row">
 <span>{{ entry.entry_at|date:"F j, Y — g:i A" }}</span>
+<span><strong>Operating as:</strong> {{ entry.operating_callsign }}</span>
 
 {% if user == adventure.owner and is_verified_member %}
 <form
@@ -50,9 +52,8 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 {% if entry.photos.all %}
 <section class="journal-view-section"><h2>Photos</h2><div class="journal-photo-grid journal-view-photos">
 {% for photo in entry.photos.all %}<figure class="journal-photo">
-<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'journal photo' }} at original size">
-<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">
-</button>
+{% if photo.is_publicly_visible %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'journal photo' }} at original size">
+<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% elif adventure.owner == user %}<p><strong>{{ photo.get_moderation_status_display }}</strong>{% if photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
 {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}</figure>{% endfor %}
 </div></section>
 {% endif %}
@@ -76,7 +77,7 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 <button type="submit" id="delete-selected-contacts" class="contact-delete-button" disabled>Delete Selected</button>
 {% endif %}
 </div>
-<div class="contact-table-scroll"><table id="journal-contact-table" class="compact-contact-table ro-data-table">
+<div class="contact-table-scroll ro-scroll-table-region" role="region" aria-label="Journal contacts" tabindex="0"><table id="journal-contact-table" class="compact-contact-table ro-data-table">
 <thead><tr>{% if user == adventure.owner and is_verified_member %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
 <th>Date</th><th>Time</th><th>Callsign</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Miles</th><th>Comment</th></tr></thead>
 <tbody>{% for contact in contacts %}<tr>

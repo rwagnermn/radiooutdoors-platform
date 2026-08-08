@@ -1,0 +1,18 @@
+<details class="ro-action-menu adventure-row-menu">
+    <summary aria-label="Actions for {{ adventure.title }}" aria-expanded="false">☰</summary>
+    <div class="ro-action-menu-panel">
+        <a href="{{ adventure.get_absolute_url }}">View</a>
+        {% if user.is_staff or is_verified_member and user == adventure.owner %}
+            <a href="{% url 'edit_adventure' adventure.slug %}">Edit</a>
+            <form
+                method="post"
+                action="{% url 'delete_adventure' adventure.slug %}"
+                onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');"
+            >
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="danger-menu-item">Delete</button>
+            </form>
+        {% endif %}
+    </div>
+</details>

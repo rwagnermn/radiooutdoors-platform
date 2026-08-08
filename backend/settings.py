@@ -147,8 +147,82 @@ if not GOOGLE_MAPS_API_KEY and _google_maps_key_file.exists():
         encoding="utf-8"
     ).strip()
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "Radio Outdoors <noreply@radiooutdoors.org>"
+# OpenAI image moderation. Environment configuration takes precedence; a local
+# key file is supported only as a development convenience and is gitignored.
+_openai_key_file = BASE_DIR / "openai_api_key.txt"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+if DEBUG and not OPENAI_API_KEY and _openai_key_file.exists():
+    OPENAI_API_KEY = _openai_key_file.read_text(encoding="utf-8").strip()
 
-LOGIN_REDIRECT_URL = "/adventures/all/"
+EMAIL_BACKEND = os.environ.get(
+    "DJANGO_EMAIL_BACKEND",
+    (
+        "django.core.mail.backends.console.EmailBackend"
+        if DEBUG
+        else "django.core.mail.backends.smtp.EmailBackend"
+    ),
+)
+EMAIL_HOST = os.environ.get("DJANGO_EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("DJANGO_EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("DJANGO_EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("DJANGO_EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("DJANGO_EMAIL_USE_TLS", "1") == "1"
+EMAIL_USE_SSL = os.environ.get("DJANGO_EMAIL_USE_SSL", "0") == "1"
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DJANGO_DEFAULT_FROM_EMAIL",
+    "Radio Outdoors <noreply@radiooutdoors.org>",
+)
+
+PASSWORD_RESET_DOMAIN = os.environ.get("PASSWORD_RESET_DOMAIN", "").strip()
+PASSWORD_RESET_USE_HTTPS = (
+    os.environ.get("PASSWORD_RESET_USE_HTTPS", "0" if DEBUG else "1") == "1"
+)
+PASSWORD_RESET_TIMEOUT = int(os.environ.get("PASSWORD_RESET_TIMEOUT", "259200"))
+PASSWORD_RESET_RATE_LIMIT = int(
+    os.environ.get("PASSWORD_RESET_RATE_LIMIT", "5")
+)
+PASSWORD_RESET_RATE_LIMIT_WINDOW = int(
+    os.environ.get("PASSWORD_RESET_RATE_LIMIT_WINDOW", "900")
+)
+
+# Image moderation is deliberately fail-closed. Configure a real provider class
+# implementing ``moderate(image_bytes, content_type=...)`` before expecting
+# automatic approvals. The disabled backend leaves every upload Pending Scan.
+PHOTO_MODERATION_BACKEND = os.environ.get(
+    "PHOTO_MODERATION_BACKEND",
+    "core.photo_moderation.OpenAIModerationProvider",
+)
+OPENAI_MODERATION_MODEL = os.environ.get(
+    "OPENAI_MODERATION_MODEL", "omni-moderation-latest"
+)
+OPENAI_MODERATION_TIMEOUT = int(os.environ.get("OPENAI_MODERATION_TIMEOUT", "20"))
+PHOTO_MAX_UPLOAD_BYTES = int(os.environ.get("PHOTO_MAX_UPLOAD_BYTES", str(12 * 1024 * 1024)))
+PHOTO_MAX_PIXELS = int(os.environ.get("PHOTO_MAX_PIXELS", "40000000"))
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "core.qrz_service": {
+            "handlers": ["console"],
+            "level": os.environ.get("QRZ_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "core.account_views": {
+            "handlers": ["console"],
+            "level": os.environ.get("QRZ_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "core.photo_moderation": {
+            "handlers": ["console"],
+            "level": os.environ.get("PHOTO_MODERATION_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}
+
+LOGIN_REDIRECT_URL = "/adventures/"
 LOGOUT_REDIRECT_URL = "/"

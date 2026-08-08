@@ -1,13 +1,19 @@
 {% extends "base.html" %}
 
 {% block title %}Adventure Book | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page adventure-book-page{% endblock %}
 
 {% block content %}
 <section class="content">
 
     <div class="adventure-book-heading">
-        <h1>Adventure Book</h1>
-        <p>Explore the stories and experiences shared by Radio Outdoors members.</p>
+        <div>
+            <h1>Adventure Book</h1>
+            <p>Explore the stories and experiences shared by Radio Outdoors members.</p>
+        </div>
+        {% if is_verified_member %}
+        <a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a>
+        {% endif %}
     </div>
 
     <p class="adventure-book-search-instruction">Search for an Adventure or select one below.</p>
@@ -45,14 +51,11 @@
             <label for="activity">Adventure Status</label>
             <select id="activity" name="activity">
                 <option value="">All statuses</option>
-                <option value="operating" {% if selected_activity == "operating" %}selected{% endif %}>
-                    Currently Operating
-                </option>
-                <option value="progress" {% if selected_activity == "progress" %}selected{% endif %}>
-                    In Progress
+                <option value="open" {% if selected_activity == "open" %}selected{% endif %}>
+                    Open
                 </option>
                 <option value="complete" {% if selected_activity == "complete" %}selected{% endif %}>
-                    Adventure Complete
+                    Complete
                 </option>
             </select>
         </div>
@@ -78,48 +81,40 @@
     </nav>
     {% endif %}
 
-    <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;min-width:1000px;background:#fff;">
+    <div class="ro-record-table-wrap adventure-book-table-wrap ro-scroll-table-region" role="region" aria-label="Adventure Book results" tabindex="0">
+        <table class="ro-record-table adventure-book-table">
             <thead>
-                <tr style="text-align:left;border-bottom:2px solid #d8ddd4;">
-                    <th style="padding:12px;">Photo</th>
-                    <th style="padding:12px;">Status</th>
-                    <th style="padding:12px;">Adventure</th>
-                    <th style="padding:12px;">Operator</th>
-                    <th style="padding:12px;">State</th>
-                    <th style="padding:12px;">Location</th>
-                    <th style="padding:12px;">Date</th>
-                    <th style="padding:12px;text-align:center;">Journal</th>
-                    <th style="padding:12px;text-align:center;">Photos</th>
-                    <th style="padding:12px;text-align:center;">Comments</th>
+                <tr>
+                    <th>Photo</th><th>Status</th><th>Adventure</th><th>Operator</th>
+                    <th>State</th><th>Location</th><th>Date</th>
+                    <th class="center-column">Journal</th><th class="center-column">Photos</th>
+                    <th class="center-column">Comments</th><th class="ro-actions-column">Action</th>
                 </tr>
             </thead>
 
             <tbody>
                 {% for adventure in adventures %}
-                    <tr
-                        style="border-bottom:1px solid #e4e7e1;cursor:pointer;"
+                    <tr class="adventure-list-row" tabindex="0" role="link"
                         onclick="window.location='{{ adventure.get_absolute_url }}';"
+                        onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}"
                     >
-                        <td style="padding:10px;width:84px;">
-                            {% if adventure.cover_photo %}
+                        <td class="adventure-photo-cell">
+                            {% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
                                 <img
                                     src="{{ adventure.cover_photo.image.url }}"
                                     alt=""
-                                    style="width:72px;height:52px;object-fit:cover;border-radius:5px;"
+                                    class="adventure-list-photo"
                                 >
                             {% else %}
-                                <div style="width:72px;height:52px;background:#e7eadf;border-radius:5px;"></div>
+                                <div class="adventure-photo-placeholder"></div>
                             {% endif %}
                         </td>
 
-                        <td style="padding:10px;white-space:nowrap;">
-                            <span class="adventure-status adventure-status-{{ adventure.display_status_key }}">
-                                {{ adventure.display_status_label }}
-                            </span>
+                        <td class="nowrap">
+                            {% include "adventures/_status_control.html" %}
                         </td>
 
-                        <td style="padding:10px;">
+                        <td>
                             <strong>{{ adventure.title }}</strong>
 
                             {% if adventure.summary %}
@@ -129,29 +124,32 @@
                             {% endif %}
                         </td>
 
-                        <td style="padding:10px;">
+                        <td>
                             {{ adventure.owner }}
                         </td>
 
-                        <td style="padding:10px;">
+                        <td>
                             {% if adventure.location %}{{ adventure.location.state|default:"—" }}{% else %}—{% endif %}
                         </td>
 
-                        <td style="padding:10px;">
+                        <td>
                             {% if adventure.location %}{{ adventure.location.name }}{% else %}—{% endif %}
                         </td>
 
-                        <td style="padding:10px;white-space:nowrap;">
+                        <td class="nowrap">
                             {{ adventure.started_at|date:"M j, Y" }}
                         </td>
 
-                        <td style="padding:10px;text-align:center;">{{ adventure.journal_count }}</td>
-                        <td style="padding:10px;text-align:center;">{{ adventure.photo_count }}</td>
-                        <td style="padding:10px;text-align:center;">{{ adventure.comment_count }}</td>
+                        <td class="center-column">{{ adventure.journal_count }}</td>
+                        <td class="center-column">{{ adventure.photo_count }}</td>
+                        <td class="center-column">{{ adventure.comment_count }}</td>
+                        <td class="ro-actions-column" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+                            {% include "adventures/_row_action_menu.html" %}
+                        </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="10" style="padding:30px;text-align:center;">
+                        <td colspan="11" class="empty-table-message">
                             No adventures match these filters.
                         </td>
                     </tr>

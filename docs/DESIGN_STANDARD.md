@@ -33,6 +33,15 @@ This is the permanent UI standard for Radio Outdoors. New pages and components m
 - Required controls must visibly say **Required Field** without duplicating the marker.
 - Application behavior must remain independent from visual styling.
 
+## Interior-page visual language
+
+- The Home page is the visual benchmark; interior pages use the same forest green, warm cream, orange accent, outdoor imagery, and readable high-contrast typography without copying the Home hero.
+- Use cards and panels to present content or tell a story. Use compact tables and rows when people are scanning, selecting, or managing records.
+- Shared record tables use a dark-green header, thin separators, subtle alternating rows, vertically centered content, and an always-visible Action column.
+- Adventures and individual Journals remain story presentations. Journal selection lists and Contacts remain compact tables.
+- Photo galleries preserve varied image proportions and use the shared large-photo viewer.
+- Decorative outdoor horizons may vary by page family, but must fill otherwise dead space rather than create dead space. Administrative pages use little or no decoration.
+
 ## Maps and Google Places
 
 - Google Maps InfoWindow and custom popup text must be readable at normal laptop distance.

@@ -24,7 +24,7 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 
 {% if entry.photos.all %}<section class="current-photos"><h2>Current Photos</h2><div class="journal-photo-grid">
 {% for photo in entry.photos.all %}<figure class="journal-photo journal-photo-manage">
-<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">
+{% if photo.is_publicly_visible %}<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">{% else %}<p><strong>{{ photo.get_moderation_status_display }}</strong>{% if photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
 {% if adventure.cover_photo_id == photo.pk %}<div class="cover-photo-badge">Cover Photo</div>{% endif %}
 <div class="photo-actions">
 {% if adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_cover_photo' photo.pk %}">{% csrf_token %}<button type="submit">Make Cover</button></form>{% endif %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Manual Verification Request | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+<div class="location-card auth-card">
+<h1>{% if verification_request %}Edit{% else %}Complete{% endif %} Manual Verification Request</h1>
+<p><strong>Callsign:</strong> {{ profile.callsign }}</p>
+<p><strong>Email address:</strong> {{ user.email }}</p>
+<p>Provide a public official licensing-authority or recognized-callbook link that staff can review. Do not upload license documents.</p>
+{% if verification_request and verification_request.reviewer_message %}<div class="verification-review-message"><strong>Message from the reviewing administrator:</strong><p>{{ verification_request.reviewer_message }}</p></div>{% endif %}
+<form method="post">
+{% csrf_token %}
+{{ form.non_field_errors }}
+{% for field in form %}
+<div class="auth-field"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="required-field-text">Required Field</span>{% endif %}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>
+{% endfor %}
+<button type="submit" class="btn-ro-primary">Submit Verification Request</button>
+</form>
+<p><a href="{% url 'manual_verification_status' %}">Return to Verification Status</a></p>
+</div>
+</section>
+{% endblock %}

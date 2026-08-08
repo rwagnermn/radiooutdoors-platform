@@ -1,11 +1,41 @@
-from datetime import timedelta
-
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
+from django.db.models.functions import Lower
+
+
+class LocationType(models.Model):
+    key = models.SlugField(max_length=30, unique=True, editable=False)
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = [Lower("name")]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("name"),
+                name="core_location_type_name_ci_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        self.name = " ".join(self.name.split())
+        if not self.key:
+            base = (slugify(self.name) or "location-type")[:30]
+            candidate = base
+            counter = 2
+            while LocationType.objects.filter(key=candidate).exclude(pk=self.pk).exists():
+                suffix = f"-{counter}"
+                candidate = f"{base[:30-len(suffix)]}{suffix}"
+                counter += 1
+            self.key = candidate
+        super().save(*args, **kwargs)
 
 
 class Location(models.Model):
@@ -21,12 +51,20 @@ class Location(models.Model):
         SUMMIT = "summit", "Summit"
         ISLAND = "island", "Island"
         REST_AREA = "rest_area", "Rest Area"
+        AIRPORT = "airport", "Airport"
         WMA_DNR = "wma_dnr", "WMA / DNR Wildlife Management Land"
         OTHER = "other", "Other"
 
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=180, unique=True, blank=True)
     location_type = models.CharField(max_length=30, choices=LocationType.choices, default=LocationType.OTHER)
+    location_type_record = models.ForeignKey(
+        "core.LocationType",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="locations",
+    )
     street_address = models.CharField(max_length=160, blank=True)
     address_line_2 = models.CharField(max_length=160, blank=True)
     city = models.CharField(max_length=100, blank=True)
@@ -59,6 +97,30 @@ class Location(models.Model):
         upload_to="location_photos/%Y/%m/",
         blank=True,
     )
+    photo_moderation_status = models.CharField(
+        max_length=12,
+        choices=[
+            ("pending", "Pending Scan"),
+            ("approved", "Approved"),
+            ("review", "Needs Administrator Review"),
+            ("rejected", "Rejected"),
+        ],
+        default="pending",
+        db_index=True,
+    )
+    photo_moderation_reason = models.CharField(max_length=240, blank=True)
+    photo_moderation_categories = models.JSONField(default=list, blank=True)
+    photo_moderation_confidence = models.FloatField(null=True, blank=True)
+    photo_moderation_provider = models.CharField(max_length=80, blank=True)
+    photo_moderation_provider_model = models.CharField(max_length=80, blank=True)
+    photo_automated_decision = models.CharField(max_length=32, blank=True)
+    photo_rejection_reason_code = models.CharField(max_length=48, blank=True)
+    photo_rejection_explanation = models.CharField(max_length=240, blank=True)
+    photo_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_location_photos",
+    )
+    photo_reviewed_at = models.DateTimeField(null=True, blank=True)
     has_operating_advisory = models.BooleanField(
         default=False,
         help_text="Show this Location with a red map pin.",
@@ -88,6 +150,14 @@ class Location(models.Model):
     def __str__(self):
         return self.name
 
+    def get_location_type_display(self):
+        if self.location_type_record_id:
+            return self.location_type_record.name
+        return dict(self.LocationType.choices).get(
+            self.location_type,
+            self.location_type.replace("_", " ").title(),
+        )
+
     @cached_property
     def default_photo_info(self):
         from .location_default_images import default_image_for_location
@@ -96,7 +166,7 @@ class Location(models.Model):
 
     @property
     def display_photo_url(self):
-        if self.photo:
+        if self.photo and self.photo_moderation_status == "approved":
             return self.photo.url
         if self.default_photo_info:
             return self.default_photo_info["url"]
@@ -118,6 +188,22 @@ class DefaultLocationImage(models.Model):
 
     key = models.CharField(max_length=30, choices=Key.choices, unique=True)
     image = models.ImageField(upload_to="location_defaults/", blank=True)
+    moderation_status = models.CharField(
+        max_length=12,
+        choices=[("pending", "Pending Scan"), ("approved", "Approved"), ("review", "Needs Administrator Review"), ("rejected", "Rejected")],
+        default="pending",
+        db_index=True,
+    )
+    moderation_reason = models.CharField(max_length=240, blank=True)
+    moderation_categories = models.JSONField(default=list, blank=True)
+    moderation_confidence = models.FloatField(null=True, blank=True)
+    moderation_provider = models.CharField(max_length=80, blank=True)
+    moderation_provider_model = models.CharField(max_length=80, blank=True)
+    automated_decision = models.CharField(max_length=32, blank=True)
+    rejection_reason_code = models.CharField(max_length=48, blank=True)
+    rejection_explanation = models.CharField(max_length=240, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_default_location_images")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     source_title = models.CharField(max_length=240)
     source_url = models.URLField()
     creator = models.CharField(max_length=180)
@@ -187,14 +273,39 @@ class OperatingLocation(models.Model):
 
 class Adventure(models.Model):
     class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
-        COMPLETED = "completed", "Completed"
+        ACTIVE = "active", "Open"
+        COMPLETED = "completed", "Complete"
+
+    class OperatingCallsignType(models.TextChoices):
+        PERSONAL = "personal", "Personal callsign"
+        SPECIAL_EVENT = "special_event", "Special Event callsign"
+        CLUB = "club", "Club callsign"
+        CONTEST = "contest", "Contest callsign"
+        PORTABLE_REGIONAL = "portable_regional", "Portable/Regional variation"
+        OTHER = "other", "Other authorized callsign"
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="adventures")
     title = models.CharField(max_length=180, blank=True)
     slug = models.SlugField(max_length=220, unique=True, blank=True)
     location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name="adventures")
     operating_location = models.ForeignKey(OperatingLocation, on_delete=models.SET_NULL, null=True, blank=True, related_name="adventures")
+    operating_callsign = models.CharField(max_length=30, blank=True)
+    operating_callsign_type = models.CharField(
+        max_length=24,
+        choices=OperatingCallsignType.choices,
+        default=OperatingCallsignType.PERSONAL,
+    )
+    operating_identity_name = models.CharField(
+        "Event or organization name", max_length=180, blank=True
+    )
+    operating_callsign_explanation = models.TextField(
+        "Optional explanation", blank=True
+    )
+    operating_callsign_url = models.URLField(
+        "Optional event website/reference", blank=True
+    )
+    operating_start_date = models.DateField("Start date", null=True, blank=True)
+    operating_end_date = models.DateField("End date", null=True, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     is_public = models.BooleanField(default=True, help_text="Visible to everyone. Turn this off to keep the Adventure private.")
     summary = models.TextField(
@@ -215,6 +326,12 @@ class Adventure(models.Model):
         ordering = ["-updated_at"]
 
     def save(self, *args, **kwargs):
+        self.operating_callsign = self.operating_callsign.strip().upper()
+        if not self.operating_callsign and self.owner_id:
+            profile = getattr(self.owner, "member_profile", None)
+            self.operating_callsign = (
+                profile.callsign if profile and profile.callsign else self.owner.username
+            ).strip().upper()
         if not self.title:
             local_date = timezone.localtime(self.started_at).date()
             self.title = f"Adventure - {local_date.strftime('%B %d, %Y')}"
@@ -234,28 +351,15 @@ class Adventure(models.Model):
 
     @property
     def display_status_key(self):
-        if self.status == self.Status.COMPLETED:
-            return "complete"
-
-        recent_cutoff = timezone.now() - timedelta(hours=24)
-
-        if self.updated_at and self.updated_at >= recent_cutoff:
-            return "operating"
-
-        return "progress"
+        return "complete" if self.status == self.Status.COMPLETED else "open"
 
     @property
     def display_status_label(self):
-        labels = {
-            "operating": "Currently Operating",
-            "progress": "In Progress",
-            "complete": "Adventure Complete",
-        }
-        return labels[self.display_status_key]
+        return "Complete" if self.status == self.Status.COMPLETED else "Open"
 
     @property
     def is_currently_operating(self):
-        return self.display_status_key == "operating"
+        return self.status == self.Status.ACTIVE
 
     def get_absolute_url(self):
         return reverse("adventure_detail", kwargs={"slug": self.slug})
@@ -270,6 +374,7 @@ class JournalEntry(models.Model):
     body = models.TextField()
     entry_at = models.DateTimeField(default=timezone.now)
     is_public = models.BooleanField(default=True, help_text="Visible to everyone who can view this Adventure.")
+    operating_callsign = models.CharField(max_length=30, blank=True)
     radio = models.CharField(max_length=150, blank=True)
     antenna = models.CharField(max_length=150, blank=True)
     equipment_description = models.TextField(blank=True)
@@ -297,6 +402,12 @@ class JournalEntry(models.Model):
 
     class Meta:
         ordering = ["entry_at", "created_at"]
+
+    def save(self, *args, **kwargs):
+        self.operating_callsign = self.operating_callsign.strip().upper()
+        if not self.operating_callsign and self.adventure_id:
+            self.operating_callsign = self.adventure.operating_callsign
+        super().save(*args, **kwargs)
 
     @property
     def contact_count(self):
@@ -373,9 +484,9 @@ class JournalContact(models.Model):
 
 class Photo(models.Model):
     class ModerationStatus(models.TextChoices):
-        PENDING = "pending", "Pending"
+        PENDING = "pending", "Pending Scan"
         APPROVED = "approved", "Approved"
-        REVIEW = "review", "Needs Review"
+        REVIEW = "review", "Needs Administrator Review"
         REJECTED = "rejected", "Rejected"
 
     journal_entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name="photos")
@@ -385,6 +496,22 @@ class Photo(models.Model):
     display_order = models.PositiveIntegerField(default=0)
     file_hash = models.CharField(max_length=64, blank=True, db_index=True)
     moderation_status = models.CharField(max_length=12, choices=ModerationStatus.choices, default=ModerationStatus.PENDING)
+    automated_decision = models.CharField(max_length=32, blank=True)
+    moderation_categories = models.JSONField(default=list, blank=True)
+    moderation_confidence = models.FloatField(null=True, blank=True)
+    moderation_reason = models.CharField(max_length=240, blank=True)
+    moderation_provider = models.CharField(max_length=80, blank=True)
+    moderation_provider_model = models.CharField(max_length=80, blank=True)
+    rejection_reason_code = models.CharField(max_length=48, blank=True)
+    rejection_explanation = models.CharField(max_length=240, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_photos",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -392,6 +519,28 @@ class Photo(models.Model):
 
     def __str__(self):
         return self.caption or f"Photo {self.pk or ''}".strip()
+
+    @property
+    def is_publicly_visible(self):
+        return self.moderation_status == self.ModerationStatus.APPROVED
+
+
+class PhotoModerationActionAudit(models.Model):
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="photo_moderation_actions",
+    )
+    action = models.CharField(max_length=16)
+    decision_source = models.CharField(max_length=40)
+    scope = models.CharField(max_length=32)
+    requested_target_ids = models.JSONField(default=list)
+    successful_target_ids = models.JSONField(default=list)
+    failed_targets = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class Comment(models.Model):
@@ -412,6 +561,7 @@ class MemberProfile(models.Model):
     class VerificationMethod(models.TextChoices):
         NONE = "none", "Not Verified"
         QRZ = "qrz", "QRZ Verified"
+        MANUAL = "manual", "Manual Verification"
         ADMIN = "admin", "Admin Verified"
         DEVELOPMENT = "development", "Development Only"
 
@@ -421,6 +571,25 @@ class MemberProfile(models.Model):
         upload_to="member_profiles/%Y/%m/",
         blank=True,
     )
+    profile_photo_moderation_status = models.CharField(
+        max_length=12,
+        choices=Photo.ModerationStatus.choices,
+        default=Photo.ModerationStatus.PENDING,
+        db_index=True,
+    )
+    profile_photo_moderation_reason = models.CharField(max_length=240, blank=True)
+    profile_photo_moderation_categories = models.JSONField(default=list, blank=True)
+    profile_photo_moderation_confidence = models.FloatField(null=True, blank=True)
+    profile_photo_moderation_provider = models.CharField(max_length=80, blank=True)
+    profile_photo_moderation_provider_model = models.CharField(max_length=80, blank=True)
+    profile_photo_automated_decision = models.CharField(max_length=32, blank=True)
+    profile_photo_rejection_reason_code = models.CharField(max_length=48, blank=True)
+    profile_photo_rejection_explanation = models.CharField(max_length=240, blank=True)
+    profile_photo_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_profile_photos",
+    )
+    profile_photo_reviewed_at = models.DateTimeField(null=True, blank=True)
     display_name = models.CharField(max_length=120, blank=True)
     bio = models.TextField(blank=True)
     home_city = models.CharField(max_length=100, blank=True)
@@ -456,6 +625,12 @@ class MemberProfile(models.Model):
     class Meta:
         ordering = ["callsign"]
 
+    @property
+    def public_profile_photo_url(self):
+        if self.profile_photo and self.profile_photo_moderation_status == Photo.ModerationStatus.APPROVED:
+            return self.profile_photo.url
+        return ""
+
     def save(self, *args, **kwargs):
         self.callsign = self.callsign.strip().upper()
         super().save(*args, **kwargs)
@@ -465,6 +640,7 @@ class MemberProfile(models.Model):
             return False
         if self.verification_method in {
             self.VerificationMethod.QRZ,
+            self.VerificationMethod.MANUAL,
             self.VerificationMethod.ADMIN,
         }:
             return True
@@ -483,6 +659,49 @@ class MemberProfile(models.Model):
 
     def __str__(self):
         return self.callsign or self.user.username
+
+
+class ManualVerificationRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending Review"
+        MORE_INFO = "more_info", "More Information Requested"
+        REJECTED = "rejected", "Not Approved"
+        APPROVED = "approved", "Approved"
+
+    member = models.OneToOneField(
+        MemberProfile,
+        on_delete=models.CASCADE,
+        related_name="manual_verification_request",
+    )
+    full_name = models.CharField(max_length=160)
+    country = models.CharField(max_length=120)
+    authority_url = models.URLField(
+        verbose_name="Official licensing authority or recognized callbook link"
+    )
+    explanation = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    reviewer_message = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_manual_verifications",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["status", "created_at"]
+
+    def __str__(self):
+        return f"{self.member.callsign}: {self.get_status_display()}"
 
 class MemberCallsignAudit(models.Model):
     member = models.ForeignKey(

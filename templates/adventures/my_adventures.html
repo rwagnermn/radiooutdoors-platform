@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 {% block title %}My Adventures | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page adventure-book-page my-adventures-page{% endblock %}
 {% block content %}
 <section class="content">
 <div class="my-adventures-heading">
-<div><h1>My Adventures</h1><p>All of your adventures, including who is currently out operating.</p></div>
-<a href="{% url 'add_adventure' %}" class="button-primary">Add New Adventure</a>
+<div><h1>My Adventures</h1><p>All of your Adventures.</p></div>
+<a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a>
 </div>
 <nav class="adventure-view-switch" aria-label="Adventure views">
 <a href="{% url 'all_adventures' %}" class="ro-small-action">View All Public Adventures</a>
 </nav>
-<div class="adventure-table-wrap">
-<table class="adventure-table">
+<div class="adventure-table-wrap ro-scroll-table-region" role="region" aria-label="My Adventures results" tabindex="0">
+<table class="adventure-table ro-record-table">
 <thead><tr>
 <th>Photo</th><th>Status</th><th>Adventure</th><th>Location</th><th>Updated</th>
 <th class="center-column">Journal</th><th class="center-column">Photos</th>
@@ -22,11 +23,11 @@
 onclick="window.location='{{ adventure.get_absolute_url }}';"
 onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}">
 <td class="adventure-photo-cell">
-{% if adventure.cover_photo %}
+{% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
 <img src="{{ adventure.cover_photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="">
 {% else %}<div class="adventure-photo-placeholder"></div>{% endif %}
 </td>
-<td class="nowrap"><span class="adventure-status adventure-status-{{ adventure.display_status_key }}">{{ adventure.display_status_label }}</span></td>
+<td class="nowrap">{% include "adventures/_status_control.html" %}</td>
 <td><a href="{{ adventure.get_absolute_url }}" onclick="event.stopPropagation();"><strong>{{ adventure.title }}</strong></a>
 {% if adventure.summary %}<div class="adventure-list-summary">{{ adventure.summary|truncatewords:18 }}</div>{% endif %}</td>
 <td>{% if adventure.location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}—{% endif %}</td>
@@ -35,55 +36,11 @@ onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_ur
 <td class="center-column">{{ adventure.photo_count }}</td>
 <td class="center-column">{{ adventure.comment_count }}</td>
 <td class="ro-actions-column" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
-<div class="journal-entry-menu">
-<button type="button" class="journal-menu-button" aria-label="Actions for {{ adventure.title }}" aria-expanded="false">☰</button>
-<div class="journal-menu-panel">
-<a href="{{ adventure.get_absolute_url }}">View Adventure</a>
-<a href="{% url 'edit_adventure' adventure.slug %}">Edit Adventure</a>
-<form method="post" action="{% if adventure.status == 'completed' %}{% url 'mark_adventure_in_progress' adventure.slug %}{% else %}{% url 'mark_adventure_done' adventure.slug %}{% endif %}">
-{% csrf_token %}
-<input type="hidden" name="next" value="{% url 'my_adventures' %}">
-<button type="submit">{% if adventure.status == 'completed' %}Mark In Progress{% else %}Mark Completed{% endif %}</button>
-</form>
-<form method="post" action="{% url 'delete_adventure' adventure.slug %}"
-onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');">
-{% csrf_token %}
-<button type="submit" class="danger-menu-item">Delete Adventure</button>
-</form>
-</div>
-</div>
+{% include "adventures/_row_action_menu.html" %}
 </td>
 </tr>
 {% empty %}
-<tr><td colspan="9" class="empty-table-message">No adventures yet. <a href="{% url 'add_adventure' %}">Add New Adventure</a></td></tr>
+<tr><td colspan="9" class="empty-table-message">No adventures yet. <a href="{% url 'add_adventure' %}">Add Adventure</a></td></tr>
 {% endfor %}
 </tbody></table></div></section>
-<script>
-document.addEventListener("click", function (event) {
-    document.querySelectorAll(".journal-menu-panel.open").forEach(function (panel) {
-        if (!panel.parentElement.contains(event.target)) {
-            panel.classList.remove("open");
-            const button = panel.parentElement.querySelector(".journal-menu-button");
-            if (button) button.setAttribute("aria-expanded", "false");
-        }
-    });
-});
-
-document.querySelectorAll(".journal-menu-button").forEach(function (button) {
-    button.addEventListener("click", function (event) {
-        event.stopPropagation();
-        const panel = button.nextElementSibling;
-        const willOpen = !panel.classList.contains("open");
-
-        document.querySelectorAll(".journal-menu-panel.open").forEach(function (openPanel) {
-            openPanel.classList.remove("open");
-            const openButton = openPanel.parentElement.querySelector(".journal-menu-button");
-            if (openButton) openButton.setAttribute("aria-expanded", "false");
-        });
-
-        panel.classList.toggle("open", willOpen);
-        button.setAttribute("aria-expanded", willOpen ? "true" : "false");
-    });
-});
-</script>
 {% endblock %}

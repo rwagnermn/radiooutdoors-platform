@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -11,6 +11,7 @@ from PIL import Image
 from core.models import Adventure, JournalEntry, Location, MemberProfile, OperatingLocation, Photo
 
 
+@override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.SafeProvider")
 class AddAdventureWorkflowTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -56,7 +57,7 @@ class AddAdventureWorkflowTests(TestCase):
         )
         self.assertContains(response, "+ Add New Location")
         self.assertContains(response, "📍 Drop a New Pin...")
-        self.assertContains(response, "Required Field", count=3)
+        self.assertContains(response, "Required Field", count=5)
 
     def test_dropdown_selection_creates_adventure_with_matching_position(self):
         response = self.client.post(
@@ -72,7 +73,7 @@ class AddAdventureWorkflowTests(TestCase):
         adventure = Adventure.objects.get(title="Dropdown Adventure")
         self.assertRedirects(
             response,
-            reverse("edit_adventure", kwargs={"slug": adventure.slug}),
+            reverse("all_adventures"),
         )
         self.assertEqual(adventure.location_id, self.location.pk)
         self.assertEqual(
@@ -85,6 +86,40 @@ class AddAdventureWorkflowTests(TestCase):
                 pk=adventure.pk,
             ).exists()
         )
+
+    def test_new_adventure_photos_use_existing_journal_photo_storage(self):
+        output = BytesIO()
+        Image.new("RGB", (32, 24), "orange").save(output, "PNG")
+        response = self.client.post(
+            reverse("add_adventure"),
+            {
+                "title": "Photo Adventure",
+                "location": self.location.pk,
+                "operating_location": self.mapped_position.pk,
+                "photos": SimpleUploadedFile("pasted.png", output.getvalue(), "image/png"),
+            },
+        )
+        adventure = Adventure.objects.get(title="Photo Adventure")
+        self.assertRedirects(response, reverse("all_adventures"))
+        self.assertEqual(Photo.objects.filter(journal_entry__adventure=adventure).count(), 1)
+
+    def test_map_coordinates_prepopulate_location_form(self):
+        response = self.client.get(
+            reverse("create_location"),
+            {"latitude": "44.123456", "longitude": "-93.654321"},
+        )
+        form = response.context["location_form"]
+        self.assertEqual(form.initial["latitude"], "44.123456")
+        self.assertEqual(form.initial["longitude"], "-93.654321")
+
+    def test_airport_location_type_persists(self):
+        airport = Location.objects.create(
+            name="Workflow Airport",
+            location_type=Location.LocationType.AIRPORT,
+        )
+        airport.refresh_from_db()
+        self.assertEqual(airport.location_type, "airport")
+        self.assertEqual(airport.get_location_type_display(), "Airport")
 
     def test_add_location_returns_with_new_location_and_position_selected(self):
         response = self.client.post(
@@ -227,6 +262,7 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertContains(response, "Change Photos")
         self.assertContains(response, "Clear Selection")
         self.assertContains(response, "photo-preview.js")
+        self.assertContains(response, "multiple")
         self.assertEqual(Photo.objects.count(), 0)
         self.assertEqual(JournalEntry.objects.count(), 0)
 
@@ -312,18 +348,19 @@ class AddAdventureWorkflowTests(TestCase):
             response,
             reverse("mark_adventure_done", kwargs={"slug": adventure.slug}),
         )
-        self.assertContains(response, '<span class="adventure-status')
-        self.assertNotContains(response, '<button type="submit" class="adventure-status')
-        self.assertContains(response, 'class="journal-menu-button"')
-        self.assertContains(response, 'name="next" value="/adventures/"')
-        self.assertContains(response, "Currently Operating")
-        self.assertContains(response, "Mark Completed")
+        self.assertContains(response, 'data-adventure-status-control')
+        self.assertContains(response, 'class="ro-action-menu adventure-row-menu"')
+        self.assertContains(response, ">Open</button>")
+        self.assertContains(response, ">View</a>")
+        self.assertContains(response, ">Edit</a>")
+        self.assertContains(response, ">Delete</button>")
+        self.assertNotContains(response, "Currently Operating")
+        self.assertNotContains(response, "Mark Completed")
 
         edit_response = self.client.get(
             reverse("edit_adventure", kwargs={"slug": adventure.slug})
         )
-        self.assertContains(edit_response, "Currently Operating")
-        self.assertContains(edit_response, "Mark Completed")
+        self.assertContains(edit_response, ">Open</button>")
 
         adventure.status = Adventure.Status.COMPLETED
         adventure.save()
@@ -335,14 +372,12 @@ class AddAdventureWorkflowTests(TestCase):
                 kwargs={"slug": adventure.slug},
             ),
         )
-        self.assertContains(response, "Adventure Complete")
-        self.assertContains(response, "Mark In Progress")
+        self.assertContains(response, ">Complete</button>")
 
         edit_response = self.client.get(
             reverse("edit_adventure", kwargs={"slug": adventure.slug})
         )
-        self.assertContains(edit_response, "Adventure Complete")
-        self.assertContains(edit_response, "Mark In Progress")
+        self.assertContains(edit_response, ">Complete</button>")
 
         self.assertEqual(
             self.client.get(
@@ -350,6 +385,125 @@ class AddAdventureWorkflowTests(TestCase):
             ).status_code,
             405,
         )
+
+    def test_ajax_status_toggle_persists_and_returns_next_toggle(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Ajax Status",
+            location=self.location,
+            operating_location=self.mapped_position,
+        )
+        response = self.client.post(
+            reverse("mark_adventure_done", kwargs={"slug": adventure.slug}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            HTTP_ACCEPT="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["label"], "Complete")
+        adventure.refresh_from_db()
+        self.assertEqual(adventure.status, Adventure.Status.COMPLETED)
+
+        response = self.client.post(
+            response.json()["toggle_url"],
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            HTTP_ACCEPT="application/json",
+        )
+        self.assertEqual(response.json()["label"], "Open")
+        adventure.refresh_from_db()
+        self.assertEqual(adventure.status, Adventure.Status.ACTIVE)
+
+    def test_public_action_menu_permissions_and_status_filters(self):
+        open_adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Owned Open",
+            location=self.location,
+            operating_location=self.mapped_position,
+            status=Adventure.Status.ACTIVE,
+        )
+        other = get_user_model().objects.create_user(
+            username="other-viewer",
+            password="test-password",
+        )
+        MemberProfile.objects.create(
+            user=other,
+            callsign="W5OTHER",
+            callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
+        )
+        complete_adventure = Adventure.objects.create(
+            owner=other,
+            title="Other Complete",
+            location=self.location,
+            operating_location=self.mapped_position,
+            status=Adventure.Status.COMPLETED,
+        )
+
+        owner_response = self.client.get(reverse("all_adventures"))
+        self.assertContains(owner_response, ">View</a>", count=2)
+        self.assertContains(owner_response, ">Edit</a>", count=1)
+        self.assertContains(owner_response, ">Delete</button>", count=1)
+        self.assertContains(owner_response, ">All statuses</option>")
+        self.assertContains(owner_response, ">\n                    Open\n                </option>")
+        self.assertContains(owner_response, ">\n                    Complete\n                </option>")
+
+        self.client.force_login(other)
+        other_response = self.client.get(reverse("all_adventures"))
+        self.assertContains(other_response, ">View</a>", count=2)
+        self.assertContains(other_response, ">Edit</a>", count=1)
+        self.assertContains(other_response, ">Delete</button>", count=1)
+
+        self.client.logout()
+        public_response = self.client.get(reverse("all_adventures"))
+        self.assertContains(public_response, ">View</a>", count=2)
+        self.assertNotContains(public_response, ">Edit</a>")
+        self.assertNotContains(public_response, ">Delete</button>")
+        self.assertNotContains(public_response, "data-adventure-status-control")
+
+        open_response = self.client.get(reverse("all_adventures"), {"activity": "open"})
+        self.assertContains(open_response, open_adventure.title)
+        self.assertNotContains(open_response, complete_adventure.title)
+        complete_response = self.client.get(reverse("all_adventures"), {"activity": "complete"})
+        self.assertContains(complete_response, complete_adventure.title)
+        self.assertNotContains(complete_response, open_adventure.title)
+
+    def test_staff_can_manage_and_unrelated_member_cannot(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Permission Status",
+            location=self.location,
+            operating_location=self.mapped_position,
+        )
+        unrelated = get_user_model().objects.create_user(
+            username="unrelated-member",
+            password="test-password",
+        )
+        MemberProfile.objects.create(
+            user=unrelated,
+            callsign="W5NOPE",
+            callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
+        )
+        self.client.force_login(unrelated)
+        denied = self.client.post(
+            reverse("mark_adventure_done", kwargs={"slug": adventure.slug})
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        staff = get_user_model().objects.create_user(
+            username="adventure-admin",
+            password="test-password",
+            is_staff=True,
+        )
+        self.client.force_login(staff)
+        allowed = self.client.post(
+            reverse("mark_adventure_done", kwargs={"slug": adventure.slug}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed.json()["label"], "Complete")
+        menu = self.client.get(reverse("all_adventures"))
+        self.assertContains(menu, ">Edit</a>")
+        self.assertContains(menu, ">Delete</button>")
 
     def test_journal_photos_render_original_size_viewer_controls(self):
         adventure = Adventure.objects.create(
@@ -366,6 +520,7 @@ class AddAdventureWorkflowTests(TestCase):
             journal_entry=entry,
             image="adventure_photos/test-original.jpg",
             caption="Summit station",
+            moderation_status=Photo.ModerationStatus.APPROVED,
         )
 
         response = self.client.get(
@@ -400,13 +555,16 @@ class AddAdventureWorkflowTests(TestCase):
         Photo.objects.create(
             journal_entry=entries[0],
             image="adventure_photos/compact-list.jpg",
+            moderation_status=Photo.ModerationStatus.APPROVED,
         )
 
         detail_response = self.client.get(adventure.get_absolute_url())
         self.assertContains(
             detail_response,
-            'class="contact-table-scroll journal-list-wrap"',
+            'class="contact-table-scroll journal-list-wrap ro-scroll-table-region"',
         )
+        self.assertContains(detail_response, 'aria-label="Journal entries"')
+        self.assertContains(detail_response, 'tabindex="0"')
         self.assertContains(
             detail_response,
             'class="compact-contact-table ro-data-table journal-list-table"',
@@ -415,6 +573,10 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertContains(detail_response, "Journal title 10")
         self.assertNotContains(detail_response, long_body)
         self.assertContains(detail_response, "Keep Lessons Learned separate.")
+        self.assertContains(detail_response, 'class="adventure-story-stats"')
+        self.assertContains(detail_response, "11</strong><span>Journals")
+        self.assertContains(detail_response, "1</strong><span>Photos")
+        self.assertContains(detail_response, 'class="journal-photo-grid adventure-photo-masonry"')
         self.assertContains(detail_response, '<td class="journal-list-photo-count center-column">1</td>')
 
         edit_response = self.client.get(

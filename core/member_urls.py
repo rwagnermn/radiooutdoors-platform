@@ -20,6 +20,10 @@ from .member_views import (
     member_verify_qrz,
     my_member_profile,
 )
+from .manual_verification_views import (
+    manual_verification_queue,
+    manual_verification_review,
+)
 
 
 urlpatterns = [
@@ -55,6 +59,8 @@ urlpatterns = [
     ),
 
     path("manage/", member_admin_list, name="member_admin_list"),
+    path("manage/manual-verification/", manual_verification_queue, name="manual_verification_queue"),
+    path("manage/manual-verification/<int:request_id>/", manual_verification_review, name="manual_verification_review"),
     path(
         "manage/<int:member_id>/active/",
         member_toggle_active,

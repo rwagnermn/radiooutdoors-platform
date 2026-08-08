@@ -10,6 +10,7 @@ from PIL import Image
 from core.models import DefaultLocationImage, Location
 
 
+@override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.SafeProvider")
 class DefaultLocationImageAdminTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -27,6 +28,8 @@ class DefaultLocationImageAdminTests(TestCase):
             password="test-password",
         )
         self.default_image = DefaultLocationImage.objects.get(key="park")
+        self.default_image.moderation_status = "approved"
+        self.default_image.save(update_fields=["moderation_status"])
 
     def image_upload(self):
         output = BytesIO()
@@ -136,6 +139,7 @@ class DefaultLocationImageAdminTests(TestCase):
             name="Member Photo Priority Park",
             location_type=Location.LocationType.PARK,
             photo="location_photos/member-priority.jpg",
+            photo_moderation_status="approved",
         )
         self.assertIn("location_photos/member-priority.jpg", location.display_photo_url)
         self.assertFalse(location.uses_default_photo)

@@ -10,9 +10,7 @@
             <h1>{{ page_title }}</h1>
             {% if adventure %}
                 <p>
-                    <span class="adventure-status adventure-status-{{ adventure.display_status_key }}">
-                        {{ adventure.display_status_label }}
-                    </span>
+                    {% include "adventures/_status_control.html" %}
                 </p>
             {% endif %}
         </div>
@@ -24,21 +22,8 @@
         {% endif %}
     </div>
 
-    {% if adventure %}
-        <div class="adventure-form-section">
-            <h2>Status</h2>
-            <form method="post" action="{% if adventure.status == 'completed' %}{% url 'mark_adventure_in_progress' adventure.slug %}{% else %}{% url 'mark_adventure_done' adventure.slug %}{% endif %}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{% url 'edit_adventure' adventure.slug %}">
-                <button type="submit" class="button-primary">
-                    {% if adventure.status == "completed" %}Mark In Progress{% else %}Mark Completed{% endif %}
-                </button>
-            </form>
-        </div>
-    {% endif %}
-
     <div class="location-card">
-        <form method="post">
+        <form method="post" enctype="multipart/form-data" data-prevent-double-submit>
             {% csrf_token %}
             {{ form.non_field_errors }}
 
@@ -62,6 +47,20 @@
                     {% endfor %}
                 </div>
 </div>
+
+            <div class="adventure-form-section">
+                <h2>Operating Identity</h2>
+                <p class="story-first-help">Your Member account remains tied to your personal callsign. Enter the authorized callsign used for this Adventure.</p>
+                <div class="two-column-fields">
+                    <div><label for="{{ form.operating_callsign.id_for_label }}">Operating Callsign <span class="required-field-label">Required Field</span></label>{{ form.operating_callsign }}{% for error in form.operating_callsign.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+                    <div><label for="{{ form.operating_callsign_type.id_for_label }}">Operating Callsign Type <span class="required-field-label">Required Field</span></label>{{ form.operating_callsign_type }}{% for error in form.operating_callsign_type.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+                    <div><label for="{{ form.operating_identity_name.id_for_label }}">Event or Organization Name <span class="optional-label">(optional)</span></label>{{ form.operating_identity_name }}{% for error in form.operating_identity_name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+                    <div><label for="{{ form.operating_callsign_url.id_for_label }}">Event Website or Reference <span class="optional-label">(optional)</span></label>{{ form.operating_callsign_url }}{% for error in form.operating_callsign_url.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+                    <div><label for="{{ form.operating_start_date.id_for_label }}">Start Date <span class="optional-label">(optional)</span></label>{{ form.operating_start_date }}{% for error in form.operating_start_date.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+                    <div><label for="{{ form.operating_end_date.id_for_label }}">End Date <span class="optional-label">(optional)</span></label>{{ form.operating_end_date }}{% for error in form.operating_end_date.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+                </div>
+                <div><label for="{{ form.operating_callsign_explanation.id_for_label }}">Explanation <span class="optional-label">(optional)</span></label>{{ form.operating_callsign_explanation }}{% for error in form.operating_callsign_explanation.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+            </div>
 
             <div class="adventure-form-section">
                 <h2>Where did you operate?</h2><p class="story-first-help">Choose a Location, then the exact Operating Position where you set up the station.</p>
@@ -91,6 +90,7 @@
                 <p id="no-operating-positions-message" hidden>
                     <strong>No Operating Positions exist for this Location yet. Choose “📍 Drop a New Pin...” and click the map to create the first one.</strong>
                 </p>
+                <div id="selected-map-position" class="form-guidance-banner" hidden aria-live="polite"></div>
 
                 <p id="position-placement-banner" class="form-guidance-banner" hidden>
                     <strong>Click on the map to place the new Operating Position.</strong>
@@ -109,6 +109,24 @@
                     <div id="adventure-position-map" class="location-pin-map"></div>
                 {% endif %}
             </div>
+
+            {% if not adventure %}
+            <div class="adventure-form-section">
+                <h2>Photos (optional)</h2>
+                <div class="photo-upload-box photo-preview-control" data-photo-preview data-photo-preview-mode="multiple" data-photo-preview-save-label="Adventure">
+                    <div class="photo-paste-zone" data-photo-paste-zone tabindex="0">Paste photo here or use the file picker</div>
+                    {{ form.photos }}
+                    <div class="photo-preview-actions">
+                        <button type="button" class="ro-small-action" data-photo-preview-load>Load Photos</button>
+                        <button type="button" class="ro-small-action" data-photo-preview-change>Change Photos</button>
+                        <button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button>
+                    </div>
+                    <div class="journal-photo-preview-grid" data-photo-preview-stage aria-live="polite"></div>
+                    <p data-photo-preview-status aria-live="polite">No photos selected.</p>
+                    {% for error in form.photos.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                </div>
+            </div>
+            {% endif %}
 
 
             <button type="submit" class="button-primary">
@@ -196,10 +214,10 @@
                         <div class="journal-photo-grid">
                             {% for photo in entry.photos.all %}
                                 <figure class="journal-photo journal-photo-manage">
-                                    <img
+                                    {% if photo.is_publicly_visible %}<img
                                         src="{{ photo.image.url }}"
                                         alt="{{ photo.caption|default:'Adventure photo' }}"
-                                    >
+                                    >{% else %}<p><strong>{{ photo.get_moderation_status_display }}</strong>{% if photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
 
                                     {% if adventure.cover_photo_id == photo.pk %}
                                         <div class="cover-photo-badge">Cover Photo</div>
@@ -383,6 +401,7 @@
         const {Map} = await google.maps.importLibrary("maps");
         const {AdvancedMarkerElement, PinElement} =
             await google.maps.importLibrary("marker");
+        const {InfoWindow} = await google.maps.importLibrary("maps");
         const bounds = new google.maps.LatLngBounds();
         const map = new Map(mapElement, radioOutdoorsMapOptions({
             center: mappedPositions.length
@@ -397,6 +416,9 @@
 
         let temporaryMarker = null;
         let pendingPosition = null;
+        let selectedMarker = null;
+        const selectedSummary = document.getElementById("selected-map-position");
+        const infoWindow = new InfoWindow();
         const savePosition = document.getElementById("save-new-position");
         const cancelPosition = document.getElementById("cancel-new-position");
 
@@ -495,6 +517,43 @@
             populatePositions(savedPosition.id);
         });
 
+        function selectMappedPosition(position, marker, pin) {
+            locationSelect.value = String(position.location_id);
+            populatePositions(position.id);
+            if (selectedMarker && selectedMarker.pin) {
+                selectedMarker.pin.background = "#2e6fd8";
+                selectedMarker.pin.scale = 1;
+            }
+            pin.background = "#f28c28";
+            pin.scale = 1.35;
+            selectedMarker = {marker: marker, pin: pin};
+            selectedSummary.hidden = false;
+            selectedSummary.replaceChildren();
+            const selectionText = document.createElement("strong");
+            selectionText.textContent = "Selected: " + position.location_name + " — " + position.name;
+            const clearSelection = document.createElement("button");
+            clearSelection.type = "button";
+            clearSelection.textContent = "Clear selection";
+            selectedSummary.append(selectionText, " ", clearSelection);
+            clearSelection.addEventListener("click", function () {
+                locationSelect.value = "";
+                populatePositions("");
+                pin.background = "#2e6fd8";
+                pin.scale = 1;
+                selectedMarker = null;
+                selectedSummary.hidden = true;
+                infoWindow.close();
+            });
+            const popup = document.createElement("div");
+            const popupTitle = document.createElement("strong");
+            popupTitle.textContent = position.location_name;
+            const popupPosition = document.createElement("div");
+            popupPosition.textContent = "Operating Position: " + position.name;
+            popup.append(popupTitle, popupPosition);
+            infoWindow.setContent(popup);
+            infoWindow.open({map:map, anchor:marker});
+        }
+
         mappedPositions.forEach(function (position) {
             const pin = new PinElement({
                 background: "#2e6fd8",
@@ -512,9 +571,16 @@
                 content: pin.element
             });
 
-            marker.addListener("click", function () {
-                locationSelect.value = String(position.location_id);
-                populatePositions(position.id);
+            marker.gmpClickable = true;
+            marker.addListener("click", function () { selectMappedPosition(position, marker, pin); });
+            pin.element.tabIndex = 0;
+            pin.element.setAttribute("role", "button");
+            pin.element.setAttribute("aria-label", "Select " + position.location_name + ", " + position.name);
+            pin.element.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectMappedPosition(position, marker, pin);
+                }
             });
             bounds.extend(marker.position);
         });
@@ -532,6 +598,12 @@
 <script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventurePositionMap"></script>
 {% endif %}
 <script>
+document.querySelectorAll("form[data-prevent-double-submit]").forEach(function (form) {
+    form.addEventListener("submit", function () {
+        const button = form.querySelector('button[type="submit"]');
+        if (button) { button.disabled = true; button.textContent = "Saving…"; }
+    });
+});
 document.addEventListener("click", function (event) {
     document.querySelectorAll(".journal-menu-panel.open").forEach(function (panel) {
         if (!panel.parentElement.contains(event.target)) {

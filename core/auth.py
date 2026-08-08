@@ -31,3 +31,20 @@ def verified_member_required(view_func):
         return view_func(request, *args, **kwargs)
 
     return wrapped
+
+
+def verified_member_or_staff_required(view_func):
+    """Allow an active staff user or a verified Member."""
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        if not request.user.is_active or not (
+            request.user.is_staff or is_verified_member(request.user)
+        ):
+            return HttpResponseForbidden(
+                "A verified Radio Outdoors Member or staff account is required."
+            )
+        return view_func(request, *args, **kwargs)
+
+    return wrapped

@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block title %}Locations | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page locations-page{% endblock %}
 
 {% block content %}
 <section class="content">
@@ -19,8 +20,9 @@
         {% endif %}
     </div>
 
-    <form method="get" class="location-filter-bar">
-        <div>
+    <p class="adventure-book-search-instruction">Search for a Location or select one below.</p>
+    <form method="get" class="adventure-book-filter-form location-filter-form">
+        <div class="adventure-book-search-field">
             <label for="q">Search</label>
             <input
                 id="q"
@@ -62,17 +64,19 @@
             </select>
         </div>
 
-        <button type="submit" class="button-primary">
-            Apply
-        </button>
+        <div class="adventure-book-filter-actions">
+            <button type="submit" class="button-primary">
+                Apply
+            </button>
 
-        <a href="{% url 'locations' %}" class="filter-clear-link">
-            Clear
-        </a>
+            <a href="{% url 'locations' %}" class="filter-clear-link">
+                Clear
+            </a>
+        </div>
     </form>
 
-    <div class="location-table-wrap">
-        <table class="location-table">
+    <div class="location-table-wrap ro-scroll-table-region" role="region" aria-label="Location results" tabindex="0">
+        <table class="location-table ro-record-table">
             <thead>
                 <tr>
                     <th aria-label="Photo"></th>

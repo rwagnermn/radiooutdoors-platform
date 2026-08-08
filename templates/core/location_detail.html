@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block title %}{{ location.name }} | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page locations-page location-story-page{% endblock %}
 
 {% block content %}
 <section class="content">
@@ -229,8 +230,8 @@
             </div>
         </div>
 
-        <div class="location-adventure-table-wrap">
-            <table class="location-adventure-table">
+        <div class="location-adventure-table-wrap ro-scroll-table-region" role="region" aria-label="Adventures at this Location" tabindex="0">
+            <table class="location-adventure-table ro-record-table">
                 <thead>
                     <tr>
                         <th>Photo</th>
@@ -254,7 +255,7 @@
                             onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}"
                         >
                             <td class="location-adventure-photo">
-                                {% if adventure.cover_photo %}
+                                {% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
                                     <img
                                         src="{{ adventure.cover_photo.image.url }}"
                                         alt=""
@@ -265,9 +266,7 @@
                             </td>
 
                             <td>
-                                <span class="adventure-status adventure-status-{{ adventure.display_status_key }}">
-                                    {{ adventure.display_status_label }}
-                                </span>
+                                {% include "adventures/_status_control.html" %}
                             </td>
 
                             <td>

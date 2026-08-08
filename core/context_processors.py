@@ -7,7 +7,11 @@ from .auth import is_verified_member
 def account_roles(request):
     user = request.user
     verified_member = is_verified_member(user)
-    header_identity = None
+    pending_member = False
+    header_identity = {
+        "full": "Visitor",
+        "compact": "Visitor",
+    }
 
     if user.is_authenticated:
         profile = getattr(user, "member_profile", None)
@@ -21,6 +25,13 @@ def account_roles(request):
                 ),
                 "compact": profile.callsign,
             }
+        elif profile and profile.callsign and not user.is_staff:
+            pending_member = True
+            name = profile.display_name.strip() or user.get_full_name().strip() or profile.callsign
+            header_identity = {
+                "full": f"Pending — {name}",
+                "compact": f"Pending — {profile.callsign}",
+            }
         else:
             name = (
                 user.first_name.strip()
@@ -29,13 +40,15 @@ def account_roles(request):
                 or user.username
             )
             role = "Staff" if user.is_staff else "Follower"
+            compact_name = user.first_name.strip() or user.username
             header_identity = {
                 "full": f"{name} - {role}",
-                "compact": f"{name} · {role}",
+                "compact": f"{compact_name} · {role}",
             }
 
     return {
         "is_verified_member": verified_member,
+        "is_pending_member": pending_member,
         "header_identity": header_identity,
     }
 

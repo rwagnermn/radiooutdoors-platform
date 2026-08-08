@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Home | Radio Outdoors{% endblock %}
+{% block body_class %}home-page{% endblock %}
 
 {% block content %}
 <section class="hero">
@@ -56,7 +57,7 @@
     <div class="adventure-grid">
         {% for adventure in featured_adventures %}
             <article class="adventure-card">
-                {% if adventure.cover_photo %}
+                {% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
                     <img
                         src="{{ adventure.cover_photo.image.url }}"
                         alt="{{ adventure.title }}"

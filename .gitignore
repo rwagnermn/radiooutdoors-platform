@@ -25,6 +25,7 @@ media/
 google_maps_api_key.txt
 qrz_username.txt
 qrz_password.txt
+openai_api_key.txt
 
 # Build artifacts
 *.zip

@@ -12,7 +12,7 @@
     <div class="adventure-grid">
       {% for adventure in adventures %}
         <article class="adventure-card">
-          {% if adventure.cover_photo %}
+          {% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
             <img src="{{ adventure.cover_photo.image.url }}" alt="{{ adventure.title }}">
           {% endif %}
           <h3><a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></h3>

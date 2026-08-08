@@ -12,7 +12,8 @@ def validate_registration_email(email):
     email = email.strip().lower()
     if User.objects.filter(email__iexact=email).exists():
         raise forms.ValidationError(
-            "An account already uses that email address."
+            "That email address is already connected to a Radio Outdoors account. Log in or use Forgot callsign or password.",
+            code="duplicate_email",
         )
     domain = email.rsplit("@", 1)[-1]
     if BlockedDomain.objects.filter(
@@ -33,7 +34,7 @@ class MemberRegistrationForm(UserCreationForm):
             attrs={
                 "autocomplete": "off",
                 "autocapitalize": "characters",
-                "placeholder": "W5RIK",
+                "placeholder": "W5RIK or DL1ABC",
             }
         ),
     )
@@ -58,6 +59,13 @@ class MemberRegistrationForm(UserCreationForm):
 
     def clean_email(self):
         return validate_registration_email(self.cleaned_data["email"])
+
+    @property
+    def has_duplicate_email_error(self):
+        return any(
+            error.code == "duplicate_email"
+            for error in self.errors.as_data().get("email", [])
+        )
 
     def save(self, commit=True):
         user = super().save(commit=False)

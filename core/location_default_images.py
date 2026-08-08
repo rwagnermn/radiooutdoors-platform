@@ -114,7 +114,9 @@ def default_image_storage_name(key):
 
 def default_image_for_location(location):
     key = default_image_key(location)
-    record = DefaultLocationImage.objects.filter(key=key, active=True).first()
+    record = DefaultLocationImage.objects.filter(
+        key=key, active=True, moderation_status="approved"
+    ).first()
     if record is None or not record.image:
         return None
     storage_name = record.image.name

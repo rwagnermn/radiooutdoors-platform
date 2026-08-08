@@ -12,6 +12,8 @@ from django.views.decorators.http import require_POST
 from .auth import verified_member_required
 from .member_forms import MemberDeleteForm, MemberProfileForm
 from .models import MemberProfile
+from .photo_moderation import moderate_profile_photo
+from .photo_upload_notices import add_photo_upload_notice
 from .qrz_service import (
     QRZConfigurationError,
     QRZError,
@@ -53,6 +55,7 @@ def _members():
 def _public_verification_methods():
     methods = [
         MemberProfile.VerificationMethod.QRZ,
+        MemberProfile.VerificationMethod.MANUAL,
         MemberProfile.VerificationMethod.ADMIN,
     ]
     if settings.DEBUG:
@@ -147,6 +150,10 @@ def my_member_profile(request):
         )
         if form.is_valid():
             saved = form.save()
+            if request.FILES.get("profile_photo"):
+                moderate_profile_photo(saved)
+                saved.refresh_from_db(fields=["profile_photo_moderation_status"])
+                add_photo_upload_notice(request, [saved.profile_photo_moderation_status])
             messages.success(request, "Member profile saved.")
             return redirect("member_detail", callsign=saved.callsign)
     else:

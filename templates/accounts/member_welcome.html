@@ -3,13 +3,26 @@
 {% block content %}
 <section class="content welcome-page">
 <div class="location-card welcome-card">
-<h1>Welcome to Radio Outdoors</h1>
-<p>Your callsign is verified. What would you like to do next?</p>
+<h1>Welcome to Radio Outdoors, {{ welcome_name }}!</h1>
+<p>Your callsign has been verified, and your Member account is ready. What would you like to do first?</p>
 <div class="welcome-actions">
-<a href="{% url 'add_adventure' %}" class="btn-ro-primary">Create My First Adventure</a>
-<a href="{% url 'my_member_profile' %}" class="ro-small-action">Add Your Photo &amp; Profile</a>
-<a href="{% url 'all_adventures' %}" class="ro-small-action">Explore Adventure Book</a>
+<article class="welcome-action-card">
+<h2>Create an Adventure</h2>
+<p>Start a new outdoor radio Adventure and record where and how you operated.</p>
+<a href="{% url 'add_adventure' %}" class="btn-ro-primary">Create an Adventure</a>
+</article>
+<article class="welcome-action-card">
+<h2>Explore Locations</h2>
+<p>Search existing Locations or add a new place to operate.</p>
+<div class="welcome-card-links"><a href="{% url 'locations' %}" class="btn-ro-primary">Search Locations</a><a href="{% url 'create_location' %}" class="ro-small-action">Add Location</a></div>
+</article>
+<article class="welcome-action-card">
+<h2>Open My Adventure Book</h2>
+<p>View Existing Adventures or Add Your Own, then add Journal entries, contacts, notes, and photos.</p>
+<a href="{% url 'my_adventures' %}" class="btn-ro-primary">Open My Adventure Book</a>
+</article>
 </div>
+<p class="welcome-home-link"><a href="{% url 'home' %}">Go to Radio Outdoors Home</a></p>
 </div>
 </section>
 {% endblock %}

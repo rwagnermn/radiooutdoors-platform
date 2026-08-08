@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{{ profile.callsign }} | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page members-page member-story-page{% endblock %}
 {% block content %}
 <section class="content">
 <div class="member-profile-heading">
-{% if profile.profile_photo %}
-<img src="{{ profile.profile_photo.url }}?v={{ profile.updated_at|date:'U' }}" alt="{{ profile.callsign }} profile picture" class="member-profile-photo member-profile-photo-large">
+{% if profile.public_profile_photo_url %}
+<img src="{{ profile.public_profile_photo_url }}?v={{ profile.updated_at|date:'U' }}" alt="{{ profile.callsign }} profile picture" class="member-profile-photo member-profile-photo-large">
 {% else %}
 <img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors profile picture placeholder" class="member-profile-photo member-profile-photo-large member-profile-photo-placeholder">
 {% endif %}

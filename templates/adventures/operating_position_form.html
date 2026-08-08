@@ -11,8 +11,8 @@
 <label for="{{ form.description.id_for_label }}">Notes (optional)</label>{{ form.description }}{{ form.description.errors }}
 {{ form.latitude }}{{ form.longitude }}
 {% if google_maps_api_key %}<p class="field-help">Click the map where the station can be set up.</p><div id="position-map" class="location-pin-map"></div>{% endif %}
-<div class="amenities-editor-heading"><h2>Amenities</h2></div>
-<div class="amenities-entry-matrix">
+<div class="amenities-editor-heading"><h2>Amenities</h2><div class="amenity-bulk-actions"><button type="button" data-set-amenities="yes">Set All Yes</button><button type="button" data-set-amenities="no">Set All No</button></div></div>
+<div class="amenities-entry-matrix" data-amenities-editor>
 <div><label for="{{ form.parking.id_for_label }}">Parking</label>{{ form.parking }}</div>
 <div><label for="{{ form.restrooms.id_for_label }}">Restrooms</label>{{ form.restrooms }}</div>
 <div><label for="{{ form.picnic_tables.id_for_label }}">Picnic Tables</label>{{ form.picnic_tables }}</div>
@@ -43,4 +43,5 @@ window.initPositionMap=initPositionMap;
 </script>
 <script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initPositionMap"></script>
 {% endif %}
+{% load static %}<script src="{% static 'js/amenity-bulk.js' %}?v=001"></script>
 {% endblock %}

@@ -4,6 +4,7 @@ from PIL import Image, UnidentifiedImageError
 
 from .models import MemberProfile
 from .profile_images import MAX_PROFILE_PHOTO_BYTES, optimize_profile_photo
+from .photo_moderation import validate_image_file
 
 
 class MemberProfileForm(forms.ModelForm):
@@ -52,6 +53,7 @@ class MemberProfileForm(forms.ModelForm):
         photo = self.cleaned_data.get("profile_photo")
         if not photo or photo is False or not isinstance(photo, UploadedFile):
             return photo
+        validate_image_file(photo)
         if photo.size > MAX_PROFILE_PHOTO_BYTES:
             raise forms.ValidationError("Choose an image smaller than 12 MB.")
         try:
@@ -73,6 +75,16 @@ class MemberProfileForm(forms.ModelForm):
     def save(self, commit=True):
         old_photo_name = self._original_photo_name
         profile = super().save(commit=False)
+        if self.files.get(self.add_prefix("profile_photo")):
+            profile.profile_photo_moderation_status = "pending"
+            profile.profile_photo_moderation_reason = ""
+            profile.profile_photo_moderation_categories = []
+            profile.profile_photo_moderation_confidence = None
+            profile.profile_photo_moderation_provider = ""
+            profile.profile_photo_moderation_provider_model = ""
+            profile.profile_photo_automated_decision = ""
+            profile.profile_photo_rejection_reason_code = ""
+            profile.profile_photo_rejection_explanation = ""
         if self.cleaned_data.get("remove_profile_photo"):
             profile.profile_photo = ""
         if self.user:
