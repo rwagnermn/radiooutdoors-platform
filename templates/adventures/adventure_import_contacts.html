@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Import Contacts | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content adventure-contact-import-destination">
+    <p><a href="{% url 'adventure_contacts' adventure.slug %}" class="back-link-button">← Back to Adventure Contacts</a></p>
+    <h1>Import Contacts</h1>
+    <p><strong>Adventure:</strong> {{ adventure.title }}</p>
+
+    {% if journal_count == 0 %}
+        <div class="location-card" role="status">
+            <p>Contacts are recorded through an Adventure Journal entry. Create a Journal entry before importing contacts.</p>
+            <a href="{% url 'add_journal_entry' adventure.slug %}?return_to=contacts" class="button-primary">Create Journal Entry</a>
+        </div>
+    {% else %}
+        <form method="post" class="location-card">
+            {% csrf_token %}
+            {% if journal_count == 1 %}
+                {% with entry=journal_entries.0 %}
+                <p>Contacts will be imported into this Journal entry:</p>
+                <p><strong>{{ entry.title|default:"Journal Entry" }}</strong> — {{ entry.entry_at|date:"M j, Y, g:i A" }}</p>
+                <input type="hidden" name="journal_entry" value="{{ entry.pk }}">
+                <button type="submit" class="button-primary">Continue to Import Contacts</button>
+                {% endwith %}
+            {% else %}
+                <fieldset>
+                    <legend>Choose the destination Journal entry</legend>
+                    {% for entry in journal_entries %}
+                    <label class="contact-import-journal-choice">
+                        <input type="radio" name="journal_entry" value="{{ entry.pk }}" required>
+                        <span><strong>{{ entry.title|default:"Journal Entry" }}</strong><br>{{ entry.entry_at|date:"M j, Y, g:i A" }} · {{ entry.aggregated_contact_count }} existing Contact{{ entry.aggregated_contact_count|pluralize }}</span>
+                    </label>
+                    {% endfor %}
+                </fieldset>
+                <button type="submit" class="button-primary">Continue to Import Contacts</button>
+            {% endif %}
+        </form>
+    {% endif %}
+</section>
+{% endblock %}

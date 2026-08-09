@@ -39,6 +39,10 @@ class RadioOutdoorsPasswordResetView(PasswordResetView):
     html_email_template_name = "registration/password_reset_email.html"
     subject_template_name = "registration/password_reset_subject.txt"
     success_url = reverse_lazy("account_recovery_done")
+    from_email = settings.DEFAULT_FROM_EMAIL
+    extra_email_context = {
+        "contact_email": settings.RADIO_OUTDOORS_CONTACT_EMAIL,
+    }
 
     def post(self, request, *args, **kwargs):
         email = (request.POST.get("email") or "").strip().casefold()

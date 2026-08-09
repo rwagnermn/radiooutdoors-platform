@@ -88,9 +88,97 @@ class MapExplorerOpenAdventureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["map_points"]), 1)
         point = response.context["map_points"][0]
-        self.assertEqual(point["kind"], "location")
+        self.assertEqual(point["marker_type"], "location")
         self.assertTrue(point["has_open_adventure"])
-        self.assertIsNone(point["operating_location_id"])
+        self.assertEqual(point["coordinate_source"], "location")
+
+    def test_coordinate_bearing_location_without_activity_gets_default_pin(self):
+        location = Location.objects.create(
+            name="Quiet Map Location",
+            latitude="0.000000",
+            longitude="-93.265000",
+        )
+
+        response = self.client.get(reverse("map_explorer"))
+
+        points = response.context["map_points"]
+        self.assertEqual(len(points), 1)
+        self.assertEqual(points[0]["location_id"], location.pk)
+        self.assertEqual(points[0]["marker_type"], "location")
+        self.assertFalse(points[0]["has_open_adventure"])
+        self.assertFalse(points[0]["has_operating_advisory"])
+        self.assertEqual(points[0]["latitude"], 0.0)
+
+    def test_advisory_location_is_included_without_an_adventure(self):
+        location = Location.objects.create(
+            name="Advisory Map Location",
+            latitude="44.000000",
+            longitude="-94.000000",
+            has_operating_advisory=True,
+            operating_advisory="Road access is limited.",
+        )
+
+        response = self.client.get(reverse("map_explorer"))
+
+        point = response.context["map_points"][0]
+        self.assertEqual(point["location_id"], location.pk)
+        self.assertTrue(point["has_operating_advisory"])
+        self.assertEqual(point["operating_advisory"], "Road access is limited.")
+
+    def test_location_without_coordinates_is_excluded(self):
+        Location.objects.create(name="No Coordinates")
+
+        response = self.client.get(reverse("map_explorer"))
+
+        self.assertEqual(response.context["map_points"], [])
+
+    def test_operating_position_does_not_create_a_second_public_pin(self):
+        location = Location.objects.create(
+            name="Position Test Location",
+            latitude="44.000000",
+            longitude="-94.000000",
+        )
+        position = OperatingLocation.objects.create(
+            location=location,
+            name="Picnic Shelter",
+            latitude="44.100000",
+            longitude="-94.100000",
+        )
+
+        response = self.client.get(reverse("map_explorer"))
+
+        points = response.context["map_points"]
+        self.assertEqual(len(points), 1)
+        self.assertEqual(points[0]["marker_type"], "location")
+        self.assertEqual(points[0]["location_id"], location.pk)
+
+    def test_legacy_location_uses_display_only_coordinate_fallback(self):
+        location = Location.objects.create(name="Legacy Position Location")
+        OperatingLocation.objects.create(
+            location=location, name="Historical Position",
+            latitude="44.100000", longitude="-94.100000",
+        )
+        response = self.client.get(reverse("map_explorer"))
+        point = response.context["map_points"][0]
+        self.assertEqual(point["location_id"], location.pk)
+        self.assertEqual(point["coordinate_source"], "legacy_operating_position_fallback")
+        location.refresh_from_db()
+        self.assertIsNone(location.latitude)
+
+    def test_map_template_distinguishes_location_and_operating_filters(self):
+        response = self.client.get(reverse("map_explorer"))
+
+        self.assertContains(response, "Location</span>")
+        self.assertContains(response, 'id="show-location-pins" checked')
+        self.assertNotContains(response, 'id="show-operating-pins"')
+        self.assertContains(response, 'id="show-open-pins" checked')
+        self.assertContains(response, "Operating Advisories — Always shown")
+        self.assertNotContains(response, "Open Adventures Only")
+        self.assertContains(response, "if (record.point.has_operating_advisory)")
+        self.assertContains(response, "Get Directions to Pin")
+        self.assertContains(response, "Copy Coordinates")
+        self.assertContains(response, "Find Nearest Mapped Address")
+        self.assertContains(response, "nearestAddressCache")
 
 
 class SupportPageTests(TestCase):
@@ -406,6 +494,8 @@ class MemberRegistrationTests(TestCase):
             "email": "operator@example.com",
             "password1": self.password,
             "password2": self.password,
+            "policy_accepted": "on",
+            "age_confirmed": "on",
         }
         data.update(overrides)
         return data
@@ -639,6 +729,8 @@ class FollowerRegistrationTests(TestCase):
             "email": email,
             "password1": self.password,
             "password2": self.password,
+            "policy_accepted": "on",
+            "age_confirmed": "on",
         }
 
     def test_valid_invitation_creates_follower_without_profile(self):
@@ -758,7 +850,9 @@ class VerifiedMemberAuthorizationTests(TestCase):
             callsign_verified=True,
             verification_method=MemberProfile.VerificationMethod.QRZ,
         )
-        self.location = Location.objects.create(name="Authorization Park")
+        self.location = Location.objects.create(
+            name="Authorization Park", created_by=self.member_user
+        )
         self.position = OperatingLocation.objects.create(
             location=self.location, name="Authorization Position"
         )
@@ -807,6 +901,7 @@ class VerifiedMemberAuthorizationTests(TestCase):
             reverse("create_location"),
             reverse("edit_location", args=[self.location.pk]),
             reverse("add_operating_position", args=[self.location.pk]),
+            reverse("edit_operating_position", args=[self.position.pk]),
             reverse("create_operating_position_inline", args=[self.location.pk]),
             reverse("follower_management"),
             reverse("invite_follower"),

@@ -12,8 +12,15 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.files.base import ContentFile
 from django.utils.module_loading import import_string
 from PIL import Image, UnidentifiedImageError
+
+from .email_notifications import notify_moderation_failure
+from .photo_normalization import (
+    ImageNormalizationError, JPEG_MIME_TYPE, normalize_image_bytes,
+    read_and_normalize,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +30,22 @@ MAX_IMAGE_PIXELS = 40_000_000
 
 
 class ModerationUnavailable(RuntimeError):
-    pass
+    """A public-safe provider failure with structured staff diagnostics."""
+
+    def __init__(
+        self,
+        message,
+        *,
+        category="provider_unavailable",
+        http_status=None,
+        provider_error_type="",
+        provider_error_code="",
+    ):
+        super().__init__(message)
+        self.category = category
+        self.http_status = http_status
+        self.provider_error_type = provider_error_type[:80]
+        self.provider_error_code = provider_error_code[:80]
 
 
 @dataclass(frozen=True)
@@ -70,6 +92,49 @@ class OpenAIModerationProvider:
         with urlopen(request, timeout=self.timeout) as response:
             return json.loads(response.read())
 
+    @staticmethod
+    def _http_failure(exc):
+        error_type = ""
+        error_code = ""
+        message = ""
+        try:
+            body = json.loads(exc.read().decode("utf-8"))
+            error = body.get("error", {}) if isinstance(body, dict) else {}
+            if isinstance(error, dict):
+                error_type = str(error.get("type") or "")[:80]
+                error_code = str(error.get("code") or "")[:80]
+                message = str(error.get("message") or "").lower()
+        except (AttributeError, UnicodeDecodeError, json.JSONDecodeError, OSError):
+            pass
+
+        if exc.code in {401, 403}:
+            category = "authentication"
+            safe_message = f"OpenAI authentication was rejected (status {exc.code})."
+        elif exc.code == 429:
+            quota_markers = ("quota", "billing", "insufficient_quota")
+            if error_code == "insufficient_quota" or any(x in message for x in quota_markers):
+                category = "billing_quota"
+                safe_message = "OpenAI billing or quota is unavailable (status 429)."
+            else:
+                category = "rate_limit"
+                safe_message = "OpenAI image moderation capacity is unavailable (status 429)."
+        elif exc.code in {400, 404, 405, 422}:
+            category = "invalid_request"
+            safe_message = f"OpenAI rejected the moderation request (status {exc.code})."
+        elif exc.code == 413:
+            category = "image_size"
+            safe_message = "OpenAI rejected the image size (status 413)."
+        else:
+            category = "http_failure"
+            safe_message = f"OpenAI moderation HTTP failure (status {exc.code})."
+        return ModerationUnavailable(
+            safe_message,
+            category=category,
+            http_status=exc.code,
+            provider_error_type=error_type,
+            provider_error_code=error_code,
+        )
+
     def moderate(self, image_bytes, *, content_type=""):
         if not self.api_key:
             raise ModerationUnavailable("OpenAI API key is not configured.")
@@ -84,9 +149,15 @@ class OpenAIModerationProvider:
                         "HEIC": "image/heic", "HEIF": "image/heif",
                     }.get((image.format or "").upper(), "")
             except (UnidentifiedImageError, OSError, ValueError) as exc:
-                raise ModerationUnavailable("Validated image content could not be read.") from exc
+                raise ModerationUnavailable(
+                    "Validated image content could not be read.",
+                    category="image_read",
+                ) from exc
         if not mime_type:
-            raise ModerationUnavailable("Validated image format is not supported for moderation.")
+            raise ModerationUnavailable(
+                "Validated image format is not supported for moderation.",
+                category="unsupported_image_format",
+            )
         payload = {
             "model": self.model,
             "input": [{
@@ -99,34 +170,43 @@ class OpenAIModerationProvider:
         try:
             response = self._request(payload)
         except HTTPError as exc:
-            if exc.code in {401, 403}:
-                category = "authentication failure"
-            elif exc.code == 429:
-                category = "rate limit"
-            else:
-                category = "HTTP failure"
-            raise ModerationUnavailable(f"OpenAI {category} (status {exc.code}).") from exc
+            raise self._http_failure(exc) from exc
         except (TimeoutError, socket.timeout) as exc:
-            raise ModerationUnavailable("OpenAI moderation request timed out.") from exc
+            raise ModerationUnavailable(
+                "OpenAI moderation request timed out.", category="timeout"
+            ) from exc
         except ssl.SSLError as exc:
-            raise ModerationUnavailable("OpenAI moderation TLS connection failed.") from exc
+            raise ModerationUnavailable(
+                "OpenAI moderation TLS connection failed.", category="tls"
+            ) from exc
         except PermissionError as exc:
-            raise ModerationUnavailable("Outbound network permission was denied.") from exc
+            raise ModerationUnavailable(
+                "Outbound network permission was denied.", category="network_permission"
+            ) from exc
         except URLError as exc:
             reason = exc.reason
             if isinstance(reason, PermissionError):
                 message = "Outbound network permission was denied."
             elif isinstance(reason, socket.gaierror):
                 message = "OpenAI moderation DNS lookup failed."
+                category = "dns"
             elif isinstance(reason, ssl.SSLError):
                 message = "OpenAI moderation TLS connection failed."
+                category = "tls"
             elif isinstance(reason, (TimeoutError, socket.timeout)):
                 message = "OpenAI moderation request timed out."
+                category = "timeout"
             else:
                 message = "OpenAI moderation network request failed."
-            raise ModerationUnavailable(message) from exc
+                category = "network"
+            if isinstance(reason, PermissionError):
+                category = "network_permission"
+            raise ModerationUnavailable(message, category=category) from exc
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-            raise ModerationUnavailable("OpenAI returned an invalid moderation response.") from exc
+            raise ModerationUnavailable(
+                "OpenAI returned an invalid moderation response.",
+                category="malformed_response",
+            ) from exc
 
         try:
             result = response["results"][0]
@@ -135,7 +215,10 @@ class OpenAIModerationProvider:
             if not isinstance(categories, dict) or not isinstance(scores, dict):
                 raise TypeError
         except (KeyError, IndexError, TypeError) as exc:
-            raise ModerationUnavailable("OpenAI returned an invalid moderation response.") from exc
+            raise ModerationUnavailable(
+                "OpenAI returned an invalid moderation response.",
+                category="malformed_response",
+            ) from exc
 
         flagged = sorted(name for name, value in categories.items() if value is True)
         severe = {"sexual/minors"}
@@ -192,24 +275,59 @@ def get_provider():
 
 def validate_image_file(uploaded_file):
     if uploaded_file.size > getattr(settings, "PHOTO_MAX_UPLOAD_BYTES", MAX_IMAGE_BYTES):
-        raise ValidationError("Choose an image smaller than 12 MB.")
+        raise ValidationError("The image is too large to process safely.")
     try:
         uploaded_file.seek(0)
-        with Image.open(uploaded_file) as image:
-            image.verify()
-            image_format = (image.format or "").upper()
+        normalized = normalize_image_bytes(uploaded_file.read())
         uploaded_file.seek(0)
-        with Image.open(uploaded_file) as image:
-            if image.width * image.height > getattr(settings, "PHOTO_MAX_PIXELS", MAX_IMAGE_PIXELS):
-                raise ValidationError("The image dimensions are too large.")
+    except ImageNormalizationError:
         uploaded_file.seek(0)
-    except ValidationError:
         raise
-    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
-        raise ValidationError("Choose a valid JPG, PNG, HEIC, or WebP image.") from exc
-    if image_format not in ALLOWED_FORMATS:
-        raise ValidationError("Choose a JPG, PNG, HEIC, or WebP image.")
-    return image_format
+    return normalized.source_format
+
+
+def _photo_derivatives(photo):
+    """Return a stored moderation derivative, creating all derivatives once."""
+    if (
+        photo.derivative_status == "ready"
+        and photo.moderation_image and photo.web_image and photo.thumbnail_image
+    ):
+        photo.moderation_image.open("rb")
+        try:
+            return photo.moderation_image.read()
+        finally:
+            photo.moderation_image.close()
+
+    normalized = read_and_normalize(photo.image)
+    stem = (photo.reference_number or f"RO-PH-{photo.pk:06d}").lower()
+    photo.moderation_image.save(
+        f"{stem}-moderation.jpg", ContentFile(normalized.moderation_bytes), save=False
+    )
+    photo.web_image.save(
+        f"{stem}-web.jpg", ContentFile(normalized.web_bytes), save=False
+    )
+    photo.thumbnail_image.save(
+        f"{stem}-thumbnail.jpg", ContentFile(normalized.thumbnail_bytes), save=False
+    )
+    photo.derivative_status = "ready"
+    photo.derivative_metadata = {
+        "source_format": normalized.source_format,
+        "source_dimensions": [normalized.source_width, normalized.source_height],
+        "source_mode": normalized.source_mode,
+        "exif_orientation": normalized.exif_orientation,
+        "moderation_dimensions": [normalized.moderation_width, normalized.moderation_height],
+        "moderation_bytes": len(normalized.moderation_bytes),
+        "web_dimensions": [normalized.web_width, normalized.web_height],
+        "web_bytes": len(normalized.web_bytes),
+        "thumbnail_dimensions": [normalized.thumbnail_width, normalized.thumbnail_height],
+        "thumbnail_bytes": len(normalized.thumbnail_bytes),
+        "moderation_mime_type": JPEG_MIME_TYPE,
+    }
+    photo.save(update_fields=[
+        "moderation_image", "web_image", "thumbnail_image",
+        "derivative_status", "derivative_metadata",
+    ])
+    return normalized.moderation_bytes
 
 
 def file_digest(file_field):
@@ -239,16 +357,17 @@ def moderate_file_field(instance, field_name, *, status_field, categories_field,
         status_field, categories_field, confidence_field, reason_field,
         provider_field, provider_model_field,
     ]
+    failure_category = ""
     try:
         provider = get_provider()
         setattr(instance, provider_field, getattr(provider, "provider_name", "")[:80])
         setattr(instance, provider_model_field, getattr(provider, "model", "")[:80])
-        image.open("rb")
-        try:
-            payload = image.read()
-        finally:
-            image.close()
-        decision = provider.moderate(payload, content_type="image/*")
+        if instance.__class__.__name__ == "Photo" and field_name == "image":
+            payload = _photo_derivatives(instance)
+        else:
+            normalized = read_and_normalize(image)
+            payload = normalized.moderation_bytes
+        decision = provider.moderate(payload, content_type=JPEG_MIME_TYPE)
         if decision.status not in {"approved", "review", "rejected"}:
             raise ModerationUnavailable("The moderation provider returned an invalid decision.")
         setattr(instance, status_field, decision.status)
@@ -260,8 +379,20 @@ def moderate_file_field(instance, field_name, *, status_field, categories_field,
         setattr(instance, automated_decision_field, decision.provider_decision[:32])
         update_fields.append(automated_decision_field)
     except Exception as exc:
+        failure_category = type(exc).__name__
         setattr(instance, automated_decision_field, "scan_failed")
-        setattr(instance, reason_field, "Moderation could not be completed.")
+        if isinstance(exc, ImageNormalizationError):
+            if hasattr(instance, "derivative_status"):
+                instance.derivative_status = "failed"
+                update_fields.append("derivative_status")
+            stored_reason = f"{exc.category}: {exc.messages[0]}"[:240]
+        elif isinstance(exc, ModerationUnavailable):
+            stored_reason = f"{exc.category}: {str(exc)}"[:240]
+        elif isinstance(exc, ImproperlyConfigured):
+            stored_reason = "configuration: Moderation provider configuration failed."
+        else:
+            stored_reason = "unexpected: Moderation could not be completed."
+        setattr(instance, reason_field, stored_reason)
         update_fields.extend([automated_decision_field])
         safe_detail = (
             str(exc)[:200]
@@ -269,10 +400,18 @@ def moderate_file_field(instance, field_name, *, status_field, categories_field,
             else "Unexpected moderation failure."
         )
         logger.warning(
-            "Photo moderation failed closed (%s): %s",
-            type(exc).__name__, safe_detail,
+            "Photo moderation failed closed exception=%s category=%s "
+            "http_status=%s provider_error_type=%s provider_error_code=%s detail=%s",
+            type(exc).__name__,
+            getattr(exc, "category", "unexpected"),
+            getattr(exc, "http_status", None),
+            getattr(exc, "provider_error_type", ""),
+            getattr(exc, "provider_error_code", ""),
+            safe_detail,
         )
     instance.save(update_fields=update_fields)
+    if failure_category:
+        notify_moderation_failure(instance, failure_category)
     return getattr(instance, status_field)
 
 

@@ -38,7 +38,13 @@
     function refreshConfirm() {
       var number = selectedCards().length;
       var kind = confirmForm.dataset.actionKind;
-      document.querySelector("[data-batch-heading] strong").textContent = kind === "approve" ? "Approve " + number + " selected photos? These photos will become publicly visible." : "Reject " + number + " selected photos?";
+      var photoLabel = number === 1 ? " photo" : " photos";
+      var heading = kind === "approve"
+        ? "Approve " + number + " selected" + photoLabel + "? These photos will become publicly visible."
+        : kind === "remove"
+          ? "Remove " + number + " selected" + photoLabel + "?"
+          : "Reject " + number + " selected" + photoLabel + "?";
+      document.querySelector("[data-batch-heading] strong").textContent = heading;
       confirmForm.querySelector("[data-confirm-button]").disabled = number === 0;
     }
     grid.querySelectorAll("[data-remove-from-batch]").forEach(function (button) { button.addEventListener("click", function () { var card = button.closest("[data-confirm-card]"); card.querySelector("[data-confirm-select]").checked = false; card.hidden = true; refreshConfirm(); }); });
@@ -52,9 +58,14 @@
       var button = confirmForm.querySelector("[data-confirm-button]");
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
-      button.textContent = confirmForm.dataset.actionKind === "approve" ? "Approving…" : "Rejecting…";
+      button.textContent = confirmForm.dataset.actionKind === "approve"
+        ? "Approving..."
+        : confirmForm.dataset.actionKind === "remove"
+          ? "Removing..."
+          : "Rejecting...";
     });
     refreshConfirm();
   }
   document.querySelectorAll("[data-rejection-reason]").forEach(function (select) { var wrapper = select.closest("form"); var other = wrapper.querySelector("[data-other-reason]"); var explanation = other.querySelector("textarea"); function toggle() { var needed = select.value === "other"; other.hidden = !needed; explanation.required = needed; } select.addEventListener("change", toggle); toggle(); });
+  document.querySelectorAll("[data-removal-reason]").forEach(function (select) { var wrapper = select.closest("form"); var other = wrapper.querySelector("[data-other-removal-reason]"); var explanation = other.querySelector("textarea"); function toggle() { var needed = select.value === "other"; other.hidden = !needed; explanation.required = needed; } select.addEventListener("change", toggle); toggle(); });
 }());

@@ -17,6 +17,8 @@ class NewMemberWelcomeTests(TestCase):
             "email": email,
             "password1": self.password,
             "password2": self.password,
+            "policy_accepted": "on",
+            "age_confirmed": "on",
         }
 
     def qrz_result(self, first_name="Casey"):

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Adventure Book | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content">
@@ -12,12 +13,10 @@
     <div class="adventure-grid">
       {% for adventure in adventures %}
         <article class="adventure-card">
-          {% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
-            <img src="{{ adventure.cover_photo.image.url }}" alt="{{ adventure.title }}">
-          {% endif %}
+          {% if adventure.display_cover_photo %}<img src="{{ adventure.display_cover_photo.public_thumbnail_url }}" alt="{{ adventure.title }}">{% else %}<img src="{% static 'images/hero.jpg' %}" alt="">{% endif %}
           <h3><a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></h3>
           <p>
-            {% if adventure.location %}<strong>{{ adventure.location.name }}</strong><br>{% endif %}
+            {% if adventure.location %}<strong>{% if adventure.can_view_location %}{{ adventure.location.name }}{% else %}Private Location{% endif %}</strong><br>{% endif %}
             Started {{ adventure.started_at|date:"F j, Y" }}
           </p>
         </article>

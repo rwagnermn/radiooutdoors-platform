@@ -13,7 +13,7 @@
             </p>
         </div>
 
-        <div class="map-point-count">
+        <div class="map-point-count" aria-live="polite">
             {{ point_count }} Map Pin{{ point_count|pluralize }}
         </div>
     </div>
@@ -22,21 +22,26 @@
         <fieldset class="radio-map-filter-group">
             <legend>Map Filters</legend>
             <label>
-                <input type="checkbox" id="show-operating-pins" checked>
-                Operating Positions
+                <input type="checkbox" id="show-location-pins" checked>
+                Locations
+            </label>
+
+            <label class="map-advisory-always">
+                <input type="checkbox" checked disabled>
+                Operating Advisories — Always shown
             </label>
 
             <label>
-                <input type="checkbox" id="show-current-only">
-                Open Adventures Only
+                <input type="checkbox" id="show-open-pins" checked>
+                Open Adventures
             </label>
         </fieldset>
 
         <div class="radio-map-legend" aria-label="Map Legend">
             <h2>Map Legend</h2>
             <div class="radio-map-legend-items">
+                <span><i class="map-legend-pin map-legend-pin-green" aria-hidden="true"><b>L</b></i>Location</span>
                 <span><i class="map-legend-pin map-legend-pin-red" aria-hidden="true"><b>!</b></i>Operating advisory</span>
-                <span><i class="map-legend-pin map-legend-pin-blue" aria-hidden="true"><b>O</b></i>Operating Position</span>
                 <span><i class="map-legend-pin map-legend-pin-yellow" aria-hidden="true"><b>OPEN</b></i>Open Adventure</span>
             </div>
             <p>Red advisory pins take precedence when an Open Adventure is also present.</p>
@@ -111,14 +116,6 @@ function startAdventureForm(point) {
         return "";
     }
 
-    const operatingInput = point.operating_location_id
-        ? (
-            "<input type='hidden' name='operating_location' value='"
-            + escapeMapText(String(point.operating_location_id))
-            + "'>"
-        )
-        : "";
-
     return (
         "<form method='post' action='"
         + escapeMapText(point.start_adventure_url)
@@ -126,9 +123,39 @@ function startAdventureForm(point) {
         + "<input type='hidden' name='csrfmiddlewaretoken' value='"
         + "{{ csrf_token|escapejs }}"
         + "'>"
-        + operatingInput
         + "<button type='submit'>Start Adventure Here</button>"
         + "</form>"
+    );
+}
+
+function editPinLink(point) {
+    if (!point.can_edit_pin || !point.pin_edit_url) return "";
+    return "<a class='radio-map-popup-secondary' href='"
+        + escapeMapText(point.pin_edit_url)
+        + "'>Edit Pin Position</a>";
+}
+
+function pinNavigationActions(point) {
+    const coordinates = point.latitude.toFixed(6) + ", "
+        + point.longitude.toFixed(6);
+    const directions = "https://www.google.com/maps/dir/?api=1&destination="
+        + encodeURIComponent(coordinates);
+    const nearest = point.has_entered_address ? "" : (
+        "<button type='button' class='radio-map-popup-secondary' "
+        + "data-find-nearest-address data-location-id='"
+        + escapeMapText(String(point.location_id)) + "' data-latitude='"
+        + point.latitude.toFixed(6) + "' data-longitude='"
+        + point.longitude.toFixed(6) + "'>Find Nearest Mapped Address</button>"
+        + "<div class='radio-map-nearest-result' data-nearest-result='"
+        + escapeMapText(String(point.location_id)) + "' aria-live='polite'></div>"
+    );
+    return (
+        "<div class='radio-map-pin-navigation'>"
+        + "<div><strong>Coordinates</strong><br>" + coordinates + "</div>"
+        + "<a href='" + directions + "' target='_blank' rel='noopener'>Get Directions to Pin</a>"
+        + "<button type='button' class='radio-map-popup-secondary' data-copy-text='"
+        + escapeMapText(coordinates) + "'>Copy Coordinates</button>"
+        + nearest + "</div>"
     );
 }
 
@@ -176,12 +203,13 @@ async function initRadioOutdoorsMap() {
         })
     );
 
-    const showOperating = document.getElementById(
-        "show-operating-pins"
+    const showLocations = document.getElementById(
+        "show-location-pins"
     );
-    const showCurrentOnly = document.getElementById(
-        "show-current-only"
+    const showOpen = document.getElementById(
+        "show-open-pins"
     );
+    const pointCount = document.querySelector(".map-point-count");
     const fitVisibleButton = document.getElementById(
         "fit-visible-pins"
     );
@@ -200,11 +228,91 @@ async function initRadioOutdoorsMap() {
 
     const infoWindow = new InfoWindow();
     const markerRecords = [];
+    const nearestAddressCache = new globalThis.Map();
+    const nearestAddressRequestTimes = new globalThis.Map();
+    const geocoder = new google.maps.Geocoder();
+
+    async function copyText(value, button) {
+        try {
+            await navigator.clipboard.writeText(value);
+            button.textContent = "Copied";
+        } catch (error) {
+            const helper = document.createElement("textarea");
+            helper.value = value;
+            helper.setAttribute("readonly", "");
+            helper.style.position = "fixed";
+            helper.style.opacity = "0";
+            document.body.appendChild(helper);
+            helper.select();
+            document.execCommand("copy");
+            helper.remove();
+            button.textContent = "Copied";
+        }
+    }
+
+    document.getElementById("radio-outdoors-map").addEventListener(
+        "click",
+        async function (event) {
+            const copyButton = event.target.closest("[data-copy-text]");
+            if (copyButton) {
+                await copyText(copyButton.dataset.copyText, copyButton);
+                return;
+            }
+            const lookupButton = event.target.closest("[data-find-nearest-address]");
+            if (!lookupButton) return;
+            const locationId = lookupButton.dataset.locationId;
+            const cacheKey = lookupButton.dataset.latitude + "," + lookupButton.dataset.longitude;
+            const resultElement = document.querySelector(
+                "[data-nearest-result='" + CSS.escape(locationId) + "']"
+            );
+            const renderResult = function (address) {
+                if (!address) {
+                    resultElement.textContent = "No nearby mapped address was found. Use the coordinates or Get Directions to Pin.";
+                    return;
+                }
+                resultElement.innerHTML = "<strong>Nearest mapped address</strong><p>"
+                    + escapeMapText(address) + "</p><p class='radio-map-address-warning'>"
+                    + "This address is approximate and may not provide direct or public-road access to the pin. Verify roads, gates, and property access before traveling."
+                    + "</p><button type='button' class='radio-map-popup-secondary' data-copy-text='"
+                    + escapeMapText(address) + "'>Copy Nearest Address</button>";
+            };
+            if (nearestAddressCache.has(cacheKey)) {
+                renderResult(nearestAddressCache.get(cacheKey));
+                return;
+            }
+            const now = Date.now();
+            if (now - (nearestAddressRequestTimes.get(locationId) || 0) < 5000) {
+                resultElement.textContent = "Please wait before requesting another address lookup.";
+                return;
+            }
+            nearestAddressRequestTimes.set(locationId, now);
+            lookupButton.disabled = true;
+            resultElement.textContent = "Finding the nearest mapped address…";
+            try {
+                const response = await geocoder.geocode({
+                    location: {
+                        lat: Number(lookupButton.dataset.latitude),
+                        lng: Number(lookupButton.dataset.longitude)
+                    }
+                });
+                const address = response.results && response.results.length
+                    ? response.results[0].formatted_address
+                    : "";
+                nearestAddressCache.set(cacheKey, address || null);
+                renderResult(address);
+            } catch (error) {
+                resultElement.textContent = "No nearby mapped address was found. Use the coordinates or Get Directions to Pin.";
+            } finally {
+                lookupButton.disabled = false;
+            }
+        }
+    );
 
     function popupHtml(point) {
-        const pinLabel = point.kind === "location"
-            ? "Named Place"
-            : "Operating Position";
+        const pinLabel = "Location";
+        const privateBadge = point.is_private
+            ? "<span class='private-location-badge'>🔒 Private</span>"
+            : "";
 
         const photo = point.cover_photo_url
             ? (
@@ -252,6 +360,7 @@ async function initRadioOutdoorsMap() {
             + photo
             + "<div class='radio-map-popup-content'>"
             + currentBadge
+            + privateBadge
             + "<span class='radio-map-popup-type'>"
             + escapeMapText(pinLabel)
             + "</span>"
@@ -263,9 +372,11 @@ async function initRadioOutdoorsMap() {
             + (point.adventure_count === 1 ? "" : "s")
             + "</div>"
             + latest
+            + pinNavigationActions(point)
             + "<div class='radio-map-popup-actions'>"
             + "<a href='" + escapeMapText(point.url) + "'>View Location</a>"
             + adventureLink
+            + editPinLink(point)
             + startAdventureForm(point)
             + "</div>"
             + "</div>"
@@ -274,20 +385,24 @@ async function initRadioOutdoorsMap() {
     }
 
     function markerVisible(record) {
-        const kindVisible = showOperating.checked;
-
-        const activityVisible = !showCurrentOnly.checked
-            || record.point.has_open_adventure;
-
-        return kindVisible && activityVisible;
+        if (record.point.has_operating_advisory) {
+            return true;
+        }
+        if (record.point.has_open_adventure) {
+            return showOpen.checked;
+        }
+        return showLocations.checked;
     }
 
     function updateVisibleMarkers() {
+        let visibleCount = 0;
         markerRecords.forEach(function (record) {
-            record.marker.map = markerVisible(record)
-                ? map
-                : null;
+            const visible = markerVisible(record);
+            record.marker.map = visible ? map : null;
+            if (visible) visibleCount += 1;
         });
+        pointCount.textContent = visibleCount + " Map Pin"
+            + (visibleCount === 1 ? "" : "s");
     }
 
     function fitVisibleMarkers() {
@@ -312,7 +427,7 @@ async function initRadioOutdoorsMap() {
     }
 
     points.forEach(function (point) {
-        let background = "#2e6fd8";
+        let background = "#277a45";
 
         if (point.has_open_adventure) {
             background = "#f0b429";
@@ -326,10 +441,12 @@ async function initRadioOutdoorsMap() {
             background: background,
             borderColor: "#ffffff",
             glyphColor: "#ffffff",
-            glyph: point.has_open_adventure
-                ? "OPEN"
+            glyph: point.has_operating_advisory
+                ? "!"
                 : (
-                    "O"
+                    point.has_open_adventure
+                        ? "OPEN"
+                        : (point.is_private ? "🔒" : "L")
                 ),
             scale: point.has_open_adventure ? 1.32 : 1.10
         });
@@ -360,8 +477,8 @@ async function initRadioOutdoorsMap() {
     });
 
     [
-        showOperating,
-        showCurrentOnly
+        showLocations,
+        showOpen
     ].forEach(function (control) {
         control.addEventListener(
             "change",
@@ -443,6 +560,7 @@ async function initRadioOutdoorsMap() {
         });
     }
 
+    updateVisibleMarkers();
     fitVisibleMarkers();
 }
 

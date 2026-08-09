@@ -1,0 +1,9 @@
+<tr>
+<td>History</td>
+<td>{% if row.restricted %}<strong>Restricted safety review.</strong>{% else %}<a href="{{ row.preview_url }}" target="_blank" rel="noopener" aria-label="Preview removed photo for {{ row.association }}"><img src="{{ row.thumbnail_url }}" alt="Removed photo thumbnail for {{ row.association }}" class="moderation-thumbnail"></a>{% endif %}</td>
+<td><strong>{{ row.reference }}</strong><br>{{ row.uploader }}{% if row.callsign %}<br>{{ row.callsign }}{% endif %}</td>
+<td>{{ row.association }}</td>
+<td>Removed {{ row.removed_at }}<br><small>by {{ row.removed_by }}</small></td>
+<td><strong>{{ row.status }}</strong><br>{{ row.removal_reason }}{% if row.removal_explanation %}<br><small>{{ row.removal_explanation }}</small>{% endif %}</td>
+<td>{% if not row.object.is_restored %}<form method="post" action="{{ row.restore_url }}" data-prevent-double-submit>{% csrf_token %}<button type="submit">Restore Photo</button></form>{% else %}<span>Restored {{ row.object.restored_at }}</span>{% endif %}</td>
+</tr>

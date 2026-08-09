@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .auth import verified_member_required
+from .email_notifications import public_email_footer
 from .follower_forms import FollowerInvitationForm
 from .models import (
     FollowerInvitation,
@@ -22,6 +23,10 @@ def _absolute_url(request, route_name, **kwargs):
     return request.build_absolute_uri(
         reverse(route_name, kwargs=kwargs)
     )
+
+
+def _public_message(message):
+    return message + public_email_footer()
 
 
 @login_required
@@ -61,7 +66,7 @@ def request_follow(request, callsign):
         if request.user.email:
             send_mail(
                 subject=f"Your request to follow {member.callsign} was sent",
-                message=(
+                message=_public_message(
                     f"Your request to follow {member.callsign} on "
                     "Radio Outdoors has been sent. You will receive "
                     "another email if the Member approves it."
@@ -84,7 +89,7 @@ def request_follow(request, callsign):
                     "New Radio Outdoors follow request from "
                     f"{follower_name}"
                 ),
-                message=(
+                message=_public_message(
                     f"{follower_name} "
                     f"({request.user.email or 'no email supplied'}) "
                     f"requested to follow {member.callsign}.\n\n"
@@ -191,7 +196,7 @@ def invite_follower(request):
         )
         send_mail(
             subject=f"{profile.callsign} added you as a Radio Outdoors Follower",
-            message=(
+            message=_public_message(
                 f"{profile.public_name} ({profile.callsign}) added you "
                 "as an approved Follower on Radio Outdoors.\n\n"
                 f"View the Member and Adventures:\n{member_url}\n\n"
@@ -228,7 +233,7 @@ def invite_follower(request):
 
     send_mail(
         subject=f"{profile.callsign} invited you to follow Radio Outdoors Adventures",
-        message=(
+        message=_public_message(
             f"{profile.public_name} ({profile.callsign}) invited you "
             "to follow their Radio Outdoors Adventures.\n\n"
             "Create a free Radio Outdoors Follower account:\n"
@@ -275,7 +280,7 @@ def invitation_action(request, invitation_id, action):
                 f"Reminder: {invitation.member.callsign} invited you "
                 "to Radio Outdoors"
             ),
-            message=(
+            message=_public_message(
                 f"{invitation.member.public_name} "
                 f"({invitation.member.callsign}) invited you to follow "
                 "their Radio Outdoors Adventures.\n\n"
@@ -350,7 +355,7 @@ def respond_to_follow(request, relationship_id, action):
                 f"{relationship.member.callsign} approved your "
                 "Radio Outdoors follow request"
             ),
-            message=(
+            message=_public_message(
                 f"{relationship.member.public_name} "
                 f"({relationship.member.callsign}) approved your "
                 "follow request.\n\n"

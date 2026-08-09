@@ -11,8 +11,10 @@ from core.recovery_views import (
     RadioOutdoorsPasswordResetView,
 )
 from core.moderated_media import serve_moderated_media
+from core.pin_views import edit_owned_pin_position
 
 urlpatterns = [
+    path("", include("core.policy_urls")),
     path("media/<path:path>", serve_moderated_media, name="moderated_media"),
     path("", include("core.identity_urls")),
     path("", home, name="home"),
@@ -20,6 +22,11 @@ urlpatterns = [
     path("locations/", location_list, name="locations"),
     path("locations/<int:location_id>/", location_detail, name="location_detail"),
     path("map/", map_explorer, name="map_explorer"),
+    path(
+        "map/pins/<str:record_type>/<int:record_id>/edit/",
+        edit_owned_pin_position,
+        name="edit_owned_pin_position",
+    ),
 
     path("adventures/", include("adventures.urls")),
     path("accounts/", include("core.account_urls")),

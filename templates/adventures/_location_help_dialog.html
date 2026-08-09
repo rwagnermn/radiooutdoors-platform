@@ -1,0 +1,14 @@
+{% load static %}
+<div id="location-help-dialog" class="location-help-backdrop" role="dialog" aria-modal="true" aria-labelledby="location-help-title" aria-describedby="location-help-description" data-location-help-dialog hidden>
+<section class="location-help-dialog">
+<header><h2 id="location-help-title">Choosing or creating a Location</h2><button type="button" data-location-help-close>Close</button></header>
+<div id="location-help-description" class="location-help-content" tabindex="0">
+<p>Search for an existing Location first. If none fits where you operated, choose Create a New Location.</p>
+<p>Give it a natural name such as Near Pike Lake, Forest Road Campsite, or North Shore Pull-off.</p>
+<p>A street address is optional. Place the pin directly on the map to identify the Location. If an address places the pin incorrectly, remove or move the pin and select the correct position yourself.</p>
+<p><strong>Your Location pin may be publicly visible.</strong> Use an approximate nearby position if you do not want to disclose an exact cabin, home, or private operating site.</p>
+<button type="button" class="btn-ro-primary" data-location-help-close>Close</button>
+</div>
+</section>
+</div>
+<script src="{% static 'js/location-help.js' %}?v=001" defer></script>

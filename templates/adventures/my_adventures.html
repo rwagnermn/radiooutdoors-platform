@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}My Adventures | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page adventure-book-page my-adventures-page{% endblock %}
 {% block content %}
@@ -23,14 +24,14 @@
 onclick="window.location='{{ adventure.get_absolute_url }}';"
 onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}">
 <td class="adventure-photo-cell">
-{% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
-<img src="{{ adventure.cover_photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="">
-{% else %}<div class="adventure-photo-placeholder"></div>{% endif %}
+{% if adventure.display_cover_photo %}
+<img src="{{ adventure.display_cover_photo.public_thumbnail_url }}?v={{ adventure.updated_at|date:'U' }}" alt="">
+{% else %}<img src="{% static 'images/hero.jpg' %}" alt="" class="adventure-list-photo">{% endif %}
 </td>
 <td class="nowrap">{% include "adventures/_status_control.html" %}</td>
 <td><a href="{{ adventure.get_absolute_url }}" onclick="event.stopPropagation();"><strong>{{ adventure.title }}</strong></a>
 {% if adventure.summary %}<div class="adventure-list-summary">{{ adventure.summary|truncatewords:18 }}</div>{% endif %}</td>
-<td>{% if adventure.location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}—{% endif %}</td>
+<td>{% if adventure.location %}{% if adventure.can_view_location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}Private Location{% endif %}{% else %}—{% endif %}</td>
 <td class="nowrap">{{ adventure.updated_at|date:"M j, Y" }}</td>
 <td class="center-column">{{ adventure.journal_count }}</td>
 <td class="center-column">{{ adventure.photo_count }}</td>

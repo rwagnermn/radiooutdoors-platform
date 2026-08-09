@@ -13,6 +13,8 @@ from .views import (
     add_journal_entry,
     add_operating_position,
     adventure_detail,
+    adventure_contacts,
+    adventure_import_contacts,
     all_adventures,
     cancel_adif_import,
     confirm_adif_import,
@@ -28,6 +30,7 @@ from .views import (
     edit_adventure,
     edit_journal_entry,
     edit_location,
+    edit_operating_position,
     import_adif,
     journal_entry_detail,
     make_cover_photo,
@@ -54,6 +57,11 @@ urlpatterns = [
         name="add_operating_position",
     ),
     path(
+        "positions/<int:position_id>/edit/",
+        edit_operating_position,
+        name="edit_operating_position",
+    ),
+    path(
         "locations/<int:location_id>/positions/inline/",
         create_operating_position_inline,
         name="create_operating_position_inline",
@@ -64,6 +72,12 @@ urlpatterns = [
         name="edit_location",
     ),
     path("<slug:slug>/comments/add/", add_comment, name="add_comment"),
+    path("<slug:slug>/contacts/", adventure_contacts, name="adventure_contacts"),
+    path(
+        "<slug:slug>/contacts/import/",
+        adventure_import_contacts,
+        name="adventure_import_contacts",
+    ),
     path(
         "<slug:slug>/visibility/",
         toggle_adventure_visibility,
@@ -109,6 +123,7 @@ urlpatterns = [
     ),
     path("journal/<int:entry_id>/delete/", delete_journal_entry, name="delete_journal_entry"),
     path("photos/<int:photo_id>/cover/", make_cover_photo, name="make_cover_photo"),
+    path("<slug:slug>/photos/<int:photo_id>/cover/", make_cover_photo, name="make_adventure_cover"),
     path("photos/<int:photo_id>/delete/", delete_photo, name="delete_photo"),
     path("<slug:slug>/edit/", edit_adventure, name="edit_adventure"),
     path("<slug:slug>/done/", mark_adventure_done, name="mark_adventure_done"),
@@ -124,4 +139,3 @@ urlpatterns = [
     ),
     path("<slug:slug>/", adventure_detail, name="adventure_detail"),
 ]
-

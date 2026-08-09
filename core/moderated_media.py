@@ -1,9 +1,11 @@
 import mimetypes
 
+from django.db import models
 from django.http import FileResponse, Http404
 
 from .models import DefaultLocationImage, Location, MemberProfile, Photo
 from .photo_moderation_views import SEVERE_CATEGORIES
+from .location_privacy import can_view_location
 
 
 def _can_view(request, status, categories, owner=None):
@@ -19,17 +21,31 @@ def _can_view(request, status, categories, owner=None):
 
 def serve_moderated_media(request, path):
     """Deliver uploaded public images only when their moderation state permits it."""
-    photo = Photo.objects.filter(image=path).select_related("journal_entry__adventure__owner").first()
+    photo = (
+        Photo.objects.filter(models.Q(image=path) | models.Q(web_image=path) | models.Q(thumbnail_image=path))
+        .select_related("journal_entry__adventure__owner")
+        .first()
+    )
     if photo:
         allowed = _can_view(
             request, photo.moderation_status, photo.moderation_categories,
             owner=photo.journal_entry.adventure.owner,
         )
-        image = photo.image
+        if photo.web_image.name == path:
+            image = photo.web_image
+        elif photo.thumbnail_image.name == path:
+            image = photo.thumbnail_image
+        else:
+            image = photo.image
     else:
         location = Location.objects.filter(photo=path).first()
         if location:
-            allowed = _can_view(request, location.photo_moderation_status, location.photo_moderation_categories)
+            allowed = can_view_location(request.user, location) and _can_view(
+                request,
+                location.photo_moderation_status,
+                location.photo_moderation_categories,
+                owner=location.created_by,
+            )
             image = location.photo
         else:
             profile = MemberProfile.objects.filter(profile_photo=path).select_related("user").first()

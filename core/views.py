@@ -5,6 +5,8 @@ from django.urls import reverse
 
 from .models import Adventure, Location, LocationType, OperatingLocation
 from .auth import is_verified_member
+from .pin_permissions import can_edit_location_pin, can_edit_operating_position_pin
+from .location_privacy import mark_adventure_location_visibility, visible_locations
 
 
 def _visible_adventure_q(request, prefix=""):
@@ -15,12 +17,15 @@ def _visible_adventure_q(request, prefix=""):
 
 
 def home(request):
-    featured_location = Location.objects.first()
+    featured_location = visible_locations(request.user).first()
     featured_adventures = Adventure.objects.filter(
         status=Adventure.Status.COMPLETED,
         is_public=True,
     ).order_by("-completed_at", "-updated_at")[:3]
 
+    featured_adventures = mark_adventure_location_visibility(
+        featured_adventures, request.user
+    )
     return render(
         request,
         "core/home.html",
@@ -33,7 +38,7 @@ def home(request):
 
 def location_list(request):
     locations = (
-        Location.objects.annotate(
+        visible_locations(request.user).annotate(
             operating_location_count=Count(
                 "operating_locations",
                 distinct=True,
@@ -72,7 +77,7 @@ def location_list(request):
         )
 
     states = (
-        Location.objects.exclude(state="")
+        visible_locations(request.user).exclude(state="")
         .values_list("state", flat=True)
         .distinct()
         .order_by("state")
@@ -101,7 +106,7 @@ def location_list(request):
 
 def location_detail(request, location_id):
     location = get_object_or_404(
-        Location.objects.select_related("location_type_record").prefetch_related(
+        visible_locations(request.user).select_related("location_type_record").prefetch_related(
             "operating_locations",
             "adventures__owner",
             "adventures__cover_photo",
@@ -134,6 +139,13 @@ def location_detail(request, location_id):
         {
             "location": location,
             "adventures": adventures,
+            "can_edit_location_pin": can_edit_location_pin(request.user, location),
+            "editable_position_ids": [
+                position.pk
+                for position in location.operating_locations.all()
+                if can_edit_operating_position_pin(request.user, position)
+            ],
+            "is_private_location": location.is_private,
         },
     )
 
@@ -173,7 +185,7 @@ def about(request):
 
 def map_explorer(request):
     locations = (
-        Location.objects.annotate(
+        visible_locations(request.user).annotate(
             adventure_count=Count("adventures", distinct=True),
         )
         .select_related("location_type_record")
@@ -215,12 +227,9 @@ def map_explorer(request):
             latest_updated = latest_adventure.updated_at.isoformat()
             latest_url = latest_adventure.get_absolute_url()
 
-            if (
-                not cover_photo_url
-                and latest_adventure.cover_photo_id
-                and latest_adventure.cover_photo.is_publicly_visible
-            ):
-                cover_photo_url = latest_adventure.cover_photo.image.url
+            resolved_cover = latest_adventure.display_cover_photo
+            if not cover_photo_url and resolved_cover:
+                cover_photo_url = resolved_cover.public_thumbnail_url
 
         shared = {
             "location_id": location.pk,
@@ -242,57 +251,49 @@ def map_explorer(request):
                 kwargs={"location_id": location.pk},
             ),
             "can_start_adventure": is_verified_member(request.user),
+            "can_edit_location_pin": can_edit_location_pin(request.user, location),
+            "is_private": location.is_private,
+            "location_pin_edit_url": (
+                reverse("edit_owned_pin_position", args=["location", location.pk])
+                + "?next=" + reverse("map_explorer")
+            ) if can_edit_location_pin(request.user, location) else "",
         }
 
-        unassigned_open_adventure = any(
-            adventure.status == Adventure.Status.ACTIVE
-            for adventure in visible_adventures.filter(
-                operating_location__isnull=True
+        # The normal workflow exposes exactly one marker per Location. For
+        # legacy Locations that have not yet received Location-level
+        # coordinates, use the first stored Operating Position coordinate as a
+        # display-only fallback. Historical records are never rewritten here.
+        latitude = location.latitude
+        longitude = location.longitude
+        coordinate_source = "location"
+        if latitude is None or longitude is None:
+            fallback = next(
+                (
+                    position
+                    for position in location.operating_locations.all()
+                    if position.latitude is not None
+                    and position.longitude is not None
+                ),
+                None,
             )
-        )
+            if fallback is not None:
+                latitude = fallback.latitude
+                longitude = fallback.longitude
+                coordinate_source = "legacy_operating_position_fallback"
 
-        if (
-            unassigned_open_adventure
-            and location.latitude is not None
-            and location.longitude is not None
-        ):
+        if latitude is not None and longitude is not None:
             map_points.append(
                 {
                     **shared,
-                    "has_open_adventure": True,
-                    "kind": "location",
-                    "operating_location_id": None,
-                    "latitude": float(location.latitude),
-                    "longitude": float(location.longitude),
+                    "marker_type": "location",
+                    "latitude": float(latitude),
+                    "longitude": float(longitude),
+                    "coordinate_source": coordinate_source,
+                    "has_entered_address": bool(location.street_address.strip()),
                     "title": location.name,
                     "subtitle": location.get_location_type_display(),
-                }
-            )
-
-        for operating_location in location.operating_locations.all():
-            if (
-                operating_location.latitude is None
-                or operating_location.longitude is None
-            ):
-                continue
-
-            position_has_open_adventure = any(
-                adventure.status == Adventure.Status.ACTIVE
-                for adventure in visible_adventures.filter(
-                    operating_location=operating_location
-                )
-            )
-
-            map_points.append(
-                {
-                    **shared,
-                    "has_open_adventure": position_has_open_adventure,
-                    "kind": "operating",
-                    "operating_location_id": operating_location.pk,
-                    "latitude": float(operating_location.latitude),
-                    "longitude": float(operating_location.longitude),
-                    "title": operating_location.name,
-                    "subtitle": location.name,
+                    "can_edit_pin": shared["can_edit_location_pin"],
+                    "pin_edit_url": shared["location_pin_edit_url"],
                 }
             )
 

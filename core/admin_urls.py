@@ -21,6 +21,9 @@ from .photo_moderation_views import (
     photo_moderation_preview_file,
     photo_moderation_queue,
     photo_moderation_thumbnail,
+    photo_quarantine_preview,
+    photo_quarantine_restore,
+    photo_quarantine_thumbnail,
 )
 
 
@@ -28,6 +31,9 @@ urlpatterns = [
     path("photo-moderation/", photo_moderation_queue, name="photo_moderation_queue"),
     path("photo-moderation/bulk/preview/", photo_moderation_bulk_preview, name="photo_moderation_bulk_preview"),
     path("photo-moderation/bulk/apply/", photo_moderation_bulk_apply, name="photo_moderation_bulk_apply"),
+    path("photo-moderation/quarantine/<int:pk>/thumbnail/", photo_quarantine_thumbnail, name="photo_quarantine_thumbnail"),
+    path("photo-moderation/quarantine/<int:pk>/preview/", photo_quarantine_preview, name="photo_quarantine_preview"),
+    path("photo-moderation/quarantine/<int:pk>/restore/", photo_quarantine_restore, name="photo_quarantine_restore"),
     path("photo-moderation/<str:kind>/<int:pk>/detail/", photo_moderation_detail, name="photo_moderation_detail"),
     path("photo-moderation/<str:kind>/<int:pk>/thumbnail/", photo_moderation_thumbnail, name="photo_moderation_thumbnail"),
     path("photo-moderation/<str:kind>/<int:pk>/preview/", photo_moderation_preview_file, name="photo_moderation_preview_file"),

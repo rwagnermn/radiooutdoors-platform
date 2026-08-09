@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 from django.core.files.storage import default_storage
 from django.core.management.base import CommandError
 from django.core.files.base import ContentFile
+from django.conf import settings
 
 from .models import DefaultLocationImage, Location
 from .profile_images import optimize_location_photo
@@ -24,7 +25,8 @@ REUSABLE_LICENSE_PREFIXES = (
     "CC BY-SA ",
 )
 WIKIMEDIA_USER_AGENT = (
-    "RadioOutdoors/1.0 (https://radiooutdoors.org; contact@radiooutdoors.org)"
+    "RadioOutdoors/1.0 (https://radiooutdoors.org; "
+    f"{settings.RADIO_OUTDOORS_CONTACT_EMAIL})"
 )
 
 DEFAULT_LOCATION_IMAGES = {

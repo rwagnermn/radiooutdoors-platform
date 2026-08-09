@@ -8,6 +8,25 @@ from .models import BlockedDomain, MemberProfile
 User = get_user_model()
 
 
+class PolicyAcceptanceFormMixin(forms.Form):
+    policy_accepted = forms.BooleanField(
+        required=True,
+        label="Policy acceptance",
+        error_messages={
+            "required": "You must read and agree to the required policies before creating an account."
+        },
+        widget=forms.CheckboxInput(attrs={"data-policy-required": "true"}),
+    )
+    age_confirmed = forms.BooleanField(
+        required=True,
+        label="Age confirmation",
+        error_messages={
+            "required": "You must confirm the age requirement before creating an account."
+        },
+        widget=forms.CheckboxInput(attrs={"data-policy-required": "true"}),
+    )
+
+
 def validate_registration_email(email):
     email = email.strip().lower()
     if User.objects.filter(email__iexact=email).exists():
@@ -26,7 +45,7 @@ def validate_registration_email(email):
     return email
 
 
-class MemberRegistrationForm(UserCreationForm):
+class MemberRegistrationForm(PolicyAcceptanceFormMixin, UserCreationForm):
     callsign = forms.CharField(
         label="Callsign",
         max_length=20,
@@ -45,7 +64,10 @@ class MemberRegistrationForm(UserCreationForm):
 
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("callsign", "email", "password1", "password2")
+        fields = (
+            "callsign", "email", "password1", "password2",
+            "policy_accepted", "age_confirmed",
+        )
 
     def clean_callsign(self):
         callsign = self.cleaned_data["callsign"].strip().upper()
@@ -76,7 +98,7 @@ class MemberRegistrationForm(UserCreationForm):
         return user
 
 
-class FollowerRegistrationForm(UserCreationForm):
+class FollowerRegistrationForm(PolicyAcceptanceFormMixin, UserCreationForm):
     email = forms.EmailField(
         label="Email address",
         disabled=True,
@@ -85,7 +107,10 @@ class FollowerRegistrationForm(UserCreationForm):
 
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("email", "password1", "password2")
+        fields = (
+            "email", "password1", "password2",
+            "policy_accepted", "age_confirmed",
+        )
 
     def __init__(self, *args, invitation, **kwargs):
         self.invitation = invitation

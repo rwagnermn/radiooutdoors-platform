@@ -52,9 +52,9 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 {% if entry.photos.all %}
 <section class="journal-view-section"><h2>Photos</h2><div class="journal-photo-grid journal-view-photos">
 {% for photo in entry.photos.all %}<figure class="journal-photo">
-{% if photo.is_publicly_visible %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'journal photo' }} at original size">
-<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% elif adventure.owner == user %}<p><strong>{{ photo.get_moderation_status_display }}</strong>{% if photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
-{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}</figure>{% endfor %}
+{% if photo.is_publicly_visible %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'journal photo' }} at original size">
+<img src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% elif adventure.owner == user %}<p><strong>{{ photo.moderation_display_status }}</strong>{% if photo.automated_decision == "scan_failed" %}: Automatic moderation could not be completed. The photo remains private.{% elif photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
+{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}{% if photo.is_publicly_visible and user == adventure.owner and is_verified_member %}<div class="photo-actions">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span class="cover-photo-control-current">Adventure Cover</span>{% else %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Cover</button></form>{% endif %}</div>{% endif %}</figure>{% endfor %}
 </div></section>
 {% endif %}
 

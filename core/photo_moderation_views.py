@@ -1,20 +1,26 @@
 import logging
+from pathlib import Path
+from uuid import uuid4
 from datetime import timedelta
 from io import BytesIO
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.base import ContentFile
+from django.db import transaction
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_POST
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .models import (
     DefaultLocationImage, Location, MemberProfile, Photo,
-    PhotoModerationActionAudit,
+    PhotoModerationActionAudit, QuarantinedPhoto,
 )
 from .photo_moderation import (
     moderate_default_location_image, moderate_location_photo,
@@ -25,7 +31,7 @@ from .photo_moderation import (
 logger = logging.getLogger(__name__)
 RESTRICTED_CATEGORIES = {"sexual/minors", "suspected-csam"}
 SEVERE_CATEGORIES = RESTRICTED_CATEGORIES
-STATUS_FILTERS = {"all", "pending", "review", "rejected", "safe", "failed"}
+STATUS_FILTERS = {"all", "pending", "review", "rejected", "approved", "safe", "failed", "removed"}
 REJECTION_REASONS = (
     ("community_standards", "Does not meet community standards"),
     ("sexual", "Nudity or sexual content"),
@@ -44,6 +50,18 @@ REJECTION_REASONS = (
     ("other", "Other"),
 )
 REJECTION_REASON_LABELS = dict(REJECTION_REASONS)
+REMOVAL_REASONS = (
+    ("sexual", "Explicit or sexual content"),
+    ("minor_safety", "Suspected minor-safety concern"),
+    ("graphic_violence", "Graphic violence"),
+    ("hate_extremist", "Hate or extremist content"),
+    ("spam", "Spam or unrelated image"),
+    ("duplicate", "Duplicate photo"),
+    ("accidental", "Uploaded accidentally"),
+    ("member_request", "Member request"),
+    ("other", "Other"),
+)
+REMOVAL_REASON_LABELS = dict(REMOVAL_REASONS)
 
 
 TARGETS = {
@@ -53,7 +71,8 @@ TARGETS = {
         "provider": "moderation_provider", "model_field": "moderation_provider_model",
         "decision": "automated_decision", "reviewer": "reviewed_by",
         "reviewed_at": "reviewed_at", "reject_code": "rejection_reason_code",
-        "reject_explanation": "rejection_explanation", "scanner": moderate_photo,
+        "reject_explanation": "rejection_explanation", "confidence": "moderation_confidence",
+        "scanner": moderate_photo,
     },
     "location": {
         "model": Location, "image": "photo", "status": "photo_moderation_status",
@@ -61,7 +80,8 @@ TARGETS = {
         "provider": "photo_moderation_provider", "model_field": "photo_moderation_provider_model",
         "decision": "photo_automated_decision", "reviewer": "photo_reviewed_by",
         "reviewed_at": "photo_reviewed_at", "reject_code": "photo_rejection_reason_code",
-        "reject_explanation": "photo_rejection_explanation", "scanner": moderate_location_photo,
+        "reject_explanation": "photo_rejection_explanation", "confidence": "photo_moderation_confidence",
+        "scanner": moderate_location_photo,
     },
     "profile": {
         "model": MemberProfile, "image": "profile_photo", "status": "profile_photo_moderation_status",
@@ -69,7 +89,8 @@ TARGETS = {
         "provider": "profile_photo_moderation_provider", "model_field": "profile_photo_moderation_provider_model",
         "decision": "profile_photo_automated_decision", "reviewer": "profile_photo_reviewed_by",
         "reviewed_at": "profile_photo_reviewed_at", "reject_code": "profile_photo_rejection_reason_code",
-        "reject_explanation": "profile_photo_rejection_explanation", "scanner": moderate_profile_photo,
+        "reject_explanation": "profile_photo_rejection_explanation", "confidence": "profile_photo_moderation_confidence",
+        "scanner": moderate_profile_photo,
     },
     "default": {
         "model": DefaultLocationImage, "image": "image", "status": "moderation_status",
@@ -77,7 +98,8 @@ TARGETS = {
         "provider": "moderation_provider", "model_field": "moderation_provider_model",
         "decision": "automated_decision", "reviewer": "reviewed_by",
         "reviewed_at": "reviewed_at", "reject_code": "rejection_reason_code",
-        "reject_explanation": "rejection_explanation", "scanner": moderate_default_location_image,
+        "reject_explanation": "rejection_explanation", "confidence": "moderation_confidence",
+        "scanner": moderate_default_location_image,
     },
 }
 
@@ -153,17 +175,76 @@ def _row(kind, obj):
         "provider": _value(kind, obj, "provider"),
         "provider_model": _value(kind, obj, "model_field"),
         "automated_decision": _value(kind, obj, "decision"),
+        "failure_category": (
+            _value(kind, obj, "reason")
+            if _value(kind, obj, "decision") == "scan_failed"
+            else ""
+        ),
         "thumbnail_url": reverse("photo_moderation_thumbnail", args=[kind, obj.pk]),
         "detail_url": reverse("photo_moderation_detail", args=[kind, obj.pk]),
+        "removed": False,
+        "reference": (
+            obj.reference_number if kind == "photo" else f"{kind.title()} #{obj.pk}"
+        ),
+    }
+
+
+def _quarantine_row(obj):
+    return {
+        "kind": "quarantine",
+        "object": obj,
+        "token": f"quarantine:{obj.pk}",
+        "status": "Restored" if obj.is_restored else "Removed / Quarantined",
+        "association": obj.association_label,
+        "association_url": "",
+        "uploader": obj.metadata.get("uploader", ""),
+        "callsign": obj.metadata.get("callsign", ""),
+        "uploaded": obj.metadata.get("uploaded", ""),
+        "removed_at": obj.removed_at,
+        "removed_by": obj.removed_by,
+        "removal_reason": REMOVAL_REASON_LABELS.get(
+            obj.removal_reason, obj.removal_reason
+        ),
+        "removal_explanation": obj.removal_explanation,
+        "categories": ", ".join(obj.metadata.get("categories", [])),
+        "category_list": list(obj.metadata.get("categories", [])),
+        "automated_decision": obj.metadata.get("decision", ""),
+        "provider": obj.metadata.get("provider", ""),
+        "provider_model": obj.metadata.get("provider_model", ""),
+        "restricted": bool(
+            set(obj.metadata.get("categories", [])).intersection(
+                RESTRICTED_CATEGORIES
+            )
+        ),
+        "thumbnail_url": reverse("photo_quarantine_thumbnail", args=[obj.pk]),
+        "preview_url": reverse("photo_quarantine_preview", args=[obj.pk]),
+        "restore_url": reverse("photo_quarantine_restore", args=[obj.pk]),
+        "removed": True,
+        "reference": obj.metadata.get(
+            "reference_number", f"RO-PH-{obj.original_object_id:06d}"
+            if obj.original_kind == "photo" else f"{obj.original_kind.title()} #{obj.original_object_id}"
+        ),
     }
 
 
 def _queue_rows(status_filter="all"):
+    if status_filter == "removed":
+        return [
+            _quarantine_row(obj)
+            for obj in QuarantinedPhoto.objects.select_related(
+                "removed_by", "restored_by"
+            )
+        ]
+    approved = status_filter == "approved"
+    photo_qs = Photo.objects.select_related("journal_entry__adventure__owner__member_profile")
+    location_qs = Location.objects.exclude(photo="")
+    profile_qs = MemberProfile.objects.exclude(profile_photo="").select_related("user")
+    default_qs = DefaultLocationImage.objects.exclude(image="")
     querysets = (
-        ("photo", Photo.objects.exclude(moderation_status="approved").select_related("journal_entry__adventure__owner__member_profile")),
-        ("location", Location.objects.exclude(photo="").exclude(photo_moderation_status="approved")),
-        ("profile", MemberProfile.objects.exclude(profile_photo="").exclude(profile_photo_moderation_status="approved").select_related("user")),
-        ("default", DefaultLocationImage.objects.exclude(image="").exclude(moderation_status="approved")),
+        ("photo", photo_qs.filter(moderation_status="approved") if approved else photo_qs.exclude(moderation_status="approved")),
+        ("location", location_qs.filter(photo_moderation_status="approved") if approved else location_qs.exclude(photo_moderation_status="approved")),
+        ("profile", profile_qs.filter(profile_photo_moderation_status="approved") if approved else profile_qs.exclude(profile_photo_moderation_status="approved")),
+        ("default", default_qs.filter(moderation_status="approved") if approved else default_qs.exclude(moderation_status="approved")),
     )
     rows = [_row(kind, obj) for kind, queryset in querysets for obj in queryset]
     rows.sort(key=lambda row: row["uploaded"], reverse=True)
@@ -171,6 +252,8 @@ def _queue_rows(status_filter="all"):
         return [row for row in rows if _is_safe_recommendation(row)]
     if status_filter == "failed":
         return [row for row in rows if row["automated_decision"] == "scan_failed"]
+    if status_filter == "approved":
+        return rows
     if status_filter != "all":
         return [row for row in rows if _value(row["kind"], row["object"], "status") == status_filter]
     return rows
@@ -199,11 +282,26 @@ def _valid_rejection(request):
     return code, explanation, ""
 
 
+def _valid_removal(request):
+    code = request.POST.get("removal_reason", "")
+    explanation = request.POST.get("removal_explanation", "").strip()
+    if code not in REMOVAL_REASON_LABELS:
+        return None, None, "Choose a reason for removal."
+    if code == "other" and not explanation:
+        return None, None, "Explain the Other removal reason."
+    return code, explanation, ""
+
+
 def _record_audit(request, *, action, source, scope, requested, succeeded, failed):
+    references = [
+        f"RO-PH-{int(token.split(':', 1)[1]):06d}"
+        for token in requested
+        if token.startswith("photo:") and token.split(":", 1)[1].isdigit()
+    ]
     return PhotoModerationActionAudit.objects.create(
         actor=request.user, action=action, decision_source=source, scope=scope,
         requested_target_ids=requested, successful_target_ids=succeeded,
-        failed_targets=failed,
+        failed_targets=failed, target_references=references,
     )
 
 
@@ -225,7 +323,10 @@ def _apply_decision(request, token, action, code="", explanation=""):
 def _image_response(kind, obj, *, thumbnail=False):
     if set(_value(kind, obj, "categories") or []).intersection(RESTRICTED_CATEGORIES):
         raise Http404
-    image_field = getattr(obj, TARGETS[kind]["image"])
+    if kind == "photo" and obj.derivative_status == "ready":
+        image_field = obj.thumbnail_image if thumbnail else obj.web_image
+    else:
+        image_field = getattr(obj, TARGETS[kind]["image"])
     try:
         image_field.open("rb")
         with Image.open(image_field) as image:
@@ -238,6 +339,31 @@ def _image_response(kind, obj, *, thumbnail=False):
     finally:
         try:
             image_field.close()
+        except Exception:
+            pass
+    output.seek(0)
+    response = FileResponse(output, content_type="image/jpeg")
+    response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _quarantine_image_response(obj, *, thumbnail=False):
+    if set(obj.metadata.get("categories", [])).intersection(RESTRICTED_CATEGORIES):
+        raise Http404
+    try:
+        obj.image.open("rb")
+        with Image.open(obj.image) as image:
+            image = ImageOps.exif_transpose(image).convert("RGB")
+            image.thumbnail((220, 160) if thumbnail else (900, 700))
+            output = BytesIO()
+            image.save(output, "JPEG", quality=78)
+    except (FileNotFoundError, OSError, UnidentifiedImageError) as exc:
+        raise Http404 from exc
+    finally:
+        try:
+            obj.image.close()
         except Exception:
             pass
     output.seek(0)
@@ -263,6 +389,168 @@ def photo_moderation_preview_file(request, kind, pk):
 
 
 @staff_member_required
+def photo_quarantine_thumbnail(request, pk):
+    return _quarantine_image_response(
+        get_object_or_404(QuarantinedPhoto, pk=pk), thumbnail=True
+    )
+
+
+@staff_member_required
+def photo_quarantine_preview(request, pk):
+    return _quarantine_image_response(get_object_or_404(QuarantinedPhoto, pk=pk))
+
+
+def _moderation_snapshot(kind, obj, row):
+    config = TARGETS[kind]
+    reviewed_at = getattr(obj, config["reviewed_at"])
+    metadata = {
+        "status": getattr(obj, config["status"]),
+        "reason": getattr(obj, config["reason"]),
+        "categories": list(getattr(obj, config["categories"]) or []),
+        "confidence": getattr(obj, config["confidence"], None),
+        "provider": getattr(obj, config["provider"]),
+        "provider_model": getattr(obj, config["model_field"]),
+        "decision": getattr(obj, config["decision"]),
+        "reviewed_by_id": getattr(obj, f"{config['reviewer']}_id"),
+        "reviewed_at": reviewed_at.isoformat() if reviewed_at else "",
+        "rejection_reason_code": getattr(obj, config["reject_code"]),
+        "rejection_explanation": getattr(obj, config["reject_explanation"]),
+        "uploader": str(row["uploader"]),
+        "callsign": row["callsign"],
+        "uploaded": row["uploaded"].isoformat() if row["uploaded"] else "",
+    }
+    if kind == "photo":
+        adventure = obj.journal_entry.adventure
+        metadata.update({
+            "journal_entry_id": obj.journal_entry_id,
+            "caption": obj.caption,
+            "taken_at": obj.taken_at.isoformat() if obj.taken_at else "",
+            "display_order": obj.display_order,
+            "file_hash": obj.file_hash,
+            "reference_number": obj.reference_number,
+            "was_cover": adventure.cover_photo_id == obj.pk,
+            "cover_was_explicit": adventure.cover_photo_is_explicit,
+            "adventure_id": adventure.pk,
+        })
+    return metadata
+
+
+def _quarantine_row_target(request, row, reason, explanation):
+    kind, obj = row["kind"], row["object"]
+    if kind not in TARGETS:
+        raise Http404
+    config = TARGETS[kind]
+    image = getattr(obj, config["image"])
+    if not image or not image.name:
+        raise ValueError("Photo is no longer available for removal.")
+    metadata = _moderation_snapshot(kind, obj, row)
+    image.open("rb")
+    try:
+        quarantine_bytes = image.read()
+    finally:
+        image.close()
+    quarantine_name = f"{uuid4().hex}{Path(image.name).suffix.lower()}"
+    quarantine = QuarantinedPhoto(
+        original_kind=kind,
+        original_object_id=obj.pk,
+        original_target=row["token"],
+        association_id=(obj.journal_entry_id if kind == "photo" else obj.pk),
+        association_label=row["association"],
+        metadata=metadata,
+        removal_reason=reason,
+        removal_explanation=explanation[:240],
+        removed_by=request.user,
+    )
+    quarantine.image.save(
+        quarantine_name, ContentFile(quarantine_bytes), save=False
+    )
+    quarantine.save()
+    if kind == "photo":
+        obj.delete()
+    else:
+        setattr(obj, config["image"], "")
+        obj.save(update_fields=[config["image"]])
+    return quarantine
+
+
+def _restore_quarantined_photo(request, quarantine):
+    if quarantine.is_restored:
+        raise ValueError("Photo was already restored.")
+    kind, metadata = quarantine.original_kind, quarantine.metadata
+    if kind not in TARGETS:
+        raise ValueError("Unknown photo association.")
+    config = TARGETS[kind]
+    if kind == "photo":
+        obj = Photo.objects.create(
+            journal_entry_id=metadata["journal_entry_id"],
+            image=quarantine.image.name,
+            caption=metadata.get("caption", ""),
+            taken_at=parse_datetime(metadata["taken_at"])
+            if metadata.get("taken_at") else None,
+            display_order=metadata.get("display_order", 0),
+            file_hash=metadata.get("file_hash", ""),
+            reference_number=metadata.get("reference_number") or None,
+        )
+        if metadata.get("was_cover"):
+            adventure = obj.journal_entry.adventure
+            if adventure.cover_photo_id is None:
+                adventure.cover_photo = obj
+                adventure.cover_photo_is_explicit = bool(
+                    metadata.get("cover_was_explicit")
+                )
+                adventure.save(update_fields=[
+                    "cover_photo", "cover_photo_is_explicit", "updated_at"
+                ])
+    else:
+        obj = TARGETS[kind]["model"].objects.get(pk=quarantine.association_id)
+        setattr(obj, config["image"], quarantine.image.name)
+    setattr(obj, config["status"], metadata.get("status", "pending"))
+    setattr(obj, config["reason"], metadata.get("reason", ""))
+    setattr(obj, config["categories"], metadata.get("categories", []))
+    setattr(obj, config["confidence"], metadata.get("confidence"))
+    setattr(obj, config["provider"], metadata.get("provider", ""))
+    setattr(obj, config["model_field"], metadata.get("provider_model", ""))
+    setattr(obj, config["decision"], metadata.get("decision", ""))
+    setattr(obj, f"{config['reviewer']}_id", metadata.get("reviewed_by_id"))
+    setattr(
+        obj,
+        config["reviewed_at"],
+        parse_datetime(metadata["reviewed_at"])
+        if metadata.get("reviewed_at") else None,
+    )
+    setattr(obj, config["reject_code"], metadata.get("rejection_reason_code", ""))
+    setattr(obj, config["reject_explanation"], metadata.get("rejection_explanation", ""))
+    obj.save()
+    quarantine.restored_by = request.user
+    quarantine.restored_at = timezone.now()
+    quarantine.save(update_fields=["restored_by", "restored_at"])
+    return obj
+
+
+@staff_member_required
+@require_POST
+def photo_quarantine_restore(request, pk):
+    quarantine = get_object_or_404(QuarantinedPhoto, pk=pk)
+    try:
+        with transaction.atomic():
+            restored = _restore_quarantined_photo(request, quarantine)
+            _record_audit(
+                request,
+                action="restore",
+                source="quarantine-restore",
+                scope="individual",
+                requested=[quarantine.original_target],
+                succeeded=[f"{quarantine.original_kind}:{restored.pk}"],
+                failed=[],
+            )
+    except (KeyError, ValueError, ObjectDoesNotExist):
+        messages.error(request, "This photo could not be restored.")
+    else:
+        messages.success(request, "Photo restored successfully.")
+    return redirect(f"{reverse('photo_moderation_queue')}?status=removed")
+
+
+@staff_member_required
 def photo_moderation_detail(request, kind, pk):
     obj = _target(kind, pk)
     row = _row(kind, obj)
@@ -277,12 +565,25 @@ def photo_moderation_queue(request):
     status_filter = request.GET.get("status", "all")
     if status_filter not in STATUS_FILTERS:
         status_filter = "all"
+    search = request.GET.get("q", "").strip()
     all_rows = _queue_rows(status_filter)
+    if search:
+        normalized_search = search.upper()
+        if normalized_search.isdigit():
+            normalized_search = f"RO-PH-{int(normalized_search):06d}"
+        all_rows = [
+            row for row in all_rows
+            if normalized_search in row["reference"].upper()
+        ]
     page_obj = Paginator(all_rows, 50).get_page(request.GET.get("page"))
     return render(request, "admin_tools/photo_moderation_queue.html", {
         "rows": page_obj.object_list, "page_obj": page_obj,
         "status_filter": status_filter, "rejection_reasons": REJECTION_REASONS,
-        "safe_count_on_page": sum(_is_safe_recommendation(row) for row in page_obj.object_list),
+        "search_query": search,
+        "safe_count_on_page": (
+            0 if status_filter == "removed"
+            else sum(_is_safe_recommendation(row) for row in page_obj.object_list)
+        ),
     })
 
 
@@ -291,7 +592,7 @@ def photo_moderation_queue(request):
 def photo_moderation_bulk_preview(request):
     action = request.POST.get("bulk_action", "")
     status_filter = request.POST.get("status_filter", "all")
-    if action not in {"approve", "reject", "retry", "approve_safe"}:
+    if action not in {"approve", "reject", "remove", "retry", "approve_safe"}:
         raise Http404
     if status_filter not in STATUS_FILTERS:
         status_filter = "all"
@@ -313,7 +614,8 @@ def photo_moderation_bulk_preview(request):
     return render(request, "admin_tools/photo_moderation_bulk_confirm.html", {
         "rows": rows, "count": len(rows), "bulk_action": action,
         "status_filter": status_filter, "approve_action": action in {"approve", "approve_safe"},
-        "safe_action": action == "approve_safe", "rejection_reasons": REJECTION_REASONS,
+        "safe_action": action == "approve_safe", "remove_action": action == "remove",
+        "rejection_reasons": REJECTION_REASONS, "removal_reasons": REMOVAL_REASONS,
     })
 
 
@@ -335,9 +637,12 @@ def _bulk_retry(request, rows):
 @require_POST
 def photo_moderation_bulk_apply(request):
     action_name = request.POST.get("bulk_action", "")
-    if action_name not in {"approve", "reject", "approve_safe"}:
+    if action_name not in {"approve", "reject", "remove", "approve_safe"}:
         raise Http404
-    action = "approve" if action_name in {"approve", "approve_safe"} else "reject"
+    action = (
+        "approve" if action_name in {"approve", "approve_safe"}
+        else action_name
+    )
     requested = list(dict.fromkeys(request.POST.getlist("selected")))
     if not requested:
         messages.warning(request, "No photos remain in this batch.")
@@ -352,22 +657,62 @@ def photo_moderation_bulk_apply(request):
                 "rows": rows, "count": len(rows), "bulk_action": action_name,
                 "status_filter": request.POST.get("status_filter", "all"),
                 "approve_action": False, "safe_action": False,
-                "rejection_reasons": REJECTION_REASONS, "form_error": error,
+                "remove_action": False, "rejection_reasons": REJECTION_REASONS,
+                "removal_reasons": REMOVAL_REASONS, "form_error": error,
             })
-    safe_rows = {row["token"]: row for row in _queue_rows("all")}
+    elif action == "remove":
+        code, explanation, error = _valid_removal(request)
+        if error:
+            messages.error(request, error)
+            rows = _rows_for_tokens(requested)
+            return render(request, "admin_tools/photo_moderation_bulk_confirm.html", {
+                "rows": rows, "count": len(rows), "bulk_action": action_name,
+                "status_filter": request.POST.get("status_filter", "all"),
+                "approve_action": False, "safe_action": False,
+                "remove_action": True, "rejection_reasons": REJECTION_REASONS,
+                "removal_reasons": REMOVAL_REASONS, "form_error": error,
+            })
+    authorized_rows = _queue_rows("approved") if action == "remove" else []
+    authorized_rows += _queue_rows("all")
+    safe_rows = {row["token"]: row for row in authorized_rows}
     succeeded, failed = [], []
     for token in requested:
         try:
             if action_name == "approve_safe" and not _is_safe_recommendation(safe_rows.get(token, {})):
                 raise ValueError("No longer safe-eligible")
-            _apply_decision(request, token, action, code, explanation)
+            if action == "remove":
+                row = safe_rows.get(token)
+                if not row:
+                    raise ValueError("Photo is outside the authorized queue.")
+                with transaction.atomic():
+                    _quarantine_row_target(request, row, code, explanation)
+            else:
+                _apply_decision(request, token, action, code, explanation)
             succeeded.append(token)
         except Exception as exc:
-            logger.warning("Bulk photo moderation target failed actor_id=%s target=%s exception=%s", request.user.pk, token, type(exc).__name__)
+            logger.warning(
+                "Bulk photo moderation target failed actor_id=%s target=%s exception=%s detail=%s",
+                request.user.pk, token, type(exc).__name__, str(exc)[:160],
+            )
             failed.append({"target": token, "error": "Could not process this photo."})
-    _record_audit(request, action=action, source="bulk-safe-recommendation" if action_name == "approve_safe" else "bulk-manual", scope="page", requested=requested, succeeded=succeeded, failed=failed)
+    _record_audit(
+        request,
+        action=action,
+        source=(
+            "bulk-safe-recommendation"
+            if action_name == "approve_safe"
+            else "bulk-quarantine" if action == "remove" else "bulk-manual"
+        ),
+        scope="page",
+        requested=requested,
+        succeeded=succeeded,
+        failed=failed,
+    )
     successful_count, failed_count = len(succeeded), len(failed)
-    past_tense = "approved" if action == "approve" else "rejected"
+    past_tense = (
+        "approved" if action == "approve"
+        else "removed" if action == "remove" else "rejected"
+    )
     photo_word = "photo" if successful_count == 1 else "photos"
     if failed_count:
         messages.warning(
@@ -393,7 +738,8 @@ def photo_moderation_action(request, kind, pk, action):
     if action == "retry":
         config["scanner"](obj)
         _record_audit(request, action="retry", source="individual-manual", scope="individual", requested=[token], succeeded=[token], failed=[])
-        messages.info(request, "Moderation retry completed.")
+        reference = obj.reference_number if kind == "photo" else token
+        messages.info(request, f"Moderation retry completed for {reference}.")
         return redirect("photo_moderation_queue")
     if action == "reject":
         code, explanation, error = _valid_rejection(request)
@@ -414,5 +760,6 @@ def photo_moderation_action(request, kind, pk, action):
             setattr(obj, config["status"], "rejected")
             obj.save(update_fields=[config["image"], config["status"]])
     _record_audit(request, action=action, source="individual-manual", scope="individual", requested=[token], succeeded=[token], failed=[])
-    messages.success(request, f"Photo action completed: {action}.")
+    reference = obj.reference_number if kind == "photo" and obj.pk else token
+    messages.success(request, f"Photo action completed for {reference}: {action}.")
     return redirect("photo_moderation_queue")

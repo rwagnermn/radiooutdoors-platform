@@ -24,10 +24,10 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 
 {% if entry.photos.all %}<section class="current-photos"><h2>Current Photos</h2><div class="journal-photo-grid">
 {% for photo in entry.photos.all %}<figure class="journal-photo journal-photo-manage">
-{% if photo.is_publicly_visible %}<img src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">{% else %}<p><strong>{{ photo.get_moderation_status_display }}</strong>{% if photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
-{% if adventure.cover_photo_id == photo.pk %}<div class="cover-photo-badge">Cover Photo</div>{% endif %}
+{% if photo.is_publicly_visible %}<img src="{{ photo.public_thumbnail_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}">{% else %}<p><strong>{{ photo.moderation_display_status }}</strong>{% if photo.automated_decision == "scan_failed" %}: Automatic moderation could not be completed. The photo remains private.{% elif photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
+{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<div class="cover-photo-badge">Adventure Cover</div>{% endif %}
 <div class="photo-actions">
-{% if adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_cover_photo' photo.pk %}">{% csrf_token %}<button type="submit">Make Cover</button></form>{% endif %}
+{% if photo.is_publicly_visible %}{% if not adventure.cover_photo_is_explicit or adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Cover</button></form>{% else %}<span class="cover-photo-control-current">Adventure Cover</span>{% endif %}{% endif %}
 <form method="post" action="{% url 'delete_photo' photo.pk %}" onsubmit="return confirm('Delete this photo?');">{% csrf_token %}<button type="submit">Delete</button></form>
 </div></figure>{% endfor %}</div></section>{% endif %}
 </div></section>

@@ -1,0 +1,26 @@
+{% load static %}
+<fieldset class="policy-acceptance-fields" data-policy-acceptance>
+<legend>Required policy acceptance</legend>
+<p class="policy-review-intro">Review the complete current policies without leaving or submitting this form.</p>
+<button type="button" class="button-secondary-dark policy-review-trigger" data-policy-review-open aria-haspopup="dialog" aria-controls="required-policy-dialog">Read Required Policies</button>
+<p class="policy-review-confirmation" data-policy-review-status role="status" aria-live="polite" hidden></p>
+<div class="policy-checkbox-row{% if form.policy_accepted.errors %} field-has-error{% endif %}">{{ form.policy_accepted }}<label for="{{ form.policy_accepted.id_for_label }}">I have read and agree to the <a href="{% url 'terms_of_use' %}" target="_blank" rel="noopener">Terms of Use</a>, <a href="{% url 'privacy_policy' %}" target="_blank" rel="noopener">Privacy Policy</a>, and <a href="{% url 'community_standards' %}" target="_blank" rel="noopener">Community and Photo Standards</a>.</label>{% if form.policy_accepted.errors %}<ul class="field-error-list" id="{{ form.policy_accepted.id_for_label }}-errors">{% for error in form.policy_accepted.errors %}<li><strong>Error:</strong> {{ error }}</li>{% endfor %}</ul>{% endif %}</div>
+<div class="policy-checkbox-row{% if form.age_confirmed.errors %} field-has-error{% endif %}">{{ form.age_confirmed }}<label for="{{ form.age_confirmed.id_for_label }}">I confirm that I am at least 13 years old. If I am under 18, I have permission from my parent or legal guardian to create this account.</label>{% if form.age_confirmed.errors %}<ul class="field-error-list" id="{{ form.age_confirmed.id_for_label }}-errors">{% for error in form.age_confirmed.errors %}<li><strong>Error:</strong> {{ error }}</li>{% endfor %}</ul>{% endif %}</div>
+</fieldset>
+<div id="required-policy-dialog" class="policy-review-backdrop" data-policy-review-dialog role="dialog" aria-modal="true" aria-labelledby="required-policy-dialog-title" aria-describedby="required-policy-dialog-description" hidden>
+<section class="policy-review-dialog">
+<header class="policy-review-dialog-header">
+<div><h2 id="required-policy-dialog-title">Required Radio Outdoors Policies</h2><p id="required-policy-dialog-description">Review the complete current Alpha policies before choosing whether to accept them.</p></div>
+<button type="button" class="policy-dialog-close" data-policy-review-close aria-label="Close policies and return to registration">Close and Return to Registration</button>
+</header>
+<div class="policy-review-scroll" tabindex="0">
+<div class="policy-version-summary"><strong>Effective:</strong> {{ policy_effective_date }}<ul><li>Terms: {{ terms_version }}</li><li>Privacy: {{ privacy_version }}</li><li>Community Standards: {{ community_version }}</li></ul></div>
+<nav class="policy-review-toc" aria-label="Required policy contents"><h3>Contents</h3><ol><li><a href="#dialog-terms">Terms of Use</a></li><li><a href="#dialog-privacy">Privacy Policy</a></li><li><a href="#dialog-community">Community and Photo Standards</a></li></ol></nav>
+<article id="dialog-terms" class="policy-review-section"><h3>Terms of Use</h3><p><strong>Version:</strong> {{ terms_version }} · <strong>Effective:</strong> {{ policy_effective_date }}</p>{% include "policies/_terms_body.html" with policy_heading_level="4" %}</article>
+<article id="dialog-privacy" class="policy-review-section"><h3>Privacy Policy</h3><p><strong>Version:</strong> {{ privacy_version }} · <strong>Effective:</strong> {{ policy_effective_date }}</p>{% include "policies/_privacy_body.html" with policy_heading_level="4" %}</article>
+<article id="dialog-community" class="policy-review-section"><h3>Community and Photo Standards</h3><p><strong>Version:</strong> {{ community_version }} · <strong>Effective:</strong> {{ policy_effective_date }}</p>{% include "policies/_community_body.html" with policy_heading_level="4" %}</article>
+<div class="policy-review-actions"><button type="button" class="btn-ro-primary" data-policy-review-accept>Accept Required Policies</button><button type="button" class="button-secondary-dark" data-policy-review-close>Close and Return to Registration</button></div>
+</div>
+</section>
+</div>
+<script src="{% static 'js/policy-review.js' %}?v=001" defer></script>

@@ -1930,10 +1930,27 @@ td{padding:14px;border-bottom:1px solid #ddd;}
 .map-legend-pin-red{background:#b51f2e}
 .map-legend-pin-blue{background:#2e6fd8}
 .map-legend-pin-yellow{background:#f0b429}
+.map-legend-pin-green{background:#277a45}
 .radio-map-controls input[type="checkbox"]{
-    width:20px;
-    height:20px;
+    width:22px;
+    height:22px;
     margin:0;
+}
+.radio-map-filter-group label{
+    min-height:40px;
+    align-items:center;
+}
+.radio-map-filter-group input[type="checkbox"]:focus-visible{
+    outline:3px solid #ef880a;
+    outline-offset:3px;
+}
+.radio-map-filter-group .map-advisory-always{
+    color:#7f1722;
+    font-weight:900;
+}
+.radio-map-filter-group .map-advisory-always input{
+    accent-color:#b51f2e;
+    opacity:1;
 }
 .radio-map-control-dot{
     width:13px;
@@ -2540,8 +2557,15 @@ td{padding:14px;border-bottom:1px solid #ddd;}
     display:flex;
     justify-content:space-between;
     align-items:center;
+    flex-wrap:wrap;
     gap:20px;
     margin-bottom:28px;
+}
+
+.my-adventures-page .content,
+.my-adventures-page .adventure-table-wrap {
+    box-sizing:border-box;
+    max-width:100%;
 }
 
 .adventure-table-wrap {
@@ -2957,7 +2981,6 @@ td{padding:14px;border-bottom:1px solid #ddd;}
 /* Build 0.29 stabilization */
 .flash-message{transition:opacity .3s ease,transform .3s ease}
 .flash-message-hiding{opacity:0;transform:translateY(-6px)}
-.adventure-cover-image{width:100%;max-height:480px;object-fit:cover;border-radius:12px;margin-bottom:28px}
 .adventure-detail-heading,.journal-edit-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
 .adventure-detail-copy{min-width:0;flex:1}
 .ro-actions-column{width:74px;min-width:74px;text-align:center!important;vertical-align:middle!important}
@@ -2979,7 +3002,6 @@ td{padding:14px;border-bottom:1px solid #ddd;}
 /* Build 0.29 stabilization */
 .flash-message{transition:opacity .3s ease,transform .3s ease}
 .flash-message-hiding{opacity:0;transform:translateY(-6px)}
-.adventure-cover-image{width:100%;max-height:480px;object-fit:cover;border-radius:12px;margin-bottom:28px}
 .adventure-detail-heading,.journal-edit-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
 .adventure-detail-copy{min-width:0;flex:1}
 .ro-actions-column{width:74px;min-width:74px;text-align:center!important;vertical-align:middle!important}
@@ -3038,7 +3060,6 @@ input[type="radio"] {
 /* Build 0.29 stabilization */
 .flash-message{transition:opacity .3s ease,transform .3s ease}
 .flash-message-hiding{opacity:0;transform:translateY(-6px)}
-.adventure-cover-image{width:100%;max-height:480px;object-fit:cover;border-radius:12px;margin-bottom:28px}
 .adventure-detail-heading,.journal-edit-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
 .adventure-detail-copy{min-width:0;flex:1}
 .ro-actions-column{width:74px;min-width:74px;text-align:center!important;vertical-align:middle!important}
@@ -4588,13 +4609,13 @@ body.interior-page .my-adventures-heading h1::after{
 .moderation-row-menu>summary .account-menu-icon span{height:3px;background:currentColor}
 .moderation-row-menu .ro-action-menu-panel{right:52px;left:auto;width:230px;z-index:10000}
 .moderation-row-menu .ro-action-menu-panel form{margin:0}
-.moderation-thumbnail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;max-height:55vh;overflow-y:auto;padding:10px;border:1px solid #b8c2ba;border-radius:8px;background:#f5f3e9}
+.moderation-thumbnail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));align-items:start;gap:12px;max-height:55vh;overflow-y:auto;padding:10px;border:1px solid #b8c2ba;border-radius:8px;background:#f5f3e9}
 .moderation-confirm-card{display:grid;gap:7px;padding:10px;border:1px solid #c9d0c8;border-radius:7px;background:#fff}
 .moderation-confirm-card img{width:100%;height:115px;object-fit:cover;border-radius:5px}
 .restricted-preview{padding:16px;border:2px solid #835c29;border-radius:7px;background:#fff3dc;color:#3f2d16}
 .moderation-detail-preview{display:block;max-width:min(900px,100%);max-height:70vh;margin:14px 0;border-radius:8px}
 .moderation-rejection-fields{display:grid;gap:8px;max-width:620px;margin:18px 0;padding:14px;border:1px solid #c8cec7;border-radius:8px;background:#fff}
-@media(max-width:700px){.moderation-thumbnail-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-height:65vh}.photo-moderation-bulk-toolbar>*{flex:1 1 180px}}
+@media(max-width:700px){.moderation-thumbnail-grid{grid-template-columns:1fr;max-height:65vh}.photo-moderation-bulk-toolbar>*{flex:1 1 180px}}
 
 /* Home navigation floats over the unchanged hero; interior headers retain the panorama. */
 .home-page .site-header{
@@ -4645,7 +4666,6 @@ body.interior-page .my-adventures-heading h1::after{
 .member-profile-heading{
     border-radius:14px;
 }
-.adventure-story-page .adventure-cover-image{max-height:360px}
 .adventure-story-stats{
     display:grid;
     grid-template-columns:repeat(3,minmax(0,1fr));
@@ -4771,7 +4791,20 @@ body.admin-page .site-footer{margin-top:24px}
     .footer-container{max-width:100%;padding-right:16px;padding-left:16px}
     .footer-links{gap:12px}
 }
+.owned-pin-editor-page{max-width:980px}
+.owned-pin-editor-page .editable-coordinate-map{min-height:420px}
+.form-warning{margin:16px 0;padding:14px 16px;border:2px solid var(--ro-color-accent);border-radius:var(--ro-radius-control);background:#fff7e8}
+.form-warning p{margin:.35rem 0 0}
+.pin-coordinate-context{display:grid;gap:8px;margin:14px 0}
+.pin-coordinate-context div{display:grid;grid-template-columns:minmax(150px,auto) 1fr;gap:12px}
+.pin-coordinate-context dt{font-weight:700}
+.pin-address-update-option{display:flex;align-items:center;gap:10px;margin-top:14px;font-weight:700}
+@media(max-width:700px){.owned-pin-editor-page .editable-coordinate-map{min-height:340px}.pin-coordinate-context div{grid-template-columns:1fr}}
 .location-pin-map{min-height:420px;margin:14px 0;border:1px solid #b9c2bc;border-radius:8px;overflow:hidden}
+.editable-map-pin-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0}
+.editable-map-pin-controls button{min-height:44px}
+.editable-map-coordinate-display{font-weight:800;color:#234231}
+.editable-map-status{min-height:1.5em;margin:8px 0 0}
 .pac-container{z-index:10000}
 
 /* RO-20260807-2040: enlarge only the shared header logo without changing layout. */
@@ -4837,4 +4870,369 @@ body.admin-page .site-footer{margin-top:24px}
 .amenities-editor-heading { margin-top: 24px; }
 .amenities-editor-heading h3 { margin-bottom: 4px; }
 .amenities-editor-grid { margin-bottom: 20px; }
+
+@media(max-width:600px){
+    .my-adventures-page .my-adventures-heading{
+        flex-wrap:wrap;
+    }
+}
 .amenities-editor-grid select { width: 100%; }
+
+/* Versioned policy pages and required account acceptance */
+.policy-page { max-width: 980px; }
+.policy-page h2 { margin-top: var(--ro-space-5); }
+.policy-alpha-label {
+    display: inline-block;
+    padding: .35rem .7rem;
+    color: #3a2600;
+    background: #ffe2aa;
+    border: 1px solid var(--ro-color-accent);
+    border-radius: var(--ro-radius-control);
+}
+.policy-acceptance-fields {
+    margin: var(--ro-space-5) 0;
+    padding: var(--ro-space-4);
+    border: 2px solid var(--ro-color-border);
+    border-radius: var(--ro-radius-control);
+}
+.policy-acceptance-fields legend {
+    padding: 0 .5rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+.policy-checkbox-row {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+    gap: .55rem;
+    margin: var(--ro-space-3) 0;
+}
+.policy-checkbox-row input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+    margin: 10px;
+    accent-color: var(--ro-color-accent);
+}
+.policy-checkbox-row input[type="checkbox"]:focus-visible {
+    outline: 3px solid var(--ro-color-focus);
+    outline-offset: 3px;
+}
+.policy-checkbox-row label {
+    padding-top: 8px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+.policy-checkbox-row .field-error-list { grid-column: 2; margin-top: 0; }
+.policy-change-summary {
+    padding: var(--ro-space-4);
+    border-left: 5px solid var(--ro-color-accent);
+    background: rgba(255,255,255,.72);
+}
+@media(max-width:640px){
+    .policy-acceptance-fields { padding: var(--ro-space-3); }
+}
+
+/* Shared policy review dialog for every account-creation path. */
+.policy-review-intro { margin: 0 0 var(--ro-space-3); }
+.policy-review-trigger { min-height: 44px; margin-bottom: var(--ro-space-3); }
+.policy-review-confirmation {
+    margin: 0 0 var(--ro-space-3);
+    padding: .75rem 1rem;
+    border-left: 5px solid var(--ro-color-accent);
+    background: #fff3dc;
+    color: var(--ro-color-text);
+    font-weight: 700;
+}
+.policy-review-backdrop[hidden] { display: none; }
+.policy-review-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(.5rem, 2vw, 1.5rem);
+    background: rgba(10, 20, 17, .72);
+}
+.policy-review-dialog {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 980px);
+    max-height: calc(100dvh - 2 * clamp(.5rem, 2vw, 1.5rem));
+    overflow: hidden;
+    color: var(--ro-color-text);
+    background: var(--ro-color-surface, #fffdf8);
+    border: 2px solid var(--ro-color-border);
+    border-radius: var(--ro-radius-card);
+    box-shadow: 0 12px 38px rgba(0, 0, 0, .45);
+}
+.policy-review-dialog-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ro-space-3);
+    padding: var(--ro-space-4);
+    background: var(--ro-forest, #153f2d);
+    color: #fff;
+}
+.policy-review-dialog-header h2,
+.policy-review-dialog-header p { margin: 0; color: #fff; }
+.policy-review-dialog-header p { margin-top: .35rem; }
+.policy-dialog-close { min-height: 44px; flex: 0 0 auto; }
+.policy-review-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--ro-space-4);
+    line-height: 1.55;
+}
+.policy-version-summary,
+.policy-review-toc {
+    margin-bottom: var(--ro-space-4);
+    padding: var(--ro-space-3);
+    background: #f1eee6;
+    border-radius: var(--ro-radius-control);
+}
+.policy-review-toc h3 { margin-top: 0; }
+.policy-review-section {
+    padding-top: var(--ro-space-3);
+    border-top: 2px solid var(--ro-color-border);
+}
+.policy-review-section h3 { color: var(--ro-forest, #153f2d); }
+.policy-review-section h4 { margin-top: var(--ro-space-4); }
+.policy-review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ro-space-3);
+    padding: var(--ro-space-4) 0 var(--ro-space-2);
+}
+.policy-review-actions button { min-height: 44px; }
+.policy-review-dialog button:focus-visible,
+.policy-review-dialog a:focus-visible,
+.policy-review-scroll:focus-visible {
+    outline: 3px solid var(--ro-color-focus);
+    outline-offset: 3px;
+}
+body.policy-dialog-open { overflow: hidden; }
+@media(max-width:640px){
+    .policy-review-backdrop { padding: .25rem; }
+    .policy-review-dialog { max-height: calc(100dvh - .5rem); border-radius: .35rem; }
+    .policy-review-dialog-header { flex-direction: column; padding: var(--ro-space-3); }
+    .policy-dialog-close { width: 100%; }
+    .policy-review-scroll { padding: var(--ro-space-3); }
+    .policy-review-actions { flex-direction: column; }
+    .policy-review-actions button { width: 100%; }
+}
+.location-field-with-help {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 0.65rem;
+    align-items: end;
+}
+
+.location-help-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--color-orange, #f28c28);
+    background: #fff;
+    color: #173f2b;
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+.location-help-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.62);
+}
+
+.location-help-backdrop[hidden] { display: none; }
+.location-help-dialog {
+    width: min(680px, 100%);
+    max-height: min(82vh, 760px);
+    overflow: auto;
+    border: 2px solid #d3d3d3;
+    border-radius: 0.75rem;
+    background: #fffdf7;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.location-help-dialog header {
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #fffdf7;
+    border-bottom: 1px solid #ccc;
+}
+.location-help-dialog header h2 { margin: 0; }
+.location-help-dialog header button,
+.location-help-content button { min-height: 44px; }
+.location-help-content { padding: 1rem 1.25rem 1.25rem; font-size: 1.05rem; line-height: 1.55; }
+body.location-help-open { overflow: hidden; }
+
+.radio-map-pin-navigation {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #ccc;
+}
+.radio-map-pin-navigation a,
+.radio-map-pin-navigation button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.radio-map-nearest-result { margin-top: 0.35rem; }
+.radio-map-address-warning { font-weight: 600; }
+.contact-import-journal-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 48px;
+    margin: 0.6rem 0;
+    padding: 0.65rem;
+    border: 1px solid #b8c2ba;
+    border-radius: 0.5rem;
+    background: #fff;
+}
+.contact-import-journal-choice input { width: 22px; height: 22px; margin-top: 0.15rem; }
+.contact-import-destinations { margin-top: 1.5rem; }
+.contact-import-destinations li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #ccd4ce;
+}
+@media (max-width: 700px) {
+    .contact-import-destinations li { align-items: flex-start; flex-direction: column; }
+    .adventure-detail-heading .ro-page-actions { width: 100%; }
+}
+
+/* Adventure Option 2 header and cover selection */
+.adventure-story-page .adventure-detail-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 58%) minmax(280px, 42%);
+    align-items: stretch;
+    gap: 28px;
+}
+.adventure-story-page .adventure-detail-copy { min-width: 0; }
+.adventure-story-page .adventure-detail-copy .ro-page-actions {
+    margin-top: 20px;
+}
+.adventure-cover-frame {
+    display: flex;
+    min-width: 0;
+    height: clamp(280px, 28vw, 340px);
+    margin: 0;
+    padding: 10px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid var(--ro-border, #d5d8cf);
+    border-radius: var(--ro-radius-lg, 14px);
+    background: #f4f0e4;
+}
+.adventure-cover-frame .adventure-cover-image {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    margin: 0;
+    object-fit: contain;
+    border-radius: 8px;
+}
+.cover-photo-control-current {
+    display: flex;
+    min-height: 44px;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--ro-forest, #234231);
+    color: #fff;
+    font-weight: 800;
+}
+.photo-source-journal {
+    margin: 6px 10px 0;
+    color: var(--ro-text-muted, #59635d);
+    font-size: .9rem;
+}
+.location-visibility-choice {
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--ro-border, #b8c2ba);
+    border-radius: 8px;
+}
+.location-visibility-choice legend { font-weight: 800; }
+.location-visibility-choice ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    margin: 8px 0;
+    padding: 0;
+    list-style: none;
+}
+.location-visibility-choice label {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    font-weight: 800;
+}
+.location-visibility-choice input { width: 22px !important; height: 22px !important; }
+.private-location-badge {
+    display: inline-flex;
+    min-height: 28px;
+    margin-left: 8px;
+    padding: 3px 8px;
+    align-items: center;
+    border: 1px solid #715a24;
+    border-radius: 999px;
+    background: #fff3c8;
+    color: #49370f;
+    font-size: .85rem;
+    font-weight: 800;
+    vertical-align: middle;
+}
+@media (max-width: 900px) {
+    .adventure-story-page .adventure-detail-heading {
+        grid-template-columns: minmax(0, 55%) minmax(240px, 45%);
+        gap: 20px;
+    }
+}
+@media (max-width: 700px) {
+    .adventure-story-page .adventure-detail-heading {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .adventure-cover-frame {
+        order: 2;
+        width: 100%;
+        height: auto;
+        max-height: 420px;
+        min-height: 220px;
+    }
+    .adventure-cover-frame .adventure-cover-image { max-height: 400px; }
+    .adventure-story-page .adventure-detail-copy { display: contents; }
+    .adventure-story-page .adventure-detail-copy > p,
+    .adventure-story-page .adventure-detail-copy > h1,
+    .adventure-story-page .adventure-detail-copy > .compact-meta-row { order: 1; }
+    .adventure-story-page .adventure-detail-copy > .ro-page-actions { order: 3; }
+}

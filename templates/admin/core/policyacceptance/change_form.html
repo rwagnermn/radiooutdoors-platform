@@ -1,0 +1,7 @@
+{% extends "admin/change_form.html" %}
+{% block content %}
+<div class="messagelist">
+  <div class="warning">Policy acceptance records are permanent audit history and cannot be edited.</div>
+</div>
+{{ block.super }}
+{% endblock %}

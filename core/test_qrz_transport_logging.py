@@ -74,6 +74,8 @@ class QRZSafeRegistrationMessageTests(TestCase):
                 "email": "transport@example.com",
                 "password1": "SafeTransportPass!942",
                 "password2": "SafeTransportPass!942",
+                "policy_accepted": "on",
+                "age_confirmed": "on",
             },
         )
         self.assertContains(

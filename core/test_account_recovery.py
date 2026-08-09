@@ -97,7 +97,9 @@ class AccountRecoveryTests(TestCase):
         self.assertRedirects(response, reverse("account_recovery_done"))
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
+        self.assertEqual(message.from_email, "Radio Outdoors <info@radiooutdoors.org>")
         self.assertIn("W5RECOVER", message.body)
+        self.assertIn("info@radiooutdoors.org", message.body)
         self.assertIn("https://radiooutdoors.example/accounts/recovery/", message.body)
         self.assertNotIn(self.old_password, message.body)
 

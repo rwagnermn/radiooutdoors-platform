@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}{{ page_title }} | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content owned-pin-editor-page">
+<h1>{{ page_title }}</h1>
+<p><strong>Drag the pin or click the map to select a new position. Save Position when finished.</strong></p>
+{% if shared_use_warning %}<div class="form-warning" role="note"><strong>Shared Location</strong><p>This Location is used by other Adventures. Moving its pin will change the Location position for everyone.</p></div>{% endif %}
+{% if record_type == "location" %}<dl class="pin-coordinate-context"><div><dt>Entered address</dt><dd>{{ record.street_address|default:"No street address entered" }}{% if record.city %}, {{ record.city }}{% endif %}{% if record.state %}, {{ record.state }}{% endif %}</dd></div><div><dt>Coordinates</dt><dd>Geocoded when originally placed; manually adjusted coordinates are saved independently.</dd></div></dl>{% endif %}
+{% if form_error %}<div class="form-error-summary" role="alert" tabindex="-1" id="pin-form-error">{{ form_error }}</div>{% endif %}
+<form method="post" id="owned-pin-position-form" novalidate>{% csrf_token %}
+<input type="hidden" name="next" value="{{ return_url }}">
+<input type="hidden" name="latitude" id="owned-pin-latitude" value="{{ record.latitude|default_if_none:'' }}">
+<input type="hidden" name="longitude" id="owned-pin-longitude" value="{{ record.longitude|default_if_none:'' }}">
+<div id="owned-pin-map" class="editable-coordinate-map" aria-label="Editable map for {{ record.name }}"></div>
+<p id="owned-pin-coordinates" class="editable-map-coordinate-display" aria-live="polite"></p>
+<p id="owned-pin-status" class="editable-map-pin-status" tabindex="-1" aria-live="assertive"></p>
+<div class="editable-map-pin-controls">
+<button type="button" id="owned-pin-remove" class="ro-small-action ro-danger-action">Remove Pin</button>
+{% if parent_location.latitude != None and parent_location.longitude != None %}<button type="button" id="owned-pin-reset" class="ro-small-action">Reset to Location</button>{% endif %}
+</div>
+{% if record_type == "location" %}<p class="helptext">Moving this pin changes coordinates only. The entered address remains unchanged.</p>{% endif %}
+<div class="form-actions"><button type="submit" class="btn-ro-primary" id="save-owned-pin">Save Position</button><a href="{{ return_url }}" class="button-secondary-dark">Cancel</a></div>
+</form>
+</section>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{% static 'js/editable-map-pin.js' %}?v=002"></script>
+{% if google_maps_api_key %}<script>
+async function initOwnedPinEditor(){
+ const form=document.getElementById("owned-pin-position-form"), lat=document.getElementById("owned-pin-latitude"), lng=document.getElementById("owned-pin-longitude");
+ const editor=await RadioOutdoorsEditablePinMap.create({mapElement:document.getElementById("owned-pin-map"),latInput:lat,lngInput:lng,coordinateDisplay:document.getElementById("owned-pin-coordinates"),statusElement:document.getElementById("owned-pin-status"),removeButton:document.getElementById("owned-pin-remove"),resetButton:document.getElementById("owned-pin-reset"),resetCoordinates:{% if parent_location.latitude != None and parent_location.longitude != None %}{lat:{{ parent_location.latitude }},lng:{{ parent_location.longitude }}}{% else %}null{% endif %},form:form,required:{{ required_coordinates|yesno:"true,false" }},requiredMessage:"Place a new pin before saving.",pinGlyph:"{% if record_type == 'location' %}L{% else %}O{% endif %}",pinColor:"{% if record_type == 'location' %}#277a45{% else %}#2e6fd8{% endif %}"});
+ let submitting=false;
+ form.addEventListener("submit",function(event){
+   if(event.defaultPrevented||submitting)return;
+   submitting=true;const button=document.getElementById("save-owned-pin");button.disabled=true;button.textContent="Saving...";
+ });
+}
+</script><script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initOwnedPinEditor"></script>{% else %}<script>document.getElementById("owned-pin-status").textContent="A Google Maps API key is required to reposition this pin.";document.getElementById("save-owned-pin").disabled=true;</script>{% endif %}
+{% endblock %}

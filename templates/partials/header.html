@@ -37,6 +37,7 @@
 <a href="{% url 'location_type_list' %}">Manage Location Types</a>
 <a href="{% url 'manual_verification_queue' %}">Manual Verification Queue</a>
 <a href="{% url 'photo_moderation_queue' %}">Photo Moderation</a>
+{% if perms.core.view_policyacceptance %}<a href="{% url 'admin:core_policyacceptance_changelist' %}">Policy Acceptance History</a>{% endif %}
 {% endif %}
 {% endif %}
 <hr class="account-menu-separator">

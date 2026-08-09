@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from .account_forms import FollowerRegistrationForm, MemberRegistrationForm
 from .models import FollowerInvitation, FollowRelationship, MemberProfile
+from .policy_acceptance import record_policy_acceptance
 from .qrz_service import (
     QRZConfigurationError,
     QRZError,
@@ -32,6 +33,7 @@ def register(request):
         return redirect("follower_register", token=invite_token)
 
     manual_available = False
+    support_contact_needed = False
     if request.method == "POST":
         form = MemberRegistrationForm(request.POST)
         if form.is_valid():
@@ -56,6 +58,11 @@ def register(request):
                             verification_method=MemberProfile.VerificationMethod.NONE,
                             home_country="",
                         )
+                        record_policy_acceptance(
+                            user,
+                            registration_path="pending_manual",
+                            account_status="pending",
+                        )
                     login(request, user)
                     messages.info(
                         request,
@@ -78,6 +85,7 @@ def register(request):
                     "QRZ is temporarily unavailable. No account was created; please try again later.",
                 )
             except QRZConfigurationError as exc:
+                support_contact_needed = True
                 logger.warning(
                     "Registration QRZ verification failed category=configuration exception_type=%s",
                     type(exc).__name__,
@@ -87,6 +95,7 @@ def register(request):
                     "QRZ configuration or connection failure. No account was created; please contact Radio Outdoors support.",
                 )
             except QRZError as exc:
+                support_contact_needed = True
                 logger.warning(
                     "Registration QRZ verification failed category=qrz_rejected exception_type=%s",
                     type(exc).__name__,
@@ -137,6 +146,11 @@ def register(request):
                             qrz_license_class=result.license_class,
                             qrz_expiration=result.expires,
                         )
+                        record_policy_acceptance(
+                            user,
+                            registration_path="qrz_member",
+                            account_status="verified",
+                        )
 
                     login(request, user)
                     messages.success(
@@ -150,7 +164,11 @@ def register(request):
     return render(
         request,
         "accounts/register.html",
-        {"form": form, "manual_available": manual_available},
+        {
+            "form": form,
+            "manual_available": manual_available,
+            "support_contact_needed": support_contact_needed,
+        },
     )
 
 
@@ -190,6 +208,11 @@ def follower_register(request, token):
                     status=FollowerInvitation.Status.PENDING,
                 )
                 user = form.save()
+                record_policy_acceptance(
+                    user,
+                    registration_path="follower_invitation",
+                    account_status="follower",
+                )
                 relationship, _ = FollowRelationship.objects.get_or_create(
                     member=locked_invitation.member,
                     follower=user,

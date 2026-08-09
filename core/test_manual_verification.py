@@ -15,6 +15,8 @@ class ManualVerificationRegistrationTests(TestCase):
         "email": "pending@example.com",
         "password1": "CedarRidgeExpedition!942",
         "password2": "CedarRidgeExpedition!942",
+        "policy_accepted": "on",
+        "age_confirmed": "on",
     }
 
     @patch("core.account_views.lookup_callsign")

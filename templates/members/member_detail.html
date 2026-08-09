@@ -30,7 +30,7 @@
 <div class="member-adventure-list">
 {% for adventure in adventures %}
 <article class="location-card member-adventure-row">
-<div class="member-adventure-summary"><strong><a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></strong><p>{% if adventure.location %}{{ adventure.location.name }}{% else %}Location not entered{% endif %}</p></div>
+<div class="member-adventure-summary"><strong><a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></strong><p>{% if adventure.location %}{% if adventure.can_view_location %}{{ adventure.location.name }}{% else %}Private Location{% endif %}{% else %}Location not entered{% endif %}</p></div>
 <div class="member-adventure-actions"><span>{{ adventure.journal_count }} Journals · {{ adventure.photo_count }} Photos</span><a href="{{ adventure.get_absolute_url }}" class="ro-small-action member-adventure-view-action">View Adventure</a></div>
 </article>
 {% empty %}<div class="location-card">No Adventures to show.</div>{% endfor %}

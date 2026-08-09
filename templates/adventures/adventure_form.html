@@ -63,52 +63,20 @@
             </div>
 
             <div class="adventure-form-section">
-                <h2>Where did you operate?</h2><p class="story-first-help">Choose a Location, then the exact Operating Position where you set up the station.</p>
-
-                <div class="two-column-fields">
+                <h2>Where did you operate?</h2>
+                <p class="story-first-help">Search for an existing Location first. If none fits, create a new Location and place its pin.</p>
+                <div class="location-field-with-help">
                     <div>
-                        <label for="{{ form.location.id_for_label }}">
-                            Location <span class="required-field-label">Required Field</span>
-                        </label>
+                        <label for="{{ form.location.id_for_label }}">Location <span class="required-field-label">Required Field</span></label>
                         {{ form.location }}
-                        {% for error in form.location.errors %}
-                            <p class="form-error">{{ error }}</p>
-                        {% endfor %}
+                        {% for error in form.location.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                     </div>
-
-                    <div>
-                        <label for="{{ form.operating_location.id_for_label }}">
-                            Operating Position <span class="required-field-label">Required Field</span>
-                        </label>
-                        {{ form.operating_location }}
-                        {% for error in form.operating_location.errors %}
-                            <p class="form-error">{{ error }}</p>
-                        {% endfor %}
-                    </div>
+                    <button type="button" class="location-help-button" data-location-help-open aria-haspopup="dialog" aria-controls="location-help-dialog" aria-label="Help choosing or creating a Location">?</button>
                 </div>
-
-                <p id="no-operating-positions-message" hidden>
-                    <strong>No Operating Positions exist for this Location yet. Choose “📍 Drop a New Pin...” and click the map to create the first one.</strong>
-                </p>
-                <div id="selected-map-position" class="form-guidance-banner" hidden aria-live="polite"></div>
-
-                <p id="position-placement-banner" class="form-guidance-banner" hidden>
-                    <strong>Click on the map to place the new Operating Position.</strong>
-                </p>
-
-                <div id="new-position-prompt" hidden>
-                    <label for="new-position-name">Operating Position Name <span class="required-field-label">Required Field</span></label>
-                    <input id="new-position-name" type="text" maxlength="150">
-                    <label for="new-position-notes">Notes (optional)</label>
-                    <textarea id="new-position-notes" rows="3"></textarea>
-                    <button id="save-new-position" type="button">Save Operating Position</button>
-                    <button id="cancel-new-position" type="button">Cancel</button>
-                </div>
-
-                {% if google_maps_api_key %}
-                    <div id="adventure-position-map" class="location-pin-map"></div>
-                {% endif %}
+                <a id="create-new-location-link" href="{% url 'create_location' %}?return_to=adventure" class="button-secondary-dark">Create a New Location</a>
             </div>
+
+            {% include "adventures/_location_help_dialog.html" %}
 
             {% if not adventure %}
             <div class="adventure-form-section">
@@ -215,12 +183,12 @@
                             {% for photo in entry.photos.all %}
                                 <figure class="journal-photo journal-photo-manage">
                                     {% if photo.is_publicly_visible %}<img
-                                        src="{{ photo.image.url }}"
+                                        src="{{ photo.public_thumbnail_url }}"
                                         alt="{{ photo.caption|default:'Adventure photo' }}"
-                                    >{% else %}<p><strong>{{ photo.get_moderation_status_display }}</strong>{% if photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
+                                    >{% else %}<p><strong>{{ photo.moderation_display_status }}</strong>{% if photo.automated_decision == "scan_failed" %}: Automatic moderation could not be completed. The photo remains private.{% elif photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
 
-                                    {% if adventure.cover_photo_id == photo.pk %}
-                                        <div class="cover-photo-badge">Cover Photo</div>
+                                    {% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}
+                                        <div class="cover-photo-badge">Adventure Cover</div>
                                     {% endif %}
 
                                     {% if photo.caption %}
@@ -228,15 +196,16 @@
                                     {% endif %}
 
                                     <div class="photo-actions">
-                                        {% if adventure.cover_photo_id != photo.pk %}
+                                        {% if photo.is_publicly_visible %}{% if not adventure.cover_photo_is_explicit or adventure.cover_photo_id != photo.pk %}
                                             <form
                                                 method="post"
-                                                action="{% url 'make_cover_photo' photo.pk %}"
+                                                action="{% url 'make_adventure_cover' adventure.slug photo.pk %}"
                                             >
                                                 {% csrf_token %}
-                                                <button type="submit">Make Cover</button>
+                                                <input type="hidden" name="next" value="{{ request.path }}">
+                                                <button type="submit">Use as Adventure Cover</button>
                                             </form>
-                                        {% endif %}
+                                        {% else %}<span class="cover-photo-control-current">Adventure Cover</span>{% endif %}{% endif %}
 
                                         <form
                                             method="post"
@@ -262,14 +231,10 @@
     {% endif %}
 
 </section>
-{{ operating_positions|json_script:"adventure-operating-positions" }}
 <script>
 (function () {
     const locationSelect = document.getElementById(
         "{{ form.location.id_for_label }}"
-    );
-    const positionSelect = document.getElementById(
-        "{{ form.operating_location.id_for_label }}"
     );
     const titleInput = document.getElementById(
         "{{ form.title.id_for_label }}"
@@ -277,329 +242,27 @@
     const publicInput = document.getElementById(
         "{{ form.is_public.id_for_label }}"
     );
-    const positions = JSON.parse(
-        document.getElementById("adventure-operating-positions").textContent
-    );
-    const emptyMessage = document.getElementById(
-        "no-operating-positions-message"
-    );
-    const placementBanner = document.getElementById(
-        "position-placement-banner"
-    );
-    const positionPrompt = document.getElementById("new-position-prompt");
-    const positionName = document.getElementById("new-position-name");
-    const positionNotes = document.getElementById("new-position-notes");
-    const dropPinValue = "__drop_new_pin__";
-    let placementMode = false;
-    let clearPendingMapPosition = null;
-
-    if (!locationSelect || !positionSelect) {
+    const createLink = document.getElementById("create-new-location-link");
+    if (!locationSelect || !createLink) {
         return;
     }
-
-    const addOption = document.createElement("option");
-    addOption.value = "__add_new_location__";
-    addOption.textContent = "+ Add New Location";
-    locationSelect.insertBefore(
-        addOption,
-        locationSelect.options[1] || null
-    );
-
-    function populatePositions(selectedPositionId) {
-        const locationId = Number(locationSelect.value);
-        const matchingPositions = positions.filter(function (position) {
-            return position.location_id === locationId;
-        });
-        positionSelect.replaceChildren();
-
-        const placeholder = document.createElement("option");
-        placeholder.value = "";
-        placeholder.textContent = "Choose the exact operating position";
-        positionSelect.appendChild(placeholder);
-
-        matchingPositions.forEach(function (position) {
-                const option = document.createElement("option");
-                option.value = String(position.id);
-                option.textContent = position.name;
-                option.selected = String(position.id) === String(selectedPositionId);
-                positionSelect.appendChild(option);
-            });
-
-        if (locationId) {
-            const dropPinOption = document.createElement("option");
-            dropPinOption.value = dropPinValue;
-            dropPinOption.textContent = "📍 Drop a New Pin...";
-            positionSelect.appendChild(dropPinOption);
-        }
-
-        if (emptyMessage) {
-            emptyMessage.hidden = !locationId || matchingPositions.length !== 0;
-        }
-    }
-
-    function exitPlacementMode(resetSelection) {
-        placementMode = false;
-        placementBanner.hidden = true;
-        positionPrompt.hidden = true;
-        positionName.value = "";
-        positionNotes.value = "";
-        if (clearPendingMapPosition) {
-            clearPendingMapPosition();
-        }
-        if (resetSelection && positionSelect.value === dropPinValue) {
-            positionSelect.value = "";
-        }
-    }
-
-    const initialPositionId = positionSelect.value;
-    populatePositions(initialPositionId);
-
-    locationSelect.addEventListener("change", function () {
-        if (locationSelect.value === "__add_new_location__") {
-            const params = new URLSearchParams();
-            params.set("return_to", "adventure");
-            params.set("title", titleInput ? titleInput.value : "");
-            params.set(
-                "public",
-                publicInput && !publicInput.checked ? "0" : "1"
-            );
-            window.location.href =
-                "{% url 'create_location' %}?" + params.toString();
-            return;
-        }
-
-        exitPlacementMode(false);
-        populatePositions("");
+    createLink.addEventListener("click", function () {
+        const params = new URLSearchParams(createLink.search);
+        params.set("title", titleInput ? titleInput.value : "");
+        params.set("public", publicInput && !publicInput.checked ? "0" : "1");
+        createLink.search = params.toString();
     });
-
-    positionSelect.addEventListener("change", function () {
-        if (positionSelect.value === dropPinValue) {
-            placementMode = true;
-            placementBanner.hidden = false;
-            positionPrompt.hidden = true;
-            positionName.value = "";
-            positionNotes.value = "";
-            if (clearPendingMapPosition) {
-                clearPendingMapPosition();
-            }
-            return;
-        }
-
-        exitPlacementMode(false);
-    });
-
-    window.initAdventurePositionMap = async function () {
-        const mapElement = document.getElementById("adventure-position-map");
-        const mappedPositions = positions.filter(function (position) {
-            return position.latitude !== null && position.longitude !== null;
-        });
-
-        if (!mapElement) {
-            return;
-        }
-
-        const {Map} = await google.maps.importLibrary("maps");
-        const {AdvancedMarkerElement, PinElement} =
-            await google.maps.importLibrary("marker");
-        const {InfoWindow} = await google.maps.importLibrary("maps");
-        const bounds = new google.maps.LatLngBounds();
-        const map = new Map(mapElement, radioOutdoorsMapOptions({
-            center: mappedPositions.length
-                ? {
-                    lat: mappedPositions[0].latitude,
-                    lng: mappedPositions[0].longitude
-                }
-                : {lat: 39.5, lng: -98.35},
-            zoom: mappedPositions.length ? 8 : 4,
-            mapId: "DEMO_MAP_ID"
-        }));
-
-        let temporaryMarker = null;
-        let pendingPosition = null;
-        let selectedMarker = null;
-        const selectedSummary = document.getElementById("selected-map-position");
-        const infoWindow = new InfoWindow();
-        const savePosition = document.getElementById("save-new-position");
-        const cancelPosition = document.getElementById("cancel-new-position");
-
-        clearPendingMapPosition = function () {
-            if (temporaryMarker) {
-                temporaryMarker.map = null;
-            }
-            temporaryMarker = null;
-            pendingPosition = null;
-        };
-
-        map.addListener("click", function (event) {
-            const locationId = Number(locationSelect.value);
-            if (!placementMode || !locationId || !event.latLng) {
-                return;
-            }
-
-            const clickedPosition = {
-                lat: event.latLng.lat(),
-                lng: event.latLng.lng()
-            };
-            const temporaryPin = new PinElement({
-                background: "#2e6fd8",
-                borderColor: "#ffffff",
-                glyphColor: "#ffffff",
-                glyph: "O"
-            });
-
-            if (temporaryMarker) {
-                temporaryMarker.map = null;
-            }
-            temporaryMarker = new AdvancedMarkerElement({
-                map: map,
-                position: clickedPosition,
-                title: "New Operating Position",
-                content: temporaryPin.element
-            });
-            pendingPosition = {
-                locationId: locationId,
-                latitude: clickedPosition.lat,
-                longitude: clickedPosition.lng
-            };
-            positionPrompt.hidden = false;
-            positionName.focus();
-        });
-
-        cancelPosition.addEventListener("click", function () {
-            exitPlacementMode(true);
-        });
-
-        savePosition.addEventListener("click", async function () {
-            const name = positionName.value.trim();
-            if (!pendingPosition || !name) {
-                positionName.focus();
-                return;
-            }
-
-            const body = new FormData();
-            body.set("name", name);
-            body.set("description", positionNotes.value.trim());
-            body.set("latitude", pendingPosition.latitude.toFixed(6));
-            body.set("longitude", pendingPosition.longitude.toFixed(6));
-            body.set(
-                "csrfmiddlewaretoken",
-                document.querySelector(
-                    "form input[name='csrfmiddlewaretoken']"
-                ).value
-            );
-
-            const endpoint =
-                "{% url 'create_operating_position_inline' 0 %}".replace(
-                    "/0/", "/" + pendingPosition.locationId + "/"
-                );
-            const response = await fetch(endpoint, {
-                method: "POST",
-                body: body,
-                credentials: "same-origin"
-            });
-
-            if (!response.ok) {
-                exitPlacementMode(true);
-                window.alert("The Operating Position could not be saved. Please try again.");
-                return;
-            }
-
-            const savedPosition = await response.json();
-            positions.push(savedPosition);
-            temporaryMarker.title = savedPosition.name;
-            temporaryMarker = null;
-            pendingPosition = null;
-            placementMode = false;
-            placementBanner.hidden = true;
-            positionName.value = "";
-            positionNotes.value = "";
-            positionPrompt.hidden = true;
-            populatePositions(savedPosition.id);
-        });
-
-        function selectMappedPosition(position, marker, pin) {
-            locationSelect.value = String(position.location_id);
-            populatePositions(position.id);
-            if (selectedMarker && selectedMarker.pin) {
-                selectedMarker.pin.background = "#2e6fd8";
-                selectedMarker.pin.scale = 1;
-            }
-            pin.background = "#f28c28";
-            pin.scale = 1.35;
-            selectedMarker = {marker: marker, pin: pin};
-            selectedSummary.hidden = false;
-            selectedSummary.replaceChildren();
-            const selectionText = document.createElement("strong");
-            selectionText.textContent = "Selected: " + position.location_name + " — " + position.name;
-            const clearSelection = document.createElement("button");
-            clearSelection.type = "button";
-            clearSelection.textContent = "Clear selection";
-            selectedSummary.append(selectionText, " ", clearSelection);
-            clearSelection.addEventListener("click", function () {
-                locationSelect.value = "";
-                populatePositions("");
-                pin.background = "#2e6fd8";
-                pin.scale = 1;
-                selectedMarker = null;
-                selectedSummary.hidden = true;
-                infoWindow.close();
-            });
-            const popup = document.createElement("div");
-            const popupTitle = document.createElement("strong");
-            popupTitle.textContent = position.location_name;
-            const popupPosition = document.createElement("div");
-            popupPosition.textContent = "Operating Position: " + position.name;
-            popup.append(popupTitle, popupPosition);
-            infoWindow.setContent(popup);
-            infoWindow.open({map:map, anchor:marker});
-        }
-
-        mappedPositions.forEach(function (position) {
-            const pin = new PinElement({
-                background: "#2e6fd8",
-                borderColor: "#ffffff",
-                glyphColor: "#ffffff",
-                glyph: "O"
-            });
-            const marker = new AdvancedMarkerElement({
-                map: map,
-                position: {
-                    lat: position.latitude,
-                    lng: position.longitude
-                },
-                title: position.name,
-                content: pin.element
-            });
-
-            marker.gmpClickable = true;
-            marker.addListener("click", function () { selectMappedPosition(position, marker, pin); });
-            pin.element.tabIndex = 0;
-            pin.element.setAttribute("role", "button");
-            pin.element.setAttribute("aria-label", "Select " + position.location_name + ", " + position.name);
-            pin.element.addEventListener("keydown", function (event) {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    selectMappedPosition(position, marker, pin);
-                }
-            });
-            bounds.extend(marker.position);
-        });
-
-        if (mappedPositions.length === 1) {
-            map.setCenter(bounds.getCenter());
-            map.setZoom(14);
-        } else if (mappedPositions.length > 1) {
-            map.fitBounds(bounds, 45);
-        }
-    };
 })();
 </script>
-{% if google_maps_api_key %}
-<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventurePositionMap"></script>
-{% endif %}
 <script>
 document.querySelectorAll("form[data-prevent-double-submit]").forEach(function (form) {
-    form.addEventListener("submit", function () {
+    let submitting = false;
+    form.addEventListener("submit", function (event) {
+        if (submitting) {
+            event.preventDefault();
+            return;
+        }
+        submitting = true;
         const button = form.querySelector('button[type="submit"]');
         if (button) { button.disabled = true; button.textContent = "Saving…"; }
     });

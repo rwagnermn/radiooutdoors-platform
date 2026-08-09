@@ -173,6 +173,8 @@ class QRZOrganizationIdentityTests(TestCase):
                 "email": "w7o-test@example.com",
                 "password1": "CedarRidgeExpedition!942",
                 "password2": "CedarRidgeExpedition!942",
+                "policy_accepted": "on",
+                "age_confirmed": "on",
             },
         )
         self.assertRedirects(response, reverse("member_welcome"))

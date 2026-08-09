@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from .auth import verified_member_required
 from .member_forms import MemberDeleteForm, MemberProfileForm
 from .models import MemberProfile
+from .location_privacy import mark_adventure_location_visibility
 from .photo_moderation import moderate_profile_photo
 from .photo_upload_notices import add_photo_upload_notice
 from .qrz_service import (
@@ -126,12 +127,14 @@ def member_detail(request, callsign):
     if not owner and not request.user.is_staff:
         adventures = adventures.filter(is_public=True)
 
+    adventures = mark_adventure_location_visibility(adventures[:6], request.user)
+
     return render(
         request,
         "members/member_detail.html",
         {
             "profile": profile,
-            "adventures": adventures[:6],
+            "adventures": adventures,
             "is_owner": owner,
         },
     )

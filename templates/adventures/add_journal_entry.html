@@ -7,6 +7,7 @@
         <h1>Add Journal Entry</h1>
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
+            {% if return_to_contacts %}<input type="hidden" name="return_to_contacts" value="1">{% endif %}
             {{ form.non_field_errors }}
             {% include "adventures/_journal_entry_fields.html" %}
             <button type="submit" class="button-primary">Save Journal Entry</button>

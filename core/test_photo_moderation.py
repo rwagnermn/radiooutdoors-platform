@@ -1,4 +1,5 @@
 from io import BytesIO
+import json
 from pathlib import Path
 import socket
 import tempfile
@@ -8,8 +9,9 @@ from urllib.error import HTTPError
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.files.storage import default_storage
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.test import RequestFactory
 from django.urls import reverse
 from PIL import Image
@@ -21,6 +23,7 @@ from core.models import (
     MemberProfile,
     Photo,
     PhotoModerationActionAudit,
+    QuarantinedPhoto,
 )
 from core.photo_moderation import (
     ModerationDecision,
@@ -128,10 +131,68 @@ class OpenAIProviderTests(TestCase):
 
     def test_rate_limit_is_sanitized(self):
         provider = self.provider()
-        error = HTTPError(provider.endpoint, 429, "secret", {}, None)
+        error = HTTPError(
+            provider.endpoint,
+            429,
+            "secret",
+            {},
+            BytesIO(json.dumps({"error": {
+                "type": "invalid_request_error",
+                "message": "Image rate limit reached for this project.",
+            }}).encode()),
+        )
         with patch.object(provider, "_request", side_effect=error):
-            with self.assertRaisesMessage(ModerationUnavailable, "rate limit"):
+            with self.assertRaises(ModerationUnavailable) as captured:
                 provider.moderate(b"bytes", content_type="image/png")
+        self.assertEqual(captured.exception.category, "rate_limit")
+        self.assertEqual(captured.exception.http_status, 429)
+        self.assertNotIn("project", str(captured.exception).lower())
+
+    def test_authentication_failure_is_categorized(self):
+        provider = self.provider()
+        error = HTTPError(provider.endpoint, 401, "secret", {}, BytesIO(b"{}"))
+        with patch.object(provider, "_request", side_effect=error):
+            with self.assertRaises(ModerationUnavailable) as captured:
+                provider.moderate(b"bytes", content_type="image/png")
+        self.assertEqual(captured.exception.category, "authentication")
+        self.assertEqual(captured.exception.http_status, 401)
+
+    def test_billing_quota_failure_is_categorized(self):
+        provider = self.provider()
+        body = {"error": {
+            "type": "insufficient_quota",
+            "code": "insufficient_quota",
+            "message": "Billing quota unavailable for this project.",
+        }}
+        error = HTTPError(
+            provider.endpoint, 429, "secret", {},
+            BytesIO(json.dumps(body).encode()),
+        )
+        with patch.object(provider, "_request", side_effect=error):
+            with self.assertRaises(ModerationUnavailable) as captured:
+                provider.moderate(b"bytes", content_type="image/png")
+        self.assertEqual(captured.exception.category, "billing_quota")
+        self.assertEqual(captured.exception.provider_error_code, "insufficient_quota")
+
+    def test_invalid_request_is_categorized(self):
+        provider = self.provider()
+        body = {"error": {"type": "invalid_request_error", "code": "bad_input"}}
+        error = HTTPError(
+            provider.endpoint, 400, "secret", {},
+            BytesIO(json.dumps(body).encode()),
+        )
+        with patch.object(provider, "_request", side_effect=error):
+            with self.assertRaises(ModerationUnavailable) as captured:
+                provider.moderate(b"bytes", content_type="image/png")
+        self.assertEqual(captured.exception.category, "invalid_request")
+        self.assertEqual(captured.exception.provider_error_type, "invalid_request_error")
+
+    def test_malformed_response_is_categorized(self):
+        provider = self.provider()
+        with patch.object(provider, "_request", return_value={"results": []}):
+            with self.assertRaises(ModerationUnavailable) as captured:
+                provider.moderate(b"bytes", content_type="image/png")
+        self.assertEqual(captured.exception.category, "malformed_response")
 
 
 @override_settings(
@@ -173,8 +234,10 @@ class PhotoModerationTests(TestCase):
     def test_safe_provider_approves_and_public_page_displays(self):
         photo = self.make_photo()
         moderate_photo(photo)
+        photo.refresh_from_db()
         response = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(response, photo.image.url)
+        self.assertContains(response, photo.public_image_url)
+        self.assertEqual(self.client.get(photo.public_image_url).status_code, 200)
         self.assertEqual(self.client.get(photo.image.url).status_code, 200)
 
     @override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.ExplicitProvider")
@@ -212,7 +275,44 @@ class PhotoModerationTests(TestCase):
         photo.refresh_from_db()
         self.assertEqual(photo.moderation_status, "pending")
         self.assertEqual(photo.automated_decision, "scan_failed")
-        self.assertEqual(photo.moderation_reason, "Moderation could not be completed.")
+        self.assertEqual(photo.moderation_display_status, "Scan failed")
+        self.assertIn("provider_unavailable", photo.moderation_reason)
+
+    @override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.FailingProvider")
+    def test_scan_failed_is_private_and_staff_gets_sanitized_category(self):
+        photo = self.make_photo()
+        moderate_photo(photo)
+        self.assertFalse(photo.is_publicly_visible)
+        staff = get_user_model().objects.create_user(
+            "failure-reviewer", password="secret", is_staff=True
+        )
+        self.client.force_login(staff)
+        queue = self.client.get(reverse("photo_moderation_queue"))
+        self.assertContains(queue, "Scan failed")
+        self.assertContains(queue, "provider_unavailable")
+
+    @override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.SafeProvider")
+    def test_individual_retry_scans_once_and_creates_one_audit(self):
+        photo = self.make_photo()
+        photo.automated_decision = "scan_failed"
+        photo.save(update_fields=["automated_decision"])
+        staff = get_user_model().objects.create_user(
+            "retry-reviewer", password="secret", is_staff=True
+        )
+        self.client.force_login(staff)
+        response = self.client.post(
+            reverse("photo_moderation_action", args=["photo", photo.pk, "retry"])
+        )
+        self.assertRedirects(response, reverse("photo_moderation_queue"))
+        photo.refresh_from_db()
+        self.assertEqual(photo.moderation_status, "approved")
+        self.assertEqual(photo.automated_decision, "safe")
+        self.assertEqual(
+            PhotoModerationActionAudit.objects.filter(
+                action="retry", requested_target_ids=[f"photo:{photo.pk}"]
+            ).count(),
+            1,
+        )
 
     @override_settings(
         PHOTO_MODERATION_BACKEND="core.photo_moderation.OpenAIModerationProvider",
@@ -529,10 +629,109 @@ class PhotoModerationTests(TestCase):
         )
         self.assertNotIn("window.confirm", script)
         self.assertIn("if (submitting", script)
-        self.assertIn('button.textContent = confirmForm.dataset.actionKind === "approve"', script)
+        self.assertIn('confirmForm.dataset.actionKind === "approve"', script)
         self.assertIn('button.setAttribute("aria-busy", "true")', script)
         self.assertIn("button.disabled = true", script)
-        self.assertIn('"Approving…"', script)
+        self.assertIn('"Removing..."', script)
+
+    def test_bulk_remove_confirmation_lists_only_explicit_selection(self):
+        first = self.make_safe_recommendation("remove-one.png")
+        second = self.make_safe_recommendation("remove-two.png")
+        staff = get_user_model().objects.create_user("bulk-removal-reviewer", password="secret", is_staff=True)
+        self.client.force_login(staff)
+        preview = self.client.post(reverse("photo_moderation_bulk_preview"), {
+            "bulk_action": "remove", "status_filter": "all",
+            "selected": [f"photo:{first.pk}", f"photo:{second.pk}"],
+        })
+        self.assertContains(preview, "Remove 2 selected photos?")
+        self.assertContains(preview, "Include this photo", count=2)
+        self.assertContains(preview, "Remove Selected Photos")
+        self.assertContains(preview, "Current moderation status", count=2)
+        self.assertContains(preview, "Existing provider recommendation", count=2)
+
+    def test_bulk_remove_quarantines_photo_preserves_file_parent_and_audit(self):
+        photo = self.make_safe_recommendation("recoverable.png")
+        photo.moderation_status = Photo.ModerationStatus.APPROVED
+        photo.save(update_fields=["moderation_status"])
+        original_pk, image_name = photo.pk, photo.image.name
+        staff = get_user_model().objects.create_user("bulk-remover", password="secret", is_staff=True)
+        self.client.force_login(staff)
+        response = self.client.post(reverse("photo_moderation_bulk_apply"), {
+            "bulk_action": "remove", "selected": [f"photo:{original_pk}"],
+            "removal_reason": "member_request",
+        }, follow=True)
+        self.assertContains(response, "1 photo removed successfully.")
+        self.assertFalse(Photo.objects.filter(pk=original_pk).exists())
+        quarantine = QuarantinedPhoto.objects.get(original_target=f"photo:{original_pk}")
+        self.assertEqual(quarantine.removed_by, staff)
+        self.assertEqual(quarantine.removal_reason, "member_request")
+        self.assertEqual(quarantine.metadata["status"], "approved")
+        self.assertEqual(self.client.get(photo.image.url).status_code, 404)
+        self.assertTrue(default_storage.exists(image_name))
+        self.assertTrue(Adventure.objects.filter(pk=self.adventure.pk).exists())
+        self.assertTrue(JournalEntry.objects.filter(pk=self.entry.pk).exists())
+        audit = PhotoModerationActionAudit.objects.get(decision_source="bulk-quarantine")
+        self.assertEqual(audit.successful_target_ids, [f"photo:{original_pk}"])
+
+    def test_bulk_remove_subset_partial_failure_and_duplicate_are_safe(self):
+        first, second = self.make_photo(), self.make_photo()
+        staff = get_user_model().objects.create_user("bulk-subset-remover", password="secret", is_staff=True)
+        self.client.force_login(staff)
+        token = f"photo:{first.pk}"
+        response = self.client.post(reverse("photo_moderation_bulk_apply"), {
+            "bulk_action": "remove", "selected": [token, token, "photo:999999"],
+            "removal_reason": "duplicate",
+        }, follow=True)
+        self.assertContains(response, "1 photo removed; 1 could not be processed.")
+        self.assertEqual(QuarantinedPhoto.objects.count(), 1)
+        self.assertTrue(Photo.objects.filter(pk=second.pk).exists())
+        repeat = self.client.post(reverse("photo_moderation_bulk_apply"), {
+            "bulk_action": "remove", "selected": [token], "removal_reason": "duplicate",
+        }, follow=True)
+        self.assertContains(repeat, "0 photos removed; 1 could not be processed.")
+        self.assertEqual(QuarantinedPhoto.objects.count(), 1)
+
+    def test_removed_filter_preview_permissions_and_restore(self):
+        photo = self.make_safe_recommendation("restore.png")
+        photo.moderation_status = Photo.ModerationStatus.APPROVED
+        photo.save(update_fields=["moderation_status"])
+        staff = get_user_model().objects.create_user("bulk-restorer", password="secret", is_staff=True)
+        self.client.force_login(staff)
+        self.client.post(reverse("photo_moderation_bulk_apply"), {
+            "bulk_action": "remove", "selected": [f"photo:{photo.pk}"],
+            "removal_reason": "accidental",
+        })
+        quarantine = QuarantinedPhoto.objects.get()
+        removed = self.client.get(reverse("photo_moderation_queue") + "?status=removed")
+        self.assertContains(removed, "Removed / Quarantined")
+        self.assertContains(removed, "Uploaded accidentally")
+        self.assertEqual(self.client.get(reverse("photo_quarantine_thumbnail", args=[quarantine.pk])).status_code, 200)
+        restored = self.client.post(reverse("photo_quarantine_restore", args=[quarantine.pk]), follow=True)
+        self.assertContains(restored, "Photo restored successfully.")
+        quarantine.refresh_from_db()
+        self.assertTrue(quarantine.is_restored)
+        self.assertEqual(Photo.objects.get(journal_entry=self.entry).moderation_status, Photo.ModerationStatus.APPROVED)
+        self.assertEqual(PhotoModerationActionAudit.objects.filter(decision_source="quarantine-restore").count(), 1)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("photo_quarantine_thumbnail", args=[quarantine.pk])).status_code, 302)
+
+    def test_bulk_remove_requires_reason_staff_and_csrf(self):
+        photo = self.make_photo()
+        payload = {"bulk_action": "remove", "selected": [f"photo:{photo.pk}"]}
+        self.assertEqual(self.client.post(reverse("photo_moderation_bulk_apply"), payload).status_code, 302)
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post(reverse("photo_moderation_bulk_apply"), payload).status_code, 302)
+        self.assertTrue(Photo.objects.filter(pk=photo.pk).exists())
+        staff = get_user_model().objects.create_user("csrf-remover", password="secret", is_staff=True)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(staff)
+        self.assertEqual(csrf_client.post(reverse("photo_moderation_bulk_apply"), {
+            **payload, "removal_reason": "spam",
+        }).status_code, 403)
+        self.client.force_login(staff)
+        missing_reason = self.client.post(reverse("photo_moderation_bulk_apply"), payload, follow=True)
+        self.assertContains(missing_reason, "Choose a reason for removal.")
+        self.assertTrue(Photo.objects.filter(pk=photo.pk).exists())
 
     def test_duplicate_bulk_tokens_are_processed_once(self):
         photo = self.make_safe_recommendation("duplicate-submit.png")

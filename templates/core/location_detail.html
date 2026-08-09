@@ -13,13 +13,14 @@
         </a>
 
         <div class="location-toolbar-actions">
-            {% if is_verified_member %}
+            {% if can_edit_location_pin %}
                 <a
                     href="{% url 'edit_location' location.pk %}"
                     class="button-secondary-dark"
                 >
                     Edit Location
                 </a>
+                <a href="{% url 'edit_owned_pin_position' 'location' location.pk %}?next={{ request.path|urlencode }}" class="button-secondary-dark">Edit Pin Position</a>
             {% endif %}
 
             {% if is_verified_member %}
@@ -45,7 +46,7 @@
             {{ location.get_location_type_display }}
         </p>
 
-        <h1>{{ location.name }}</h1>
+        <h1>{{ location.name }} {% if is_private_location %}<span class="private-location-badge">🔒 Private</span>{% endif %}</h1>
 
         <p class="location-place-line">
             {% if location.city %}{{ location.city }}{% endif %}
@@ -124,7 +125,7 @@
     </header>
 
 
-    {% if location.operating_locations.all %}
+    {% if False %}
         <section class="location-map-section">
             <div class="location-section-heading">
                 <div>
@@ -144,9 +145,12 @@
                         {% for operating_location in location.operating_locations.all %}
                             {% if operating_location.latitude and operating_location.longitude %}
                                 {
+                                    "id": {{ operating_location.pk }},
                                     "name": "{{ operating_location.name|escapejs }}",
                                     "latitude": {{ operating_location.latitude }},
-                                    "longitude": {{ operating_location.longitude }}
+                                    "longitude": {{ operating_location.longitude }},
+                                    "can_edit": {% if operating_location.pk in editable_position_ids %}true{% else %}false{% endif %},
+                                    "edit_url": "{% url 'edit_owned_pin_position' 'operating_position' operating_location.pk %}?next={{ request.path|urlencode }}"
                                 }{% if not forloop.last %},{% endif %}
                             {% endif %}
                         {% endfor %}
@@ -160,7 +164,7 @@
         </section>
     {% endif %}
 
-    <section class="operating-location-section">
+    {% if False %}<section class="operating-location-section">
         <div class="location-section-heading">
             <div>
                 <p class="section-kicker">Exact places to set up</p>
@@ -175,6 +179,10 @@
                     <div class="operating-location-title-row">
                         <h3>{{ operating_location.name }}</h3>
 
+                        {% if operating_location.pk in editable_position_ids %}
+                            <a href="{% url 'edit_operating_position' operating_location.pk %}" class="ro-small-action">Edit Operating Position</a>
+                            <a href="{% url 'edit_owned_pin_position' 'operating_position' operating_location.pk %}?next={{ request.path|urlencode }}" class="ro-small-action">Edit Pin Position</a>
+                        {% endif %}
                         {% if is_verified_member %}
                             <form
                                 method="post"
@@ -220,7 +228,7 @@
                 </div>
             {% endfor %}
         </div>
-    </section>
+    </section>{% endif %}
 
     <section class="location-adventure-section">
         <div class="location-section-heading">
@@ -255,13 +263,13 @@
                             onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}"
                         >
                             <td class="location-adventure-photo">
-                                {% if adventure.cover_photo and adventure.cover_photo.is_publicly_visible %}
+                                {% if adventure.display_cover_photo %}
                                     <img
-                                        src="{{ adventure.cover_photo.image.url }}"
+                                        src="{{ adventure.display_cover_photo.public_thumbnail_url }}"
                                         alt=""
                                     >
                                 {% else %}
-                                    <div class="location-adventure-placeholder"></div>
+                                    <img src="{% static 'images/hero.jpg' %}" alt="">
                                 {% endif %}
                             </td>
 
@@ -272,11 +280,6 @@
                             <td>
                                 <strong>{{ adventure.title }}</strong>
 
-                                {% if adventure.operating_location %}
-                                    <div class="location-adventure-subtext">
-                                        {{ adventure.operating_location.name }}
-                                    </div>
-                                {% endif %}
                             </td>
 
                             <td>{{ adventure.owner }}</td>
@@ -299,7 +302,7 @@
 
 </section>
 
-{% if google_maps_api_key and location.operating_locations.all %}
+{% if False %}
 <script>
 async function initLocationDetailMap() {
     const mapElement = document.getElementById("location-detail-map");
@@ -313,9 +316,12 @@ async function initLocationDetailMap() {
     {% for operating_location in location.operating_locations.all %}
         {% if operating_location.latitude != None and operating_location.longitude != None %}
             points.push({
+                id: {{ operating_location.pk }},
                 name: "{{ operating_location.name|escapejs }}",
                 latitude: {{ operating_location.latitude }},
-                longitude: {{ operating_location.longitude }}
+                longitude: {{ operating_location.longitude }},
+                canEdit: {% if operating_location.pk in editable_position_ids %}true{% else %}false{% endif %},
+                editUrl: "{% url 'edit_owned_pin_position' 'operating_position' operating_location.pk %}?next={{ request.path|urlencode }}"
             });
         {% endif %}
     {% endfor %}
@@ -367,6 +373,7 @@ async function initLocationDetailMap() {
         marker.addListener("click", function () {
             infoWindow.setContent(
                 "<strong>" + point.name + "</strong><br>Operating Position"
+                + (point.canEdit ? "<br><a href='" + point.editUrl + "'>Edit Pin Position</a>" : "")
             );
             infoWindow.open({
                 map: map,

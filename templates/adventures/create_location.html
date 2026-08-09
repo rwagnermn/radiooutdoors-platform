@@ -45,7 +45,8 @@
 
             <section class="location-editor-section">
                 <h2>Location</h2>
-                <p class="section-help">Start typing a park, airport, campground, or address. Select the match to fill the address.</p>
+                <p class="section-help">Give the Location a natural name such as Near Pike Lake, Forest Road Campsite, or North Shore Pull-off. A street address is optional; the map pin is required.</p>
+                <p class="section-help">Choose Private for cabins, homes, private property, or operating places you do not want shown to other users. Private Locations and their pins are visible only to you and authorized Radio Outdoors staff.</p>
 
                 <div class="location-editor-grid">
                     <div class="field-span-two">
@@ -92,6 +93,14 @@
                         <label for="{{ location_form.description.id_for_label }}">Location Notes (optional)</label>
                         {{ location_form.description }}
                     </div>
+
+                    <fieldset class="field-span-two location-visibility-choice">
+                        <legend>Location Visibility</legend>
+                        {{ location_form.visibility }}
+                        <p><strong>Public:</strong> Other users can find and view this Location.</p>
+                        <p><strong>Private:</strong> Only you and authorized Radio Outdoors staff can view this Location and its exact position.</p>
+                        {% for error in location_form.visibility.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </fieldset>
                 </div>
 
                 <div class="location-photo-editor photo-preview-control" data-photo-preview data-photo-preview-mode="single" data-photo-preview-save-label="Location" data-photo-preview-remove-field="remove_location_photo">
@@ -117,6 +126,16 @@
 
                 {{ location_form.latitude }}
                 {{ location_form.longitude }}
+                {% if google_maps_api_key %}
+                    <h3>Location Pin</h3>
+                    <p class="field-help">Click the map to place the pin, or drag the pin to adjust it. Use Remove Pin if it was placed accidentally.</p>
+                    <div id="location-map" class="location-pin-map"></div>
+                    <div class="editable-map-pin-controls">
+                        <button type="button" id="remove-location-pin" class="ro-small-action ro-danger-action">Remove Pin</button>
+                        <output id="location-coordinate-display" class="editable-map-coordinate-display" aria-live="polite"></output>
+                    </div>
+                    <p id="location-map-status" class="field-help editable-map-status" tabindex="-1" aria-live="assertive"></p>
+                {% endif %}
             </section>
 
             <section id="advisory-editor-section" class="location-editor-section advisory-editor-section{% if location_form.has_operating_advisory.value %} advisory-active{% endif %}{% if location_form.operating_advisory.errors %} advisory-has-error{% endif %}">
@@ -206,15 +225,21 @@
                 {{ operating_form.longitude }}
 
                 {% if google_maps_api_key %}
+                    <p class="field-help">Click the map to place the pin, or drag the pin to adjust it. Use Remove Pin if it was placed accidentally.</p>
                     <div id="position-map" class="location-pin-map"></div>
-                    <p id="position-map-status" class="field-help">Select a Location above or click the map to place the blue Operating Position pin.</p>
+                    <div class="editable-map-pin-controls">
+                        <button type="button" id="remove-position-pin" class="ro-small-action ro-danger-action">Remove Pin</button>
+                        <button type="button" id="reset-position-pin" class="ro-small-action">Reset to Location</button>
+                        <output id="position-coordinate-display" class="editable-map-coordinate-display" aria-live="polite"></output>
+                    </div>
+                    <p id="position-map-status" class="field-help editable-map-status" tabindex="-1" aria-live="assertive"></p>
                 {% else %}
                     <div class="google-maps-setup-message">Google Maps API key needed to place the Operating Position.</div>
                 {% endif %}
             </section>
             {% endif %}
 
-            <button type="submit" class="button-primary">{{ save_label }}</button>
+            <div class="form-actions"><button type="submit" class="button-primary">{{ save_label }}</button><a class="button-secondary-dark" href="{% if return_to == 'adventure' %}{% url 'add_adventure' %}{% else %}{% url 'locations' %}{% endif %}">Cancel</a></div>
         </form>
     </div>
 </section>
@@ -237,13 +262,12 @@
 })();
 </script>
 
-{% if operating_form and google_maps_api_key %}
+{% if google_maps_api_key %}
+<script src="{% static 'js/editable-map-pin.js' %}?v=001"></script>
 <script>
 async function initLocationEditor() {
-    const {Map} = await google.maps.importLibrary("maps");
-    const {AdvancedMarkerElement, PinElement} = await google.maps.importLibrary("marker");
     const {Autocomplete} = await google.maps.importLibrary("places");
-
+    const form = document.getElementById("location-form");
     const locationName = document.getElementById("{{ location_form.name.id_for_label }}");
     const street = document.getElementById("{{ location_form.street_address.id_for_label }}");
     const city = document.getElementById("{{ location_form.city.id_for_label }}");
@@ -253,60 +277,47 @@ async function initLocationEditor() {
     const website = document.getElementById("{{ location_form.official_website.id_for_label }}");
     const locationLat = document.getElementById("{{ location_form.latitude.id_for_label }}");
     const locationLng = document.getElementById("{{ location_form.longitude.id_for_label }}");
+    const locationMap = await RadioOutdoorsEditablePinMap.create({
+        mapElement:document.getElementById("location-map"),latInput:locationLat,lngInput:locationLng,
+        form:form,required:{{ require_location_pin|yesno:"true,false" }},requiredMessage:"Place the Location pin before continuing.",pinColor:"#277a45",pinGlyph:"L",pinTitle:"Location",
+        removeButton:document.getElementById("remove-location-pin"),
+        coordinateDisplay:document.getElementById("location-coordinate-display"),
+        statusElement:document.getElementById("location-map-status"),
+        emptyMessage:"Place New Pin: search for an address or click the map.",
+        removedMessage:"Place New Pin: click the map to place the Location pin.",
+        placedMessage:"Location pin placed. Drag it to adjust."
+    });
+
+    let positionMap = null;
+    {% if operating_form %}
     const positionLat = document.getElementById("{{ operating_form.latitude.id_for_label }}");
     const positionLng = document.getElementById("{{ operating_form.longitude.id_for_label }}");
-    const status = document.getElementById("position-map-status");
-
-    const startingPosition = {
-        lat: parseFloat(positionLat.value || locationLat.value) || 45.0,
-        lng: parseFloat(positionLng.value || locationLng.value) || -93.0
-    };
-
-    const map = new Map(document.getElementById("position-map"), radioOutdoorsMapOptions({
-        center: startingPosition,
-        zoom: (positionLat.value || locationLat.value) ? 15 : 7,
-        mapId: "DEMO_MAP_ID",
-        streetViewControl: true,
-        mapTypeControl: true
-    }));
-
-    let marker = null;
-    function placePosition(pos, pan) {
-        const clean = {lat: Number(pos.lat), lng: Number(pos.lng)};
-        positionLat.value = clean.lat.toFixed(6);
-        positionLng.value = clean.lng.toFixed(6);
-        if (marker) marker.map = null;
-        const pin = new PinElement({background: "#2e6fd8", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "O"});
-        marker = new AdvancedMarkerElement({map: map, position: clean, content: pin.element, title: "Operating Position"});
-        if (pan) { map.panTo(clean); map.setZoom(16); }
-        if (status) status.textContent = "Blue Operating Position pin placed.";
-    }
-
-    if (positionLat.value && positionLng.value) placePosition(startingPosition, false);
-
-    map.addListener("click", function (event) {
-        placePosition({lat: event.latLng.lat(), lng: event.latLng.lng()}, false);
+    positionMap = await RadioOutdoorsEditablePinMap.create({
+        mapElement:document.getElementById("position-map"),latInput:positionLat,lngInput:positionLng,
+        form:form,required:true,
+        requiredMessage:"Place the Operating Position pin before continuing.",
+        pinColor:"#2e6fd8",pinGlyph:"O",pinTitle:"Operating Position",
+        removeButton:document.getElementById("remove-position-pin"),
+        resetButton:document.getElementById("reset-position-pin"),
+        getResetCoordinates:function(){return locationMap.coordinates();},
+        coordinateDisplay:document.getElementById("position-coordinate-display"),
+        statusElement:document.getElementById("position-map-status"),
+        emptyMessage:"Place New Pin: click the map where the station can be set up.",
+        removedMessage:"Place New Pin: click the map to place the Operating Position pin.",
+        placedMessage:"Operating Position pin placed. Drag it to adjust."
     });
+    {% endif %}
 
     const autocomplete = new Autocomplete(locationName, {
         fields: ["name", "formatted_address", "address_components", "geometry", "website"],
         types: ["establishment", "geocode"]
     });
-
     autocomplete.addListener("place_changed", function () {
         const place = autocomplete.getPlace();
         if (!place.geometry || !place.geometry.location) return;
-
         if (place.name) locationName.value = place.name;
         if (place.website && !website.value) website.value = place.website;
-
-        let streetNumber = "";
-        let route = "";
-        let locality = "";
-        let admin = "";
-        let zip = "";
-        let nation = "";
-
+        let streetNumber="",route="",locality="",admin="",zip="",nation="";
         (place.address_components || []).forEach(function (component) {
             const types = component.types || [];
             if (types.includes("street_number")) streetNumber = component.long_name;
@@ -317,17 +328,17 @@ async function initLocationEditor() {
             if (types.includes("postal_code")) zip = component.long_name;
             if (types.includes("country")) nation = component.long_name;
         });
-
-        street.value = [streetNumber, route].filter(Boolean).join(" ");
-        city.value = locality;
-        state.value = admin;
-        postal.value = zip;
-        country.value = nation || country.value;
-
-        const pos = {lat: place.geometry.location.lat(), lng: place.geometry.location.lng()};
-        locationLat.value = pos.lat.toFixed(6);
-        locationLng.value = pos.lng.toFixed(6);
-        placePosition(pos, true);
+        if (!street.value) street.value=[streetNumber,route].filter(Boolean).join(" ");
+        if (!city.value) city.value=locality;
+        if (!state.value) state.value=admin;
+        if (!postal.value) postal.value=zip;
+        if (!country.value) country.value=nation;
+        const oldLocation = locationMap.coordinates();
+        const pos={lat:place.geometry.location.lat(),lng:place.geometry.location.lng()};
+        locationMap.place(pos,true);
+        if (positionMap && (positionMap.isEmpty() || positionMap.matches(oldLocation))) {
+            positionMap.place(pos,true);
+        }
     });
 }
 window.initLocationEditor = initLocationEditor;

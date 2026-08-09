@@ -25,39 +25,27 @@ class AddAdventureWorkflowTests(TestCase):
             verification_method=MemberProfile.VerificationMethod.QRZ,
         )
         self.client.force_login(self.user)
-        self.location = Location.objects.create(name="Workflow Park")
+        self.location = Location.objects.create(name="Workflow Park", created_by=self.user)
         self.mapped_position = OperatingLocation.objects.create(
             location=self.location,
+            created_by=self.user,
             name="Mapped Position",
             latitude="44.100000",
             longitude="-93.100000",
         )
         self.unmapped_position = OperatingLocation.objects.create(
             location=self.location,
+            created_by=self.user,
             name="Unmapped Position",
         )
 
-    def test_add_page_supplies_all_positions_and_only_maps_coordinates(self):
+    def test_add_page_uses_location_only_workflow(self):
         response = self.client.get(reverse("add_adventure"))
 
         self.assertEqual(response.status_code, 200)
-        positions = response.context["operating_positions"]
-        self.assertEqual(
-            {position["id"] for position in positions},
-            {self.mapped_position.pk, self.unmapped_position.pk},
-        )
-        mapped = [
-            position for position in positions
-            if position["latitude"] is not None
-            and position["longitude"] is not None
-        ]
-        self.assertEqual(
-            [position["id"] for position in mapped],
-            [self.mapped_position.pk],
-        )
-        self.assertContains(response, "+ Add New Location")
-        self.assertContains(response, "📍 Drop a New Pin...")
-        self.assertContains(response, "Required Field", count=5)
+        self.assertNotIn("operating_location", response.context["form"].fields)
+        self.assertContains(response, "Create a New Location")
+        self.assertContains(response, "Choosing or creating a Location")
 
     def test_dropdown_selection_creates_adventure_with_matching_position(self):
         response = self.client.post(
@@ -73,13 +61,10 @@ class AddAdventureWorkflowTests(TestCase):
         adventure = Adventure.objects.get(title="Dropdown Adventure")
         self.assertRedirects(
             response,
-            reverse("all_adventures"),
+            reverse("my_adventures"),
         )
         self.assertEqual(adventure.location_id, self.location.pk)
-        self.assertEqual(
-            adventure.operating_location_id,
-            self.unmapped_position.pk,
-        )
+        self.assertIsNone(adventure.operating_location_id)
         self.assertTrue(
             Adventure.objects.filter(
                 owner=self.user,
@@ -100,8 +85,93 @@ class AddAdventureWorkflowTests(TestCase):
             },
         )
         adventure = Adventure.objects.get(title="Photo Adventure")
-        self.assertRedirects(response, reverse("all_adventures"))
+        self.assertRedirects(response, reverse("my_adventures"))
         self.assertEqual(Photo.objects.filter(journal_entry__adventure=adventure).count(), 1)
+
+    def test_create_redirects_to_my_adventures_with_success_message_and_saved_row(self):
+        response = self.client.post(
+            reverse("add_adventure"),
+            {
+                "title": "Visible After Save",
+                "location": self.location.pk,
+                "operating_location": self.mapped_position.pk,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.resolver_match.url_name, "my_adventures")
+        self.assertContains(response, "Adventure saved successfully.")
+        self.assertContains(response, "Visible After Save")
+        self.assertContains(response, "My Adventures")
+
+    def test_edit_redirects_to_my_adventures_and_updates_saved_row(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Before Edit Redirect",
+            location=self.location,
+            operating_location=self.mapped_position,
+        )
+
+        response = self.client.post(
+            reverse("edit_adventure", kwargs={"slug": adventure.slug}),
+            {
+                "title": "After Edit Redirect",
+                "location": self.location.pk,
+                "operating_location": self.mapped_position.pk,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.resolver_match.url_name, "my_adventures")
+        self.assertContains(response, "Adventure saved successfully.")
+        self.assertContains(response, "After Edit Redirect")
+        adventure.refresh_from_db()
+        self.assertEqual(adventure.title, "After Edit Redirect")
+
+    def test_validation_failure_stays_on_form_and_creates_nothing(self):
+        response = self.client.post(
+            reverse("add_adventure"),
+            {"title": "Preserve This Title"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.resolver_match.url_name, "add_adventure")
+        self.assertContains(response, "Preserve This Title")
+        self.assertTrue(response.context["form"].errors)
+        self.assertFalse(
+            Adventure.objects.filter(title="Preserve This Title").exists()
+        )
+
+    def test_related_photo_failure_rolls_back_adventure_and_stays_on_form(self):
+        output = BytesIO()
+        Image.new("RGB", (20, 20), "orange").save(output, "PNG")
+        with patch(
+            "adventures.views._save_entry_photos",
+            side_effect=OSError("simulated storage failure"),
+        ):
+            response = self.client.post(
+                reverse("add_adventure"),
+                {
+                    "title": "Rolled Back Adventure",
+                    "location": self.location.pk,
+                    "operating_location": self.mapped_position.pk,
+                    "photos": SimpleUploadedFile(
+                        "rollback.png", output.getvalue(), "image/png"
+                    ),
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The Adventure could not be saved")
+        self.assertFalse(
+            Adventure.objects.filter(title="Rolled Back Adventure").exists()
+        )
+
+    def test_form_prevents_duplicate_browser_submission(self):
+        response = self.client.get(reverse("add_adventure"))
+        self.assertContains(response, "data-prevent-double-submit")
+        self.assertContains(response, "if (submitting)")
+        self.assertContains(response, "event.preventDefault()")
 
     def test_map_coordinates_prepopulate_location_form(self):
         response = self.client.get(
@@ -112,6 +182,84 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertEqual(form.initial["latitude"], "44.123456")
         self.assertEqual(form.initial["longitude"], "-93.654321")
 
+        self.assertIsNone(response.context["operating_form"])
+
+    def test_first_operating_position_inherits_parent_location_coordinates(self):
+        self.location.latitude = "44.234567"
+        self.location.longitude = "-93.765432"
+        self.location.save(update_fields=["latitude", "longitude"])
+
+        response = self.client.get(
+            reverse("add_operating_position", args=[self.location.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(str(response.context["form"].initial["latitude"]), "44.234567")
+        self.assertEqual(str(response.context["form"].initial["longitude"]), "-93.765432")
+        self.assertContains(response, "Reset to Location")
+        self.assertContains(response, "Remove Pin")
+
+    def test_location_without_coordinates_does_not_invent_position_coordinates(self):
+        response = self.client.get(
+            reverse("add_operating_position", args=[self.location.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("latitude", response.context["form"].initial)
+        self.assertNotIn("longitude", response.context["form"].initial)
+
+    def test_operating_position_requires_a_pin(self):
+        response = self.client.post(
+            reverse("add_operating_position", args=[self.location.pk]),
+            {"name": "Missing Pin"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Place the Operating Position pin before continuing.",
+        )
+        self.assertFalse(
+            OperatingLocation.objects.filter(
+                location=self.location,
+                name="Missing Pin",
+            ).exists()
+        )
+
+    def test_editing_position_coordinates_does_not_change_parent_location(self):
+        self.location.latitude = "44.300000"
+        self.location.longitude = "-93.300000"
+        self.location.save(update_fields=["latitude", "longitude"])
+
+        response = self.client.post(
+            reverse("edit_operating_position", args=[self.mapped_position.pk]),
+            {
+                "name": self.mapped_position.name,
+                "latitude": "44.399999",
+                "longitude": "-93.399999",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("location_detail", args=[self.location.pk]),
+        )
+        self.mapped_position.refresh_from_db()
+        self.location.refresh_from_db()
+        self.assertEqual(str(self.mapped_position.latitude), "44.399999")
+        self.assertEqual(str(self.mapped_position.longitude), "-93.399999")
+        self.assertEqual(str(self.location.latitude), "44.300000")
+        self.assertEqual(str(self.location.longitude), "-93.300000")
+
+    def test_edit_location_renders_shared_editable_pin_controls(self):
+        response = self.client.get(
+            reverse("edit_location", args=[self.location.pk])
+        )
+
+        self.assertContains(response, "Remove Pin")
+        self.assertContains(response, "editable-map-pin.js")
+        self.assertNotContains(response, "Reset to Location")
+
     def test_airport_location_type_persists(self):
         airport = Location.objects.create(
             name="Workflow Airport",
@@ -121,7 +269,7 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertEqual(airport.location_type, "airport")
         self.assertEqual(airport.get_location_type_display(), "Airport")
 
-    def test_add_location_returns_with_new_location_and_position_selected(self):
+    def test_add_location_returns_with_new_location_selected(self):
         response = self.client.post(
             reverse("create_location"),
             {
@@ -129,17 +277,21 @@ class AddAdventureWorkflowTests(TestCase):
                 "draft_title": "Preserved Draft",
                 "draft_public": "1",
                 "location-name": "New Workflow Location",
+                "location-visibility": Location.Visibility.PUBLIC,
                 "location-location_type": Location.LocationType.PARK,
                 "location-country": "USA",
+                "location-latitude": "44.123456",
+                "location-longitude": "-93.654321",
                 "operating-name": "First Position",
+                "operating-latitude": "44.123456",
+                "operating-longitude": "-93.654321",
             },
         )
 
         location = Location.objects.get(name="New Workflow Location")
-        position = location.operating_locations.get(name="First Position")
         expected = (
             f"{reverse('add_adventure')}?location={location.pk}"
-            f"&operating={position.pk}&title=Preserved+Draft&public=1"
+            f"&title=Preserved+Draft&public=1"
         )
         self.assertRedirects(response, expected, fetch_redirect_response=False)
 
@@ -148,10 +300,20 @@ class AddAdventureWorkflowTests(TestCase):
             returned.context["form"].initial["location"],
             str(location.pk),
         )
-        self.assertEqual(
-            returned.context["form"].initial["operating_location"],
-            str(position.pk),
+
+        saved = self.client.post(
+            reverse("add_adventure"),
+            {
+                "title": "Adventure With Newly Created Place",
+                "location": location.pk,
+            },
+            follow=True,
         )
+        self.assertEqual(saved.resolver_match.url_name, "my_adventures")
+        self.assertContains(saved, "Adventure With Newly Created Place")
+        created = Adventure.objects.get(title="Adventure With Newly Created Place")
+        self.assertEqual(created.location_id, location.pk)
+        self.assertIsNone(created.operating_location_id)
 
     def test_inline_position_creation_saves_under_selected_location(self):
         empty_location = Location.objects.create(name="Empty Workflow Park")
@@ -621,10 +783,12 @@ class AddAdventureWorkflowTests(TestCase):
             reverse("create_location"),
             {
                 "location-name": "Photo Workflow Location",
+                "location-visibility": Location.Visibility.PUBLIC,
                 "location-location_type": Location.LocationType.PARK,
                 "location-country": "USA",
                 "location-photo": self.location_image(),
-                "operating-name": "First Position",
+                "location-latitude": "44.123456",
+                "location-longitude": "-93.654321",
             },
         )
         location = Location.objects.get(name="Photo Workflow Location")
@@ -649,6 +813,7 @@ class AddAdventureWorkflowTests(TestCase):
             reverse("edit_location", kwargs={"location_id": location.pk}),
             {
                 "location-name": location.name,
+                "location-visibility": location.visibility,
                 "location-location_type": location.location_type,
                 "location-country": location.country,
                 "location-photo": self.location_image("replacement.png", "blue"),
@@ -662,6 +827,7 @@ class AddAdventureWorkflowTests(TestCase):
             reverse("edit_location", kwargs={"location_id": location.pk}),
             {
                 "location-name": location.name,
+                "location-visibility": location.visibility,
                 "location-location_type": location.location_type,
                 "location-country": location.country,
                 "location-remove_location_photo": "on",

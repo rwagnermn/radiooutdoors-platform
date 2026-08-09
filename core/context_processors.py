@@ -2,6 +2,12 @@ from django.conf import settings
 
 
 from .auth import is_verified_member
+from .policies import (
+    COMMUNITY_VERSION,
+    POLICY_EFFECTIVE_DATE,
+    PRIVACY_VERSION,
+    TERMS_VERSION,
+)
 
 
 def account_roles(request):
@@ -56,4 +62,21 @@ def account_roles(request):
 def google_maps(request):
     return {
         "google_maps_api_key": settings.GOOGLE_MAPS_API_KEY,
+    }
+
+
+def organizational_emails(request):
+    """Expose only the public organizational address to templates."""
+    return {
+        "radio_outdoors_contact_email": settings.RADIO_OUTDOORS_CONTACT_EMAIL,
+    }
+
+
+def current_policy_metadata(request):
+    """Expose authoritative display metadata; submitted versions are never trusted."""
+    return {
+        "policy_effective_date": POLICY_EFFECTIVE_DATE,
+        "terms_version": TERMS_VERSION,
+        "privacy_version": PRIVACY_VERSION,
+        "community_version": COMMUNITY_VERSION,
     }

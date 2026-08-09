@@ -49,6 +49,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.policy_middleware.PolicyAcceptanceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -67,6 +68,8 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.google_maps',
                 'core.context_processors.account_roles',
+                'core.context_processors.organizational_emails',
+                'core.context_processors.current_policy_metadata',
             ],
         },
     },
@@ -168,9 +171,29 @@ EMAIL_HOST_USER = os.environ.get("DJANGO_EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("DJANGO_EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("DJANGO_EMAIL_USE_TLS", "1") == "1"
 EMAIL_USE_SSL = os.environ.get("DJANGO_EMAIL_USE_SSL", "0") == "1"
+RADIO_OUTDOORS_CONTACT_EMAIL = os.environ.get(
+    "RADIO_OUTDOORS_CONTACT_EMAIL",
+    "info@radiooutdoors.org",
+).strip()
+RADIO_OUTDOORS_ADMIN_EMAIL = os.environ.get(
+    "RADIO_OUTDOORS_ADMIN_EMAIL",
+    "admin@radiooutdoors.org",
+).strip()
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DJANGO_DEFAULT_FROM_EMAIL",
-    "Radio Outdoors <noreply@radiooutdoors.org>",
+    f"Radio Outdoors <{RADIO_OUTDOORS_CONTACT_EMAIL}>",
+)
+SERVER_EMAIL = os.environ.get(
+    "DJANGO_SERVER_EMAIL",
+    f"Radio Outdoors System <{RADIO_OUTDOORS_ADMIN_EMAIL}>",
+)
+ADMINS = [("Radio Outdoors Administrator", RADIO_OUTDOORS_ADMIN_EMAIL)]
+RADIO_OUTDOORS_SITE_URL = os.environ.get(
+    "RADIO_OUTDOORS_SITE_URL",
+    "http://127.0.0.1:8000" if DEBUG else "https://radiooutdoors.org",
+).rstrip("/")
+ADMIN_NOTIFICATION_SUPPRESSION_SECONDS = int(
+    os.environ.get("ADMIN_NOTIFICATION_SUPPRESSION_SECONDS", "3600")
 )
 
 PASSWORD_RESET_DOMAIN = os.environ.get("PASSWORD_RESET_DOMAIN", "").strip()
@@ -196,7 +219,10 @@ OPENAI_MODERATION_MODEL = os.environ.get(
     "OPENAI_MODERATION_MODEL", "omni-moderation-latest"
 )
 OPENAI_MODERATION_TIMEOUT = int(os.environ.get("OPENAI_MODERATION_TIMEOUT", "20"))
-PHOTO_MAX_UPLOAD_BYTES = int(os.environ.get("PHOTO_MAX_UPLOAD_BYTES", str(12 * 1024 * 1024)))
+PHOTO_MAX_UPLOAD_BYTES = int(os.environ.get("PHOTO_MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
+PHOTO_MAX_PROCESSING_BYTES = int(
+    os.environ.get("PHOTO_MAX_PROCESSING_BYTES", str(50 * 1024 * 1024))
+)
 PHOTO_MAX_PIXELS = int(os.environ.get("PHOTO_MAX_PIXELS", "40000000"))
 
 LOGGING = {

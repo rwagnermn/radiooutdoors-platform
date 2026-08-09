@@ -15,6 +15,7 @@ from .manual_verification_forms import (
     ManualVerificationReviewForm,
 )
 from .models import ManualVerificationRequest, MemberProfile
+from .email_notifications import notify_pending_verification_created
 
 
 def pending_member_required(view_func):
@@ -51,6 +52,7 @@ def manual_verification_status(request):
 def manual_verification_request(request):
     profile = request.pending_member_profile
     instance = getattr(profile, "manual_verification_request", None)
+    is_new_request = instance is None
     if request.method == "POST":
         form = ManualVerificationRequestForm(request.POST, instance=instance)
         if form.is_valid():
@@ -70,6 +72,13 @@ def manual_verification_request(request):
                 profile.user.first_name = name_parts[0]
                 profile.user.last_name = name_parts[1] if len(name_parts) > 1 else ""
                 profile.user.save(update_fields=["first_name", "last_name"])
+
+                if is_new_request:
+                    transaction.on_commit(
+                        lambda: notify_pending_verification_created(
+                            verification_request
+                        )
+                    )
 
             messages.success(request, "Your verification request was submitted for review.")
             return redirect("manual_verification_status")

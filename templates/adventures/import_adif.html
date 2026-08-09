@@ -24,6 +24,7 @@
 
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
+            <input type="hidden" name="return_to" value="{{ return_to }}">
 
             <div class="journal-form-section">
                 <label for="{{ form.adif_file.id_for_label }}">ADIF File</label>

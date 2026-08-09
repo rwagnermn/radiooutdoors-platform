@@ -7,6 +7,13 @@ from PIL import Image, UnidentifiedImageError
 from core.models import Adventure, Comment, JournalEntry, Location, LocationType as LocationTypeRecord, OperatingLocation
 from core.profile_images import MAX_PROFILE_PHOTO_BYTES, optimize_location_photo
 from core.photo_moderation import validate_image_file
+from core.location_privacy import visible_locations
+
+
+class AdventureLocationChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        prefix = "Private — " if obj.visibility == Location.Visibility.PRIVATE else ""
+        return f"{prefix}{obj.name}"
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -35,20 +42,12 @@ class AdventureForm(forms.ModelForm):
         required=False,
         help_text="Select or paste one or more images.",
     )
-    location = forms.ModelChoiceField(
+    location = AdventureLocationChoiceField(
         queryset=Location.objects.all().order_by("name"),
         required=True,
         empty_label="Choose a Location",
         label="Location",
         help_text="Choose an existing Location or add a new one.",
-    )
-
-    operating_location = forms.ModelChoiceField(
-        queryset=OperatingLocation.objects.none(),
-        required=True,
-        empty_label="Choose the exact operating position",
-        label="Operating Position",
-        help_text="Choose the pin showing where you actually set up the station.",
     )
 
     class Meta:
@@ -64,7 +63,6 @@ class AdventureForm(forms.ModelForm):
             "operating_start_date",
             "operating_end_date",
             "location",
-            "operating_location",
         ]
         widgets = {
             "title": forms.TextInput(
@@ -84,6 +82,7 @@ class AdventureForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        self.fields["location"].queryset = visible_locations(user).order_by("name")
         self.fields["operating_callsign"].required = True
         self.fields["operating_callsign_type"].required = True
 
@@ -95,22 +94,6 @@ class AdventureForm(forms.ModelForm):
                     "operating_callsign",
                     profile.callsign if profile and profile.callsign else user.username,
                 )
-
-        location_id = None
-
-        if self.is_bound:
-            location_id = self.data.get("location")
-        elif self.instance and self.instance.pk:
-            location_id = self.instance.location_id
-        elif self.initial.get("location"):
-            location = self.initial["location"]
-            location_id = getattr(location, "pk", location)
-
-        if location_id:
-            self.fields["operating_location"].queryset = (
-                OperatingLocation.objects.filter(location_id=location_id)
-                .order_by("name")
-            )
 
     def clean_operating_callsign(self):
         callsign = self.cleaned_data["operating_callsign"].strip().upper()
@@ -133,6 +116,8 @@ class LocationForm(forms.ModelForm):
     )
 
     def __init__(self, *args, **kwargs):
+        self.require_coordinates = kwargs.pop("require_coordinates", False)
+        self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
         self._original_photo_name = (
             self.instance.photo.name
@@ -186,10 +171,29 @@ class LocationForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        latitude = cleaned.get("latitude")
+        longitude = cleaned.get("longitude")
+        if self.require_coordinates and (latitude is None or longitude is None):
+            raise forms.ValidationError(
+                "Place the Location pin before continuing."
+            )
         if cleaned.get("has_operating_advisory") and not cleaned.get("operating_advisory", "").strip():
             self.add_error(
                 "operating_advisory",
                 "Add a short note explaining the Operating Advisory.",
+            )
+        if (
+            self.instance.pk
+            and self.instance.visibility == Location.Visibility.PUBLIC
+            and cleaned.get("visibility") == Location.Visibility.PRIVATE
+            and self.user
+            and not self.user.is_staff
+            and self.instance.adventures.exclude(owner=self.user).exists()
+        ):
+            self.add_error(
+                "visibility",
+                "This Location is used by Adventures belonging to other members. "
+                "Contact Radio Outdoors staff before changing it to Private.",
             )
         return cleaned
 
@@ -220,6 +224,7 @@ class LocationForm(forms.ModelForm):
         model = Location
         fields = [
             "name",
+            "visibility",
             "location_type",
             "street_address",
             "address_line_2",
@@ -237,6 +242,7 @@ class LocationForm(forms.ModelForm):
             "operating_advisory",
         ]
         widgets = {
+            "visibility": forms.RadioSelect(),
             "photo": forms.FileInput(
                 attrs={"accept": "image/jpeg,image/png,image/gif,image/webp"}
             ),
@@ -320,6 +326,10 @@ class OperatingLocationForm(forms.ModelForm):
         for field_name, default in self.AMENITY_DEFAULTS.items():
             if cleaned.get(field_name) in (None, ""):
                 cleaned[field_name] = default
+        if cleaned.get("latitude") is None or cleaned.get("longitude") is None:
+            raise forms.ValidationError(
+                "Place the Operating Position pin before continuing."
+            )
         return cleaned
 
     class Meta:

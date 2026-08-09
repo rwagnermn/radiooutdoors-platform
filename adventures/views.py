@@ -13,13 +13,22 @@ from PIL import Image
 from datetime import date, datetime, time
 import hashlib
 import json
+import logging
 from pathlib import Path
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from core.models import Adventure, Comment, JournalContact, JournalEntry, Location, OperatingLocation, Photo
+from core.models import (
+    Adventure, AdventureCoverSelectionAudit, Comment, JournalContact,
+    JournalEntry, Location, OperatingLocation, Photo,
+)
 from core.photo_moderation import moderate_location_photo, moderate_photo
 from core.photo_upload_notices import add_photo_upload_notice
+from core.pin_permissions import can_edit_location_pin, can_edit_operating_position_pin
+from core.location_privacy import (
+    can_manage_location, can_view_location, location_access_q,
+    mark_adventure_location_visibility, visible_locations,
+)
 from core.auth import (
     is_verified_member,
     verified_member_or_staff_required,
@@ -36,6 +45,9 @@ from .forms import (
     LocationForm,
     OperatingLocationForm,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _can_manage_adventure(user, adventure):
@@ -60,6 +72,8 @@ def _safe_next_url(request, default):
         require_https=request.is_secure(),
     ):
         return next_url
+    if isinstance(default, str) and default.startswith("/"):
+        return default
     return reverse(default) if isinstance(default, str) else default
 
 
@@ -98,7 +112,6 @@ def _photo_hash(uploaded_file):
 
 def _save_entry_photos(entry, uploaded_files):
     adventure = entry.adventure
-    first_saved_photo = None
     saved_count = 0
     duplicate_count = 0
     statuses = []
@@ -119,6 +132,8 @@ def _save_entry_photos(entry, uploaded_files):
         photo = Photo.objects.create(
             journal_entry=entry,
             image=uploaded_file,
+            original_filename=Path(uploaded_file.name).name[:255],
+            original_content_type=(getattr(uploaded_file, "content_type", "") or "")[:100],
             taken_at=_photo_taken_at(uploaded_file),
             display_order=display_order,
             file_hash=file_hash,
@@ -130,13 +145,6 @@ def _save_entry_photos(entry, uploaded_files):
 
         existing_hashes.add(file_hash)
         saved_count += 1
-
-        if first_saved_photo is None:
-            first_saved_photo = photo
-
-    if adventure.cover_photo_id is None and first_saved_photo is not None:
-        adventure.cover_photo = first_saved_photo
-        adventure.save(update_fields=["cover_photo", "updated_at"])
 
     return saved_count, duplicate_count, statuses
 
@@ -153,6 +161,7 @@ def my_adventures(request):
         )
         .order_by("status", "-updated_at")
     )
+    adventures = mark_adventure_location_visibility(adventures, request.user)
 
     return render(
         request,
@@ -196,19 +205,26 @@ def all_adventures(request):
     activity = request.GET.get("activity", "").strip()
 
     if search:
-        adventures = adventures.filter(
-            Q(title__icontains=search)
-            | Q(location__name__icontains=search)
+        location_search = (
+            Q(location__name__icontains=search)
             | Q(location__city__icontains=search)
             | Q(location__state__icontains=search)
+        ) & location_access_q(request.user, "location__")
+        adventures = adventures.filter(
+            Q(title__icontains=search)
             | Q(owner__username__icontains=search)
+            | location_search
         )
 
     if state:
-        adventures = adventures.filter(location__state=state)
+        adventures = adventures.filter(
+            location_access_q(request.user, "location__"), location__state=state
+        )
 
     if place:
-        adventures = adventures.filter(location_id=place)
+        adventures = adventures.filter(
+            location_access_q(request.user, "location__"), location_id=place
+        )
 
     if activity in {"open", "operating", "progress"}:
         adventures = adventures.filter(status=Adventure.Status.ACTIVE)
@@ -232,12 +248,13 @@ def all_adventures(request):
         adventures = adventures.order_by("-started_at", "-updated_at")
 
     states = (
-        Location.objects.exclude(state="")
+        visible_locations(request.user).exclude(state="")
         .values_list("state", flat=True)
         .distinct()
         .order_by("state")
     )
-    locations = Location.objects.all().order_by("name")
+    locations = visible_locations(request.user).order_by("name")
+    adventures = mark_adventure_location_visibility(adventures, request.user)
 
     return render(
         request,
@@ -269,11 +286,12 @@ def adventure_detail(request, slug):
         slug=slug,
     )
 
-    if not adventure.is_public and adventure.owner != request.user:
+    can_manage_adventure = _can_manage_adventure(request.user, adventure)
+    if not adventure.is_public and not can_manage_adventure:
         raise Http404("Adventure not found.")
 
     journal_entries = adventure.journal_entries.all()
-    if adventure.owner != request.user:
+    if not can_manage_adventure:
         journal_entries = journal_entries.filter(is_public=True)
 
     adventure_photos = Photo.objects.filter(
@@ -286,6 +304,22 @@ def adventure_detail(request, slug):
     contact_count = JournalContact.objects.filter(
         journal_entry__in=journal_entries,
     ).count()
+    can_view_adventure_location = can_view_location(request.user, adventure.location)
+    display_cover_photo = adventure.display_cover_photo
+    if (
+        can_manage_adventure
+        and adventure.cover_photo_is_explicit
+        and (
+            not adventure.cover_photo_id
+            or not display_cover_photo
+            or display_cover_photo.pk != adventure.cover_photo_id
+        )
+    ):
+        messages.warning(
+            request,
+            "Your selected Adventure cover is no longer publicly available. "
+            "Another approved photo or the generic Adventure image is now being used.",
+        )
 
     return render(
         request,
@@ -295,6 +329,73 @@ def adventure_detail(request, slug):
             "journal_entries": journal_entries,
             "adventure_photos": adventure_photos,
             "contact_count": contact_count,
+            "can_manage_adventure": can_manage_adventure,
+            "can_view_adventure_location": can_view_adventure_location,
+            "display_cover_photo": display_cover_photo,
+        },
+    )
+
+
+def adventure_contacts(request, slug):
+    adventure = get_object_or_404(
+        Adventure.objects.select_related("owner", "location"),
+        slug=slug,
+    )
+    can_manage_adventure = _can_manage_adventure(request.user, adventure)
+    if not adventure.is_public and not can_manage_adventure:
+        raise Http404("Adventure not found.")
+
+    journal_entries = adventure.journal_entries.annotate(
+        aggregated_contact_count=Count("contacts")
+    ).order_by("-entry_at", "-pk")
+    if not can_manage_adventure:
+        journal_entries = journal_entries.filter(is_public=True)
+
+    contacts = JournalContact.objects.filter(
+        journal_entry__in=journal_entries,
+    ).select_related("journal_entry").order_by(
+        "-qso_date", "-time_on", "callsign"
+    )
+    return render(
+        request,
+        "adventures/adventure_contacts.html",
+        {
+            "adventure": adventure,
+            "journal_entries": journal_entries,
+            "contacts": contacts,
+            "contact_count": contacts.count(),
+            "can_manage_adventure": can_manage_adventure,
+        },
+    )
+
+
+@verified_member_or_staff_required
+def adventure_import_contacts(request, slug):
+    adventure = get_object_or_404(Adventure, slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or authorized staff can import contacts."
+        )
+    journal_entries = adventure.journal_entries.annotate(
+        aggregated_contact_count=Count("contacts")
+    ).order_by("-entry_at", "-pk")
+    if request.method == "POST":
+        entry = get_object_or_404(
+            journal_entries,
+            pk=request.POST.get("journal_entry"),
+        )
+        return redirect(
+            reverse("import_adif", args=[entry.pk])
+            + "?return_to="
+            + reverse("adventure_contacts", args=[adventure.slug])
+        )
+    return render(
+        request,
+        "adventures/adventure_import_contacts.html",
+        {
+            "adventure": adventure,
+            "journal_entries": journal_entries,
+            "journal_count": journal_entries.count(),
         },
     )
 
@@ -302,20 +403,11 @@ def adventure_detail(request, slug):
 @verified_member_required
 @require_POST
 def start_adventure_here(request, location_id):
-    location = get_object_or_404(Location, pk=location_id)
-    operating_location = None
-    operating_location_id = request.POST.get("operating_location")
-
-    if operating_location_id:
-        operating_location = get_object_or_404(
-            location.operating_locations,
-            pk=operating_location_id,
-        )
+    location = get_object_or_404(visible_locations(request.user), pk=location_id)
 
     adventure = Adventure.objects.create(
         owner=request.user,
         location=location,
-        operating_location=operating_location,
         status=Adventure.Status.ACTIVE,
     )
 
@@ -325,7 +417,6 @@ def start_adventure_here(request, location_id):
 @verified_member_required
 def add_adventure(request):
     selected_location_id = request.GET.get("location")
-    selected_operating_id = request.GET.get("operating")
     draft_title = request.GET.get("title", "")
     draft_public = request.GET.get("public", "1")
 
@@ -347,24 +438,39 @@ def add_adventure(request):
         form = AdventureForm(form_data, request.FILES, user=request.user)
 
         if form.is_valid():
-            adventure = form.save(commit=False)
-            adventure.owner = request.user
-            adventure.status = Adventure.Status.ACTIVE
-            adventure.save()
-            uploaded_photos = request.FILES.getlist("photos")
-            if uploaded_photos:
-                entry = JournalEntry.objects.create(
-                    adventure=adventure,
-                    operating_callsign=adventure.operating_callsign,
-                    entry_at=timezone.now(),
-                    title="Adventure photos",
-                    body="Photos from this Adventure.",
-                    is_public=adventure.is_public,
+            try:
+                with transaction.atomic():
+                    adventure = form.save(commit=False)
+                    adventure.owner = request.user
+                    adventure.status = Adventure.Status.ACTIVE
+                    adventure.save()
+                    uploaded_photos = request.FILES.getlist("photos")
+                    if uploaded_photos:
+                        entry = JournalEntry.objects.create(
+                            adventure=adventure,
+                            operating_callsign=adventure.operating_callsign,
+                            entry_at=timezone.now(),
+                            title="Adventure photos",
+                            body="Photos from this Adventure.",
+                            is_public=adventure.is_public,
+                            is_adventure_photo_collection=True,
+                        )
+                        _, _, statuses = _save_entry_photos(entry, uploaded_photos)
+                        add_photo_upload_notice(request, statuses)
+            except Exception as exc:
+                logger.exception(
+                    "Adventure create transaction failed user_id=%s exception=%s",
+                    request.user.pk,
+                    type(exc).__name__,
                 )
-                _, _, statuses = _save_entry_photos(entry, uploaded_photos)
-                add_photo_upload_notice(request, statuses)
-            messages.success(request, "Adventure created successfully.")
-            return redirect("all_adventures")
+                form.add_error(
+                    None,
+                    "The Adventure could not be saved. Correct any related Location "
+                    "or photo errors and try again.",
+                )
+            else:
+                messages.success(request, "Adventure saved successfully.")
+                return redirect("my_adventures")
     else:
         initial = {
             "title": draft_title,
@@ -374,39 +480,7 @@ def add_adventure(request):
         if selected_location_id:
             initial["location"] = selected_location_id
 
-        if selected_operating_id:
-            initial["operating_location"] = selected_operating_id
-
         form = AdventureForm(initial=initial, user=request.user)
-
-        if selected_location_id:
-            form.fields["operating_location"].queryset = (
-                OperatingLocation.objects.filter(
-                    location_id=selected_location_id
-                ).order_by("name")
-            )
-
-    operating_positions = [
-        {
-            "id": position.pk,
-            "location_id": position.location_id,
-            "location_name": position.location.name,
-            "name": position.name,
-            "latitude": (
-                float(position.latitude)
-                if position.latitude is not None
-                else None
-            ),
-            "longitude": (
-                float(position.longitude)
-                if position.longitude is not None
-                else None
-            ),
-        }
-        for position in OperatingLocation.objects.select_related("location").order_by(
-            "location__name", "name"
-        )
-    ]
     return render(
         request,
         "adventures/adventure_form.html",
@@ -414,7 +488,6 @@ def add_adventure(request):
             "form": form,
             "page_title": "Add New Adventure",
             "adventure": None,
-            "operating_positions": operating_positions,
         },
     )
 
@@ -422,7 +495,7 @@ def add_adventure(request):
 @verified_member_required
 @require_POST
 def create_operating_position_inline(request, location_id):
-    location = get_object_or_404(Location, pk=location_id)
+    location = get_object_or_404(visible_locations(request.user), pk=location_id)
     form = OperatingLocationForm(
         {
             "name": request.POST.get("name", ""),
@@ -446,6 +519,7 @@ def create_operating_position_inline(request, location_id):
 
     position = form.save(commit=False)
     position.location = location
+    position.created_by = request.user
     position.save()
 
     return JsonResponse(
@@ -479,32 +553,28 @@ def edit_adventure(request, slug):
         form = AdventureForm(form_data, instance=adventure, user=request.user)
 
         if form.is_valid():
-            adventure = form.save()
-            return redirect("edit_adventure", slug=adventure.slug)
+            try:
+                with transaction.atomic():
+                    adventure = form.save()
+            except Exception as exc:
+                logger.exception(
+                    "Adventure edit transaction failed adventure_id=%s user_id=%s "
+                    "exception=%s",
+                    adventure.pk,
+                    request.user.pk,
+                    type(exc).__name__,
+                )
+                form.add_error(
+                    None,
+                    "The Adventure could not be saved. Correct any related Location "
+                    "errors and try again.",
+                )
+            else:
+                messages.success(request, "Adventure saved successfully.")
+                return redirect("my_adventures")
     else:
         form = AdventureForm(instance=adventure, user=request.user)
 
-    operating_positions = [
-        {
-            "id": position.pk,
-            "location_id": position.location_id,
-            "location_name": position.location.name,
-            "name": position.name,
-            "latitude": (
-                float(position.latitude)
-                if position.latitude is not None
-                else None
-            ),
-            "longitude": (
-                float(position.longitude)
-                if position.longitude is not None
-                else None
-            ),
-        }
-        for position in OperatingLocation.objects.select_related("location").order_by(
-            "location__name", "name"
-        )
-    ]
     journal_entries = adventure.journal_entries.prefetch_related("photos").all()
 
     return render(
@@ -514,7 +584,6 @@ def edit_adventure(request, slug):
             "form": form,
             "page_title": "Edit Adventure",
             "adventure": adventure,
-            "operating_positions": operating_positions,
             "journal_entries": journal_entries,
         },
     )
@@ -696,6 +765,12 @@ def add_journal_entry(request, slug):
 
 
             adventure.save(update_fields=["updated_at"])
+            if request.POST.get("return_to_contacts") == "1":
+                messages.success(
+                    request,
+                    f"Journal Entry created: {entry.title or 'Journal Entry'}.",
+                )
+                return redirect("adventure_import_contacts", slug=adventure.slug)
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
         last_entry = adventure.journal_entries.order_by("-entry_at").first()
@@ -731,6 +806,10 @@ def add_journal_entry(request, slug):
         {
             "adventure": adventure,
             "form": form,
+            "return_to_contacts": (
+                request.GET.get("return_to") == "contacts"
+                or request.POST.get("return_to_contacts") == "1"
+            ),
         },
     )
 
@@ -889,7 +968,7 @@ def _contact_fingerprint(contact):
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
-@verified_member_required
+@verified_member_or_staff_required
 def import_adif(request, entry_id):
     entry = get_object_or_404(
         JournalEntry.objects.select_related(
@@ -900,10 +979,22 @@ def import_adif(request, entry_id):
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the Adventure owner can import contacts."
+            "Only the Adventure owner or authorized staff can import contacts."
         )
+
+    return_to = (
+        request.POST.get("return_to")
+        or request.GET.get("return_to")
+        or reverse("journal_entry_detail", args=[entry.pk])
+    )
+    if not url_has_allowed_host_and_scheme(
+        return_to,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return_to = reverse("journal_entry_detail", args=[entry.pk])
 
     if request.method == "POST":
         form = AdifImportForm(request.POST, request.FILES)
@@ -933,6 +1024,7 @@ def import_adif(request, entry_id):
                     "entry_id": entry.pk,
                     "filename": uploaded_file.name,
                     "contacts": [contact.as_dict() for contact in contacts],
+                    "return_to": return_to,
                 }
                 _preview_path(token).write_text(
                     json.dumps(payload),
@@ -954,20 +1046,21 @@ def import_adif(request, entry_id):
             "entry": entry,
             "adventure": entry.adventure,
             "form": form,
+            "return_to": return_to,
         },
     )
 
 
-@verified_member_required
+@verified_member_or_staff_required
 def preview_adif_import(request, entry_id, token):
     entry = get_object_or_404(
         JournalEntry.objects.select_related("adventure"),
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the Adventure owner can preview contacts."
+            "Only the Adventure owner or authorized staff can preview contacts."
         )
 
     if request.session.get("adif_preview_token") != token:
@@ -1008,7 +1101,7 @@ def preview_adif_import(request, entry_id, token):
     )
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def confirm_adif_import(request, entry_id, token):
     entry = get_object_or_404(
@@ -1016,9 +1109,9 @@ def confirm_adif_import(request, entry_id, token):
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the Adventure owner can import contacts."
+            "Only the Adventure owner or authorized staff can import contacts."
         )
 
     if request.session.get("adif_preview_token") != token:
@@ -1083,24 +1176,18 @@ def confirm_adif_import(request, entry_id, token):
     messages.success(
         request,
         (
-            f"{imported_count} contact"
-            f"{'s' if imported_count != 1 else ''} imported."
+            f"{imported_count} imported; {duplicate_count} skipped; "
+            f"{duplicate_count} duplicate{'s' if duplicate_count != 1 else ''}. "
+            f"Destination Journal: {entry.title or 'Journal Entry'}."
         ),
     )
 
-    if duplicate_count:
-        messages.info(
-            request,
-            (
-                f"{duplicate_count} duplicate contact"
-                f"{'s were' if duplicate_count != 1 else ' was'} skipped."
-            ),
-        )
-
-    return redirect("journal_entry_detail", entry_id=entry.pk)
+    return redirect(payload.get("return_to") or reverse(
+        "journal_entry_detail", args=[entry.pk]
+    ))
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def cancel_adif_import(request, entry_id, token):
     entry = get_object_or_404(
@@ -1108,9 +1195,9 @@ def cancel_adif_import(request, entry_id, token):
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the Adventure owner can cancel this import."
+            "Only the Adventure owner or authorized staff can cancel this import."
         )
 
     _preview_path(token).unlink(missing_ok=True)
@@ -1140,36 +1227,47 @@ def delete_journal_entry(request, entry_id):
     entry.delete()
 
     if deleting_cover:
-        replacement = (
-            Photo.objects.filter(journal_entry__adventure=adventure)
-            .order_by("taken_at", "display_order", "created_at")
-            .first()
-        )
-        adventure.cover_photo = replacement
-        adventure.save(update_fields=["cover_photo", "updated_at"])
+        adventure.cover_photo = None
+        adventure.cover_photo_is_explicit = False
+        adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit", "updated_at"])
     else:
         adventure.save(update_fields=["updated_at"])
 
     return redirect("edit_adventure", slug=adventure.slug)
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
-def make_cover_photo(request, photo_id):
+def make_cover_photo(request, photo_id, slug=None):
     photo = get_object_or_404(
         Photo.objects.select_related("journal_entry__adventure"),
         pk=photo_id,
     )
     adventure = photo.journal_entry.adventure
 
-    if adventure.owner != request.user:
+    if slug is not None and adventure.slug != slug:
         return HttpResponseForbidden(
-            "Only the operator who owns this adventure can change its cover photo."
+            "The selected photo does not belong to this Adventure."
+        )
+
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or authorized staff can change its cover photo."
+        )
+
+    if not photo.is_publicly_visible or not photo.journal_entry.is_public:
+        return HttpResponseForbidden(
+            "Only an approved, publicly eligible Adventure photo can be used as cover."
         )
 
     adventure.cover_photo = photo
-    adventure.save(update_fields=["cover_photo", "updated_at"])
-    return redirect("edit_adventure", slug=adventure.slug)
+    adventure.cover_photo_is_explicit = True
+    adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit", "updated_at"])
+    AdventureCoverSelectionAudit.objects.create(
+        adventure=adventure, photo=photo, actor=request.user, action="selected"
+    )
+    messages.success(request, "Adventure cover updated.")
+    return redirect(_safe_next_url(request, adventure.get_absolute_url()))
 
 
 @verified_member_required
@@ -1190,13 +1288,9 @@ def delete_photo(request, photo_id):
     photo.delete()
 
     if was_cover:
-        replacement = (
-            Photo.objects.filter(journal_entry__adventure=adventure)
-            .order_by("taken_at", "display_order", "created_at")
-            .first()
-        )
-        adventure.cover_photo = replacement
-        adventure.save(update_fields=["cover_photo", "updated_at"])
+        adventure.cover_photo = None
+        adventure.cover_photo_is_explicit = False
+        adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit", "updated_at"])
     else:
         adventure.save(update_fields=["updated_at"])
 
@@ -1240,18 +1334,15 @@ def create_location(request):
             request.POST,
             request.FILES,
             prefix="location",
+            require_coordinates=True,
+            user=request.user,
         )
-        operating_form = OperatingLocationForm(
-            request.POST,
-            prefix="operating",
-        )
-
         location_valid = location_form.is_valid()
-        operating_valid = operating_form.is_valid()
 
-        if location_valid and operating_valid:
+        if location_valid:
             with transaction.atomic():
                 location = location_form.save(commit=False)
+                location.created_by = request.user
                 if location.has_operating_advisory:
                     location.advisory_updated_at = timezone.now()
                 else:
@@ -1263,15 +1354,10 @@ def create_location(request):
                     location.refresh_from_db(fields=["photo_moderation_status"])
                     add_photo_upload_notice(request, [location.photo_moderation_status])
 
-                operating_location = operating_form.save(commit=False)
-                operating_location.location = location
-                operating_location.save()
-
-            messages.success(request, "Location and first Operating Position saved.")
+            messages.success(request, "Location saved successfully.")
             if request.POST.get("return_to") == "adventure":
                 params = {
                     "location": location.pk,
-                    "operating": operating_location.pk,
                     "title": request.POST.get("draft_title", ""),
                     "public": request.POST.get("draft_public", "1"),
                 }
@@ -1279,26 +1365,25 @@ def create_location(request):
             return redirect("location_detail", location_id=location.pk)
     else:
         initial_location = {}
-
         map_latitude = request.GET.get("latitude", "").strip()
         map_longitude = request.GET.get("longitude", "").strip()
 
         if map_latitude and map_longitude:
             initial_location["latitude"] = map_latitude
             initial_location["longitude"] = map_longitude
-
         location_form = LocationForm(
             prefix="location",
             initial=initial_location,
+            require_coordinates=True,
+            user=request.user,
         )
-        operating_form = OperatingLocationForm(prefix="operating")
 
     return render(
         request,
         "adventures/create_location.html",
         {
             "location_form": location_form,
-            "operating_form": operating_form,
+            "operating_form": None,
             "page_title": "Add New Location",
             "save_label": "Save Location",
             "editing_location": None,
@@ -1314,19 +1399,25 @@ def create_location(request):
                 "public",
                 request.POST.get("draft_public", "1"),
             ),
+            "require_location_pin": True,
         },
     )
 
 
-@verified_member_required
+@verified_member_or_staff_required
 def edit_location(request, location_id):
-    location = get_object_or_404(Location, pk=location_id)
+    location = get_object_or_404(visible_locations(request.user), pk=location_id)
+    if not can_manage_location(request.user, location):
+        return HttpResponseForbidden(
+            "Only the Location owner or authorized staff can edit this Location."
+        )
     if request.method == "POST":
         location_form = LocationForm(
             request.POST,
             request.FILES,
             instance=location,
             prefix="location",
+            user=request.user,
         )
         if location_form.is_valid():
             location = location_form.save()
@@ -1336,29 +1427,68 @@ def edit_location(request, location_id):
                 add_photo_upload_notice(request, [location.photo_moderation_status])
             return redirect("location_detail", location_id=location.pk)
     else:
-        location_form = LocationForm(instance=location, prefix="location")
+        location_form = LocationForm(
+            instance=location, prefix="location", user=request.user
+        )
     return render(request, "adventures/create_location.html", {
         "location_form": location_form,
         "operating_form": None,
         "page_title": "Edit Location",
         "save_label": "Save Changes",
         "editing_location": location,
+        "require_location_pin": False,
     })
 
 
 @verified_member_required
 def add_operating_position(request, location_id):
-    location = get_object_or_404(Location, pk=location_id)
+    location = get_object_or_404(visible_locations(request.user), pk=location_id)
     if request.method == "POST":
         form = OperatingLocationForm(request.POST)
         if form.is_valid():
             position = form.save(commit=False)
             position.location = location
+            position.created_by = request.user
             position.save()
             return redirect("location_detail", location_id=location.pk)
     else:
-        form = OperatingLocationForm()
+        initial = {}
+        if location.latitude is not None and location.longitude is not None:
+            initial = {
+                "latitude": location.latitude,
+                "longitude": location.longitude,
+            }
+        form = OperatingLocationForm(initial=initial)
     return render(request, "adventures/operating_position_form.html", {
         "location": location,
         "form": form,
+        "page_title": "Add Operating Position",
+        "editing_position": None,
+    })
+
+
+@verified_member_required
+def edit_operating_position(request, position_id):
+    position = get_object_or_404(
+        OperatingLocation.objects.select_related("location").filter(
+            location__in=visible_locations(request.user)
+        ),
+        pk=position_id,
+    )
+    if not can_edit_operating_position_pin(request.user, position):
+        return HttpResponseForbidden(
+            "You are not authorized to edit this Operating Position."
+        )
+    if request.method == "POST":
+        form = OperatingLocationForm(request.POST, instance=position)
+        if form.is_valid():
+            form.save()
+            return redirect("location_detail", location_id=position.location_id)
+    else:
+        form = OperatingLocationForm(instance=position)
+    return render(request, "adventures/operating_position_form.html", {
+        "location": position.location,
+        "form": form,
+        "page_title": "Edit Operating Position",
+        "editing_position": position,
     })

@@ -39,6 +39,10 @@ class LocationType(models.Model):
 
 
 class Location(models.Model):
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        PRIVATE = "private", "Private"
+
     class LocationType(models.TextChoices):
         PARK = "park", "Park"
         CAMPGROUND = "campground", "Campground"
@@ -56,6 +60,19 @@ class Location(models.Model):
         OTHER = "other", "Other"
 
     name = models.CharField(max_length=150)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_locations",
+    )
+    visibility = models.CharField(
+        max_length=10,
+        choices=Visibility.choices,
+        default=Visibility.PUBLIC,
+        db_index=True,
+    )
     slug = models.SlugField(max_length=180, unique=True, blank=True)
     location_type = models.CharField(max_length=30, choices=LocationType.choices, default=LocationType.OTHER)
     location_type_record = models.ForeignKey(
@@ -149,6 +166,10 @@ class Location(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_private(self):
+        return self.visibility == self.Visibility.PRIVATE
 
     def get_location_type_display(self):
         if self.location_type_record_id:
@@ -247,6 +268,13 @@ class OperatingLocation(models.Model):
         VERY_BUSY = "very_busy", "Very Busy"
 
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="operating_locations")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_operating_locations",
+    )
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -319,6 +347,10 @@ class Adventure(models.Model):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
     cover_photo = models.ForeignKey("Photo", on_delete=models.SET_NULL, null=True, blank=True, related_name="cover_for_adventures")
+    cover_photo_is_explicit = models.BooleanField(
+        default=False,
+        help_text="True when an authorized manager explicitly selected the cover.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -364,6 +396,29 @@ class Adventure(models.Model):
     def get_absolute_url(self):
         return reverse("adventure_detail", kwargs={"slug": self.slug})
 
+    def eligible_cover_photos(self):
+        """Approved, public photos for this Adventure in cover-priority order."""
+        return Photo.objects.filter(
+            journal_entry__adventure=self,
+            journal_entry__is_public=True,
+            moderation_status=Photo.ModerationStatus.APPROVED,
+        ).select_related("journal_entry").order_by(
+            "-journal_entry__is_adventure_photo_collection",
+            "taken_at",
+            "display_order",
+            "created_at",
+            "pk",
+        )
+
+    @property
+    def display_cover_photo(self):
+        """Resolve the public cover without mutating the stored owner selection."""
+        if self.cover_photo_is_explicit and self.cover_photo_id:
+            selected = self.eligible_cover_photos().filter(pk=self.cover_photo_id).first()
+            if selected:
+                return selected
+        return self.eligible_cover_photos().first()
+
     def __str__(self):
         return self.title
 
@@ -374,6 +429,10 @@ class JournalEntry(models.Model):
     body = models.TextField()
     entry_at = models.DateTimeField(default=timezone.now)
     is_public = models.BooleanField(default=True, help_text="Visible to everyone who can view this Adventure.")
+    is_adventure_photo_collection = models.BooleanField(
+        default=False,
+        help_text="System collection for photos uploaded directly with an Adventure.",
+    )
     operating_callsign = models.CharField(max_length=30, blank=True)
     radio = models.CharField(max_length=150, blank=True)
     antenna = models.CharField(max_length=150, blank=True)
@@ -491,6 +550,20 @@ class Photo(models.Model):
 
     journal_entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name="photos")
     image = models.ImageField(upload_to="adventure_photos/%Y/%m/")
+    reference_number = models.CharField(
+        max_length=20, unique=True, null=True, blank=True, editable=False,
+    )
+    original_filename = models.CharField(max_length=255, blank=True)
+    original_content_type = models.CharField(max_length=100, blank=True)
+    moderation_image = models.ImageField(upload_to="photo_derivatives/moderation/", blank=True)
+    web_image = models.ImageField(upload_to="photo_derivatives/web/", blank=True)
+    thumbnail_image = models.ImageField(upload_to="photo_derivatives/thumbnails/", blank=True)
+    derivative_status = models.CharField(
+        max_length=12,
+        choices=[("pending", "Pending"), ("ready", "Ready"), ("failed", "Failed")],
+        default="pending",
+    )
+    derivative_metadata = models.JSONField(default=dict, blank=True)
     caption = models.CharField(max_length=240, blank=True)
     taken_at = models.DateTimeField(null=True, blank=True)
     display_order = models.PositiveIntegerField(default=0)
@@ -520,9 +593,36 @@ class Photo(models.Model):
     def __str__(self):
         return self.caption or f"Photo {self.pk or ''}".strip()
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.pk and not self.reference_number:
+            reference = f"RO-PH-{self.pk:06d}"
+            type(self).objects.filter(pk=self.pk, reference_number__isnull=True).update(
+                reference_number=reference
+            )
+            self.reference_number = reference
+
+    @property
+    def public_image_url(self):
+        if self.web_image and self.derivative_status == "ready":
+            return self.web_image.url
+        return self.image.url
+
+    @property
+    def public_thumbnail_url(self):
+        if self.thumbnail_image and self.derivative_status == "ready":
+            return self.thumbnail_image.url
+        return self.public_image_url
+
     @property
     def is_publicly_visible(self):
         return self.moderation_status == self.ModerationStatus.APPROVED
+
+    @property
+    def moderation_display_status(self):
+        if self.automated_decision == "scan_failed":
+            return "Scan failed"
+        return self.get_moderation_status_display()
 
 
 class PhotoModerationActionAudit(models.Model):
@@ -537,10 +637,120 @@ class PhotoModerationActionAudit(models.Model):
     requested_target_ids = models.JSONField(default=list)
     successful_target_ids = models.JSONField(default=list)
     failed_targets = models.JSONField(default=list)
+    target_references = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class AdventureCoverSelectionAudit(models.Model):
+    adventure = models.ForeignKey(
+        Adventure, on_delete=models.CASCADE, related_name="cover_selection_history"
+    )
+    photo = models.ForeignKey(Photo, null=True, on_delete=models.SET_NULL)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL
+    )
+    action = models.CharField(max_length=32, default="selected")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PolicyAcceptance(models.Model):
+    """Append-only history of the exact policy bundle accepted by an account."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="policy_acceptances",
+    )
+    account_identifier = models.CharField(max_length=254)
+    terms_version = models.CharField(max_length=40)
+    privacy_version = models.CharField(max_length=40)
+    community_version = models.CharField(max_length=40)
+    accepted_at = models.DateTimeField(auto_now_add=True)
+    registration_path = models.CharField(max_length=40)
+    age_attested = models.BooleanField()
+    account_status = models.CharField(max_length=20)
+
+    class Meta:
+        ordering = ["-accepted_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "user", "terms_version", "privacy_version", "community_version"
+                ],
+                name="unique_policy_bundle_per_user",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValueError("Policy acceptance history is immutable.")
+        super().save(*args, **kwargs)
+
+
+class CoordinateChangeAudit(models.Model):
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="coordinate_changes",
+    )
+    record_type = models.CharField(max_length=24)
+    record_id = models.PositiveBigIntegerField()
+    previous_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    previous_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    new_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    new_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    address_updated = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class QuarantinedPhoto(models.Model):
+    class Kind(models.TextChoices):
+        PHOTO = "photo", "Adventure or Journal photo"
+        LOCATION = "location", "Location photo"
+        PROFILE = "profile", "Member profile photo"
+        DEFAULT = "default", "Default Location image"
+
+    original_kind = models.CharField(max_length=16, choices=Kind.choices)
+    original_object_id = models.PositiveBigIntegerField()
+    original_target = models.CharField(max_length=48, db_index=True)
+    association_id = models.PositiveBigIntegerField(null=True, blank=True)
+    association_label = models.CharField(max_length=320)
+    image = models.FileField(upload_to="photo_quarantine/", max_length=500)
+    metadata = models.JSONField(default=dict)
+    removal_reason = models.CharField(max_length=48)
+    removal_explanation = models.CharField(max_length=240, blank=True)
+    removed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="quarantined_photos",
+    )
+    removed_at = models.DateTimeField(auto_now_add=True)
+    restored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="restored_quarantined_photos",
+    )
+    restored_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-removed_at"]
+
+    @property
+    def is_restored(self):
+        return self.restored_at is not None
 
 
 class Comment(models.Model):
