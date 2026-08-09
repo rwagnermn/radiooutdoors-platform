@@ -16,21 +16,26 @@
         {% endif %}
     </div>
 
+    {% include "adventures/_contact_map.html" %}
+
     {% if contacts %}
     <div class="contact-table-scroll ro-scroll-table-region" role="region" aria-label="Adventure contacts" tabindex="0">
         <table class="compact-contact-table ro-data-table">
-            <thead><tr><th>Date</th><th>Time</th><th>Callsign</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Miles</th><th>Journal</th><th>Comment</th></tr></thead>
+            <thead><tr><th>Date</th><th>Time</th><th>Callsign</th><th>Band</th><th>Frequency</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Miles</th><th>Journal</th><th>Map source</th><th>Comment</th></tr></thead>
             <tbody>
             {% for contact in contacts %}
                 <tr>
                     <td>{{ contact.qso_date|date:"M j, Y" }}</td>
                     <td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
                     <td class="contact-call">{{ contact.callsign }}</td>
+                    <td>{{ contact.band|default:"—" }}</td>
+                    <td>{{ contact.frequency|default_if_none:"—" }}</td>
                     <td>{{ contact.mode|default:"—" }}</td>
                     <td>{{ contact.name|default:"—" }}</td>
                     <td>{{ contact.location_label|default:"—" }}</td>
                     <td>{{ contact.distance_miles|default_if_none:"—" }}</td>
                     <td><a href="{% url 'journal_entry_detail' contact.journal_entry_id %}">{{ contact.journal_entry.title|default:"Journal Entry" }}</a></td>
+                    <td>{{ contact.map_coordinate_source }}</td>
                     <td>{{ contact.comment|default:"" }}</td>
                 </tr>
             {% endfor %}

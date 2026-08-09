@@ -36,6 +36,7 @@ from core.auth import (
 )
 
 from .adif_parser import parse_adif_bytes
+from .contact_map import build_contact_map
 
 from .forms import (
     AdifImportForm,
@@ -161,6 +162,8 @@ def my_adventures(request):
         )
         .order_by("status", "-updated_at")
     )
+    if request.GET.get("source") == "pota":
+        adventures = adventures.filter(pota_import__isnull=False)
     adventures = mark_adventure_location_visibility(adventures, request.user)
 
     return render(
@@ -301,9 +304,27 @@ def adventure_detail(request, slug):
         adventure_photos = adventure_photos.filter(
             moderation_status=Photo.ModerationStatus.APPROVED
         )
-    contact_count = JournalContact.objects.filter(
+    contacts = list(JournalContact.objects.filter(
         journal_entry__in=journal_entries,
-    ).count()
+    ).select_related("journal_entry"))
+    contact_count = len(contacts)
+    contact_map = build_contact_map(adventure, contacts, request.user)
+    can_manage_journals = bool(
+        request.user == adventure.owner and is_verified_member(request.user)
+    )
+    photo_upload_entry = journal_entries.first() if can_manage_journals else None
+    if photo_upload_entry is not None:
+        photo_add_url = (
+            reverse("edit_journal_entry", args=[photo_upload_entry.pk])
+            + "#journal-photo-upload"
+        )
+    elif can_manage_journals:
+        photo_add_url = (
+            reverse("add_journal_entry", args=[adventure.slug])
+            + "#journal-photo-upload"
+        )
+    else:
+        photo_add_url = ""
     can_view_adventure_location = can_view_location(request.user, adventure.location)
     display_cover_photo = adventure.display_cover_photo
     if (
@@ -329,7 +350,12 @@ def adventure_detail(request, slug):
             "journal_entries": journal_entries,
             "adventure_photos": adventure_photos,
             "contact_count": contact_count,
+            "contact_map": contact_map,
+            "contact_map_dom_id": "adventure-contact-map",
+            "contact_map_data_id": "adventure-contact-map-data",
             "can_manage_adventure": can_manage_adventure,
+            "can_manage_journals": can_manage_journals,
+            "photo_add_url": photo_add_url,
             "can_view_adventure_location": can_view_adventure_location,
             "display_cover_photo": display_cover_photo,
         },
@@ -351,11 +377,12 @@ def adventure_contacts(request, slug):
     if not can_manage_adventure:
         journal_entries = journal_entries.filter(is_public=True)
 
-    contacts = JournalContact.objects.filter(
+    contacts = list(JournalContact.objects.filter(
         journal_entry__in=journal_entries,
     ).select_related("journal_entry").order_by(
         "-qso_date", "-time_on", "callsign"
-    )
+    ))
+    contact_map = build_contact_map(adventure, contacts, request.user)
     return render(
         request,
         "adventures/adventure_contacts.html",
@@ -363,7 +390,10 @@ def adventure_contacts(request, slug):
             "adventure": adventure,
             "journal_entries": journal_entries,
             "contacts": contacts,
-            "contact_count": contacts.count(),
+            "contact_count": len(contacts),
+            "contact_map": contact_map,
+            "contact_map_dom_id": "contact-hub-map",
+            "contact_map_data_id": "contact-hub-map-data",
             "can_manage_adventure": can_manage_adventure,
         },
     )
@@ -1152,6 +1182,10 @@ def confirm_adif_import(request, entry_id, token):
                     ),
                     callsign=contact["callsign"],
                     mode=contact.get("mode", ""),
+                    band=contact.get("band", ""),
+                    frequency=contact.get("frequency"),
+                    latitude=contact.get("latitude"),
+                    longitude=contact.get("longitude"),
                     name=contact.get("name", ""),
                     state=contact.get("state", ""),
                     country=contact.get("country", ""),

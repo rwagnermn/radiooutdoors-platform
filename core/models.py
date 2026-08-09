@@ -396,6 +396,7 @@ class Adventure(models.Model):
     def get_absolute_url(self):
         return reverse("adventure_detail", kwargs={"slug": self.slug})
 
+
     def eligible_cover_photos(self):
         """Approved, public photos for this Adventure in cover-priority order."""
         return Photo.objects.filter(
@@ -421,6 +422,44 @@ class Adventure(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class PotaImportBatch(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pota_import_batches")
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    diagnostics = models.JSONField(default=dict, blank=True)
+
+
+class PotaCallsignAttestation(models.Model):
+    batch = models.ForeignKey(PotaImportBatch, on_delete=models.CASCADE, related_name="callsign_attestations")
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pota_callsign_attestations")
+    callsign = models.CharField(max_length=30)
+    attestation_text = models.TextField()
+    attested_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["batch", "callsign"], name="unique_pota_callsign_attestation")]
+
+
+class PotaActivationImport(models.Model):
+    adventure = models.OneToOneField(Adventure, on_delete=models.CASCADE, related_name="pota_import")
+    batch = models.ForeignKey(PotaImportBatch, on_delete=models.PROTECT, related_name="activations")
+    activation_date = models.DateField()
+    callsign = models.CharField(max_length=30)
+    park_reference = models.CharField(max_length=30)
+    park_name = models.CharField(max_length=200)
+    entity = models.CharField(max_length=120, blank=True)
+    cw_contacts = models.PositiveIntegerField(default=0)
+    data_contacts = models.PositiveIntegerField(default=0)
+    phone_contacts = models.PositiveIntegerField(default=0)
+    total_contacts = models.PositiveIntegerField(default=0)
+    fingerprint = models.CharField(max_length=64, unique=True)
+    location_resolution = models.CharField(max_length=20, choices=[("existing", "Existing Location"), ("unresolved", "Needs Location")])
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-activation_date", "park_reference"]
 
 
 class JournalEntry(models.Model):
@@ -511,6 +550,10 @@ class JournalContact(models.Model):
     qso_date = models.DateField()
     time_on = models.TimeField(null=True, blank=True)
     callsign = models.CharField(max_length=32)
+    band = models.CharField(max_length=24, blank=True)
+    frequency = models.DecimalField(
+        max_digits=12, decimal_places=6, null=True, blank=True
+    )
     mode = models.CharField(max_length=32, blank=True)
     name = models.CharField(max_length=120, blank=True)
     state = models.CharField(max_length=80, blank=True)
@@ -518,6 +561,12 @@ class JournalContact(models.Model):
     distance_miles = models.PositiveIntegerField(null=True, blank=True)
     comment = models.TextField(blank=True)
     grid_square = models.CharField(max_length=12, blank=True)
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
     fingerprint = models.CharField(max_length=64, db_index=True)
     imported_at = models.DateTimeField(auto_now_add=True)
 

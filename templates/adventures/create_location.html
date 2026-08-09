@@ -45,12 +45,13 @@
 
             <section class="location-editor-section">
                 <h2>Location</h2>
-                <p class="section-help">Give the Location a natural name such as Near Pike Lake, Forest Road Campsite, or North Shore Pull-off. A street address is optional; the map pin is required.</p>
-                <p class="section-help">Choose Private for cabins, homes, private property, or operating places you do not want shown to other users. Private Locations and their pins are visible only to you and authorized Radio Outdoors staff.</p>
 
                 <div class="location-editor-grid">
                     <div class="field-span-two">
-                        <label for="{{ location_form.name.id_for_label }}">Location Name</label>
+                        <div class="location-name-label-row">
+                            <label for="{{ location_form.name.id_for_label }}">Location Name</label>
+                            <button type="button" class="location-help-button" data-location-help-open aria-haspopup="dialog" aria-controls="location-editor-help-dialog" aria-label="Location help">?</button>
+                        </div>
                         {{ location_form.name }}
                         {% for error in location_form.name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                     </div>
@@ -102,6 +103,8 @@
                         {% for error in location_form.visibility.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                     </fieldset>
                 </div>
+
+                {% include "adventures/_location_editor_help_dialog.html" %}
 
                 <div class="location-photo-editor photo-preview-control" data-photo-preview data-photo-preview-mode="single" data-photo-preview-save-label="Location" data-photo-preview-remove-field="remove_location_photo">
                     <div class="photo-preview-stage" data-photo-preview-stage data-original-src="{% if editing_location.photo %}{{ editing_location.photo.url }}?v={{ editing_location.updated_at|date:'U' }}{% else %}{% static 'images/radiooutdoors-logo-white.png' %}{% endif %}" data-placeholder-src="{% static 'images/radiooutdoors-logo-white.png' %}">

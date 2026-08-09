@@ -13,7 +13,7 @@
                 <td class="journal-list-summary" title="{{ entry.body|striptags|truncatechars:300 }}">{{ entry.body|striptags|truncatechars:150 }}</td>
                 <td class="journal-list-photo-count center-column">{{ entry.photos.count }}</td>
                 <td class="journal-list-actions">
-                    <a class="ro-small-action" href="{% url 'journal_entry_detail' entry.pk %}">View Journal</a>
+                    <a class="primary-feature-button" href="{% url 'journal_entry_detail' entry.pk %}">View Journal</a>
                     {% if manage_journals %}<a class="ro-small-action" href="{% url 'edit_journal_entry' entry.pk %}">Edit</a>
                     <form method="post" action="{% url 'delete_journal_entry' entry.pk %}" onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">{% csrf_token %}<button type="submit" class="ro-small-action ro-danger-action">Delete</button></form>{% endif %}
                 </td>

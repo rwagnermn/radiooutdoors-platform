@@ -1,0 +1,22 @@
+{% load static %}
+<div id="location-editor-help-dialog" class="location-help-backdrop" role="dialog" aria-modal="true" aria-labelledby="location-editor-help-title" aria-describedby="location-editor-help-description" data-location-help-dialog hidden>
+  <section class="location-help-dialog">
+    <header>
+      <h2 id="location-editor-help-title">Choosing a Location</h2>
+      <button type="button" class="location-help-close-x" data-location-help-close aria-label="Close Location help">×</button>
+    </header>
+    <div id="location-editor-help-description" class="location-help-content" tabindex="0">
+      <p>Give the Location a natural, recognizable name. Examples include:</p>
+      <ul>
+        <li>Near Pike Lake</li>
+        <li>Forest Road Campsite</li>
+        <li>North Shore Pull-off</li>
+        <li>Benson Airport</li>
+      </ul>
+      <p>A street address is optional, but a map pin is required. Place the pin where the Adventure actually occurred. You can move or replace the pin if necessary.</p>
+      <p>Choose Private for cabins, homes, private property, or other places you do not want displayed to other users. Private Locations and their exact map pins are visible only to you and authorized Radio Outdoors staff.</p>
+      <button type="button" class="btn-ro-primary location-help-close-button" data-location-help-close>Close</button>
+    </div>
+  </section>
+</div>
+<script src="{% static 'js/location-help.js' %}?v=001" defer></script>

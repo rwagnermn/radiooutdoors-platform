@@ -40,11 +40,29 @@ from .views import (
     start_adventure_here,
     preview_adif_import,
 )
+from .pota_views import (
+    confirm_pota_history,
+    import_pota_history,
+    pota_history_result,
+    preview_pota_history,
+)
 
 urlpatterns = [
     path("", my_adventures, name="my_adventures"),
     path("all/", all_adventures, name="all_adventures"),
     path("add/", add_adventure, name="add_adventure"),
+    path("import/pota/", import_pota_history, name="import_pota_history"),
+    path(
+        "import/pota/preview/<str:token>/",
+        preview_pota_history,
+        name="preview_pota_history",
+    ),
+    path(
+        "import/pota/confirm/<str:token>/",
+        confirm_pota_history,
+        name="confirm_pota_history",
+    ),
+    path("import/pota/result/", pota_history_result, name="pota_history_result"),
     path(
         "locations/<int:location_id>/start/",
         start_adventure_here,

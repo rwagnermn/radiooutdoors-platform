@@ -6,7 +6,7 @@
 <section class="content">
 <div class="my-adventures-heading">
 <div><h1>My Adventures</h1><p>All of your Adventures.</p></div>
-<a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a>
+<div class="adventure-heading-actions"><a href="{% url 'import_pota_history' %}" class="ro-small-action">Import POTA History</a> <a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a></div>
 </div>
 <nav class="adventure-view-switch" aria-label="Adventure views">
 <a href="{% url 'all_adventures' %}" class="ro-small-action">View All Public Adventures</a>

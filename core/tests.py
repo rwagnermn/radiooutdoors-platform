@@ -991,7 +991,7 @@ class MemberSignupDiscoverabilityTests(TestCase):
         signed_out = self.client.get(reverse("all_adventures"))
         self.assertContains(
             signed_out,
-            f'<a href="{reverse("all_adventures")}" class="nav-adventure-book" aria-current="page">Adventure Book</a>',
+            f'<a href="{reverse("all_adventures")}" class="nav-adventure-book primary-feature-button" aria-current="page">Adventure Book</a>',
         )
         self.assertNotContains(signed_out, ">Add Adventure</a>")
 
@@ -999,7 +999,7 @@ class MemberSignupDiscoverabilityTests(TestCase):
         public_book = self.client.get(reverse("all_adventures"))
         self.assertContains(
             public_book,
-            f'<a href="{reverse("my_adventures")}" class="nav-adventure-book" aria-current="page">Adventure Book</a>',
+            f'<a href="{reverse("my_adventures")}" class="nav-adventure-book primary-feature-button" aria-current="page">Adventure Book</a>',
         )
         self.assertContains(public_book, ">Add Adventure</a>")
 

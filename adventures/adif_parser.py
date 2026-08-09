@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, time
 from math import asin, cos, radians, sin, sqrt
+import re
 
 
 KM_TO_MILES = 0.621371
@@ -13,6 +14,8 @@ class ParsedContact:
     qso_date: date
     time_on: time | None
     callsign: str
+    band: str
+    frequency: float | None
     mode: str
     name: str
     state: str
@@ -20,12 +23,16 @@ class ParsedContact:
     distance_miles: int | None
     comment: str
     grid_square: str
+    latitude: float | None
+    longitude: float | None
 
     def as_dict(self) -> dict:
         return {
             "qso_date": self.qso_date.isoformat(),
             "time_on": self.time_on.isoformat() if self.time_on else "",
             "callsign": self.callsign,
+            "band": self.band,
+            "frequency": self.frequency,
             "mode": self.mode,
             "name": self.name,
             "state": self.state,
@@ -33,6 +40,8 @@ class ParsedContact:
             "distance_miles": self.distance_miles,
             "comment": self.comment,
             "grid_square": self.grid_square,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
         }
 
 
@@ -75,12 +84,18 @@ def parse_adif_text(
             record.get("SUBMODE", "").strip().upper()
             or record.get("MODE", "").strip().upper()
         )
+        latitude = _parse_coordinate(record.get("LAT", ""), "latitude")
+        longitude = _parse_coordinate(record.get("LON", ""), "longitude")
+        if latitude is None or longitude is None:
+            latitude = longitude = None
 
         contacts.append(
             ParsedContact(
                 qso_date=qso_date,
                 time_on=_parse_time(record.get("TIME_ON", "")),
                 callsign=callsign,
+                band=record.get("BAND", "").strip().upper(),
+                frequency=_parse_float(record.get("FREQ", "")),
                 mode=mode,
                 name=record.get("NAME", "").strip(),
                 state=record.get("STATE", "").strip(),
@@ -97,6 +112,8 @@ def parse_adif_text(
                     or record.get("NOTES", "").strip()
                 ),
                 grid_square=grid_square,
+                latitude=latitude,
+                longitude=longitude,
             )
         )
 
@@ -192,6 +209,34 @@ def _parse_time(value: str) -> time | None:
     except ValueError:
         return None
 
+
+def _parse_float(value: str) -> float | None:
+    try:
+        return float(value.strip()) if value.strip() else None
+    except ValueError:
+        return None
+
+
+def _parse_coordinate(value: str, axis: str) -> float | None:
+    value = value.strip().upper()
+    if not value:
+        return None
+    try:
+        result = float(value)
+    except ValueError:
+        match = re.fullmatch(r"([NSEW])\s*(\d{1,3})[\s:]+(\d+(?:\.\d+)?)", value)
+        if not match:
+            return None
+        direction, degrees, minutes = match.groups()
+        result = float(degrees) + float(minutes) / 60
+        if direction in {"S", "W"}:
+            result = -result
+        if axis == "latitude" and direction not in {"N", "S"}:
+            return None
+        if axis == "longitude" and direction not in {"E", "W"}:
+            return None
+    limit = 90 if axis == "latitude" else 180
+    return result if -limit <= result <= limit else None
 
 def _distance_miles(
     record: dict[str, str],

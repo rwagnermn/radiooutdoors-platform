@@ -731,7 +731,12 @@ class AddAdventureWorkflowTests(TestCase):
             detail_response,
             'class="compact-contact-table ro-data-table journal-list-table"',
         )
-        self.assertContains(detail_response, "View Journal", count=11)
+        self.assertContains(detail_response, ">View Journal</a>", count=11)
+        self.assertContains(
+            detail_response,
+            'class="primary-feature-button"',
+            count=11,
+        )
         self.assertContains(detail_response, "Journal title 10")
         self.assertNotContains(detail_response, long_body)
         self.assertContains(detail_response, "Keep Lessons Learned separate.")
@@ -749,7 +754,20 @@ class AddAdventureWorkflowTests(TestCase):
             'class="compact-contact-table ro-data-table journal-list-table"',
         )
         self.assertContains(edit_response, "View Journal", count=11)
+        self.assertContains(
+            edit_response,
+            'class="primary-feature-button"',
+            count=11,
+        )
         self.assertContains(edit_response, ">Edit</a>", count=11)
+
+        edit_journal_response = self.client.get(
+            reverse("edit_journal_entry", kwargs={"entry_id": entries[0].pk})
+        )
+        self.assertContains(
+            edit_journal_response,
+            'class="primary-feature-button">View Journal</a>',
+        )
 
         journal_response = self.client.get(
             reverse("journal_entry_detail", kwargs={"entry_id": entries[0].pk})
@@ -762,6 +780,22 @@ class AddAdventureWorkflowTests(TestCase):
         output = BytesIO()
         image.save(output, format="PNG")
         return SimpleUploadedFile(name, output.getvalue(), "image/png")
+
+    def test_location_name_help_uses_accessible_dialog(self):
+        response = self.client.get(reverse("create_location"))
+
+        self.assertContains(response, 'aria-label="Location help"')
+        self.assertContains(response, 'aria-controls="location-editor-help-dialog"')
+        self.assertContains(response, 'role="dialog"')
+        self.assertContains(response, 'aria-modal="true"')
+        self.assertContains(response, "Choosing a Location")
+        self.assertContains(response, "Benson Airport")
+        self.assertContains(response, "A street address is optional, but a map pin is required.")
+        self.assertContains(response, "Private Locations and their exact map pins")
+        self.assertNotContains(
+            response,
+            '<p class="section-help">Give the Location a natural name',
+        )
 
     def test_location_photo_create_preview_replace_remove_and_display(self):
         with patch(

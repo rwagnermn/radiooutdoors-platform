@@ -5,7 +5,7 @@
 <div class="journal-edit-heading">
 <div><p><a href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal Entry</a></p><h1>Edit Journal Entry</h1></div>
 <div class="ro-page-actions">
-<a href="{% url 'journal_entry_detail' entry.pk %}" class="ro-small-action">View Journal</a>
+<a href="{% url 'journal_entry_detail' entry.pk %}" class="primary-feature-button">View Journal</a>
 <form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
 onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">
 {% csrf_token %}
