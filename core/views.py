@@ -64,6 +64,7 @@ def location_list(request):
             | Q(city__icontains=search)
             | Q(state__icontains=search)
             | Q(postal_code__icontains=search)
+            | Q(reference_code__icontains=search)
             | Q(description__icontains=search)
         )
 
@@ -140,6 +141,15 @@ def location_detail(request, location_id):
             "location": location,
             "adventures": adventures,
             "can_edit_location_pin": can_edit_location_pin(request.user, location),
+            "single_location_map_data": (
+                {
+                    "name": location.name,
+                    "latitude": float(location.latitude),
+                    "longitude": float(location.longitude),
+                }
+                if location.latitude is not None and location.longitude is not None
+                else None
+            ),
             "editable_position_ids": [
                 position.pk
                 for position in location.operating_locations.all()

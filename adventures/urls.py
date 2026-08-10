@@ -44,6 +44,9 @@ from .pota_views import (
     confirm_pota_history,
     import_pota_history,
     pota_history_result,
+    pota_pin_queue,
+    retry_pota_pin_lookup,
+    review_pota_pin,
     preview_pota_history,
 )
 
@@ -63,6 +66,9 @@ urlpatterns = [
         name="confirm_pota_history",
     ),
     path("import/pota/result/", pota_history_result, name="pota_history_result"),
+    path("import/pota/pins/", pota_pin_queue, name="pota_pin_queue"),
+    path("import/pota/pins/<int:location_id>/", review_pota_pin, name="review_pota_pin"),
+    path("import/pota/pins/<int:location_id>/lookup/", retry_pota_pin_lookup, name="retry_pota_pin_lookup"),
     path(
         "locations/<int:location_id>/start/",
         start_adventure_here,

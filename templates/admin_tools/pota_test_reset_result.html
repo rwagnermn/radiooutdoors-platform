@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}POTA Reset Result | Radio Outdoors{% endblock %}
+{% block content %}<section class="content"><h1>POTA Test Reset Result</h1>
+{% if failed %}<div class="form-error-summary" role="alert"><h2>Reset failed safely</h2><p>Failure category: {{ error_category }}. Review the server log; no credentials or Contact contents are displayed here.</p></div>{% else %}
+<p><strong>Backup:</strong> {{ result.backup_path }}</p><h2>Deleted</h2><ul>{% for key, value in result.deleted.items %}<li>{{ key|title }}: {{ value }}</li>{% endfor %}</ul><p><strong>Retained:</strong> {{ result.retained }}</p><p><strong>Blocked:</strong> {{ result.blocked|length }}</p><p><strong>Integrity:</strong> {{ result.integrity }}</p>{% endif %}
+<p><a class="button-primary" href="{% url 'my_adventures' %}">Back to My Adventure Book</a> <a class="button-secondary" href="{% url 'import_pota_history' %}">Import POTA History</a></p></section>{% endblock %}

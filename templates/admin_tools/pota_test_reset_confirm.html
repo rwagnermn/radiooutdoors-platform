@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Final POTA Reset Confirmation | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><h1>Final Confirmation</h1>
+<div class="form-error-summary" role="alert"><h2>Delete the reviewed POTA test imports?</h2><p>This is the second and final server-rendered confirmation. The backup will be created before the transaction begins.</p></div>
+<p>Adventures eligible: {{ preview.safe_adventure_ids|length }}. Locations eligible: {{ preview.deletable_location_ids|length }}. Blocked records: {{ preview.blocked|length }}.</p>
+<form method="post" action="{% url 'pota_test_reset_execute' %}" data-pota-reset-form>{% csrf_token %}<button class="button-danger" type="submit" data-pota-reset-submit>Delete POTA Test Imports</button><p data-pota-reset-status aria-live="polite" hidden>Creating backup and resetting test imports…</p></form>
+<p><a href="{% url 'pota_test_reset' %}">Cancel and return to preview</a></p></section>
+<script>(function(){const f=document.querySelector('[data-pota-reset-form]');if(!f)return;f.addEventListener('submit',function(){const b=f.querySelector('[data-pota-reset-submit]'),s=f.querySelector('[data-pota-reset-status]');b.disabled=true;b.textContent='Resetting…';s.hidden=false;});})();</script>
+{% endblock %}

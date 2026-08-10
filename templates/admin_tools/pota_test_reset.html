@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Reset POTA Test Imports | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+<h1>Reset POTA Test Imports</h1>
+<div class="form-error-summary" role="alert">
+<h2>Development-only destructive tool</h2>
+<p>This removes records proven to have been created by POTA test imports. A database backup is created before deletion. Manually added content blocks the affected record.</p>
+</div>
+{% if error %}<div class="form-error-summary" role="alert"><strong>{{ error }}</strong></div>{% endif %}
+<h2>Dry-run preview</h2>
+<dl>
+{% for key, value in preview.counts.items %}<dt>{{ key|title }}</dt><dd>{{ value }}</dd>{% endfor %}
+<dt>Blocked records</dt><dd>{{ preview.blocked|length }}</dd>
+<dt>Retained Locations</dt><dd>{{ preview.retained_locations|length }}</dd>
+</dl>
+{% if preview.blocked %}<h3>Blocked records</h3><ul>{% for item in preview.blocked %}<li>{{ item.type }} {{ item.id }} — {{ item.label }}: {{ item.reason }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" data-pota-reset-form>{% csrf_token %}
+<label for="confirmation_phrase">Type <strong>{{ confirmation_phrase }}</strong></label>
+<input id="confirmation_phrase" name="confirmation_phrase" autocomplete="off" required>
+<button class="button-danger" type="submit" data-pota-reset-submit>Review Final Confirmation</button>
+<p data-pota-reset-status aria-live="polite" hidden>Preparing final confirmation…</p>
+</form>
+</section>
+<script>(function(){const f=document.querySelector('[data-pota-reset-form]');if(!f)return;f.addEventListener('submit',function(){const b=f.querySelector('[data-pota-reset-submit]'),s=f.querySelector('[data-pota-reset-status]');b.disabled=true;b.textContent='Preparing…';s.hidden=false;});})();</script>
+{% endblock %}

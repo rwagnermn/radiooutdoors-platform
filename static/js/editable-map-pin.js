@@ -29,6 +29,12 @@
         let marker = null;
         let suppressMapClickUntil = 0;
 
+        function syncRemoveButton(hasPin) {
+            if (config.removeButton && config.hideRemoveWhenEmpty) {
+                config.removeButton.hidden = !hasPin;
+            }
+        }
+
         function updateDisplay(position) {
             if (!config.coordinateDisplay) return;
             config.coordinateDisplay.textContent = position
@@ -83,6 +89,7 @@
                 marker.position = clean;
             }
             writeCoordinates(clean);
+            syncRemoveButton(true);
             if (options && options.center) {
                 map.panTo(clean);
                 map.setZoom(16);
@@ -97,6 +104,7 @@
             config.lngInput.value = "";
             updateDisplay(null);
             setStatus(config.removedMessage || "Place New Pin: click the map to place it.", false);
+            syncRemoveButton(false);
         }
 
         function reset() {
@@ -134,6 +142,7 @@
 
         if (initial) place(initial);
         else {
+            syncRemoveButton(false);
             updateDisplay(null);
             setStatus(config.emptyMessage || "Click the map to place the pin.", false);
         }

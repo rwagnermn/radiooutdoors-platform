@@ -35,6 +35,11 @@
 </div>
 {% if adventure.summary %}<section class="adventure-overview-card"><h2>Adventure Summary</h2><div>{{ adventure.summary|linebreaks }}</div></section>{% endif %}
 {% if adventure.pota_import %}<section class="adventure-overview-card"><h2>POTA activation import</h2><dl><dt>Park</dt><dd>{{ adventure.pota_import.park_reference }} — {{ adventure.pota_import.park_name }}</dd><dt>Activation date</dt><dd>{{ adventure.pota_import.activation_date }}</dd><dt>Operating callsign</dt><dd>{{ adventure.pota_import.callsign }}</dd><dt>Contacts</dt><dd>{{ adventure.pota_import.total_contacts }} total (CW {{ adventure.pota_import.cw_contacts }}, data {{ adventure.pota_import.data_contacts }}, phone {{ adventure.pota_import.phone_contacts }})</dd><dt>Location review</dt><dd>{{ adventure.pota_import.get_location_resolution_display }}</dd></dl></section>{% endif %}
+{% if can_view_adventure_location and adventure.location %}
+  {% url 'location_detail' adventure.location.pk as location_detail_path %}
+  {% if can_edit_adventure_location_pin %}{% url 'edit_owned_pin_position' 'location' adventure.location.pk as pin_edit_path %}{% endif %}
+  {% include "partials/single_location_map.html" with map_id="adventure-location-map" map_data_id="adventure-location-map-data" map_heading="Adventure Location" map_kicker="Where this Adventure happened" location_detail_url=location_detail_path pin_edit_url=pin_edit_path show_missing_pin=can_edit_adventure_location_pin %}
+{% endif %}
 {% include "adventures/_contact_map.html" %}
 <section id="journal-entries" class="adventure-journal-section"><div class="adventure-journal-heading"><div><p class="adventure-journal-kicker">The pages of this Adventure</p><h2>Adventure Journal</h2></div>{% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">Add Journal Entry</a>{% endif %}</div>
 {% include "adventures/_journal_entry_list.html" with manage_journals=can_manage_adventure %}</section>
@@ -43,4 +48,10 @@
 {% for photo in adventure_photos %}{% if photo.is_publicly_visible %}<figure class="journal-photo journal-photo-manage"><button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'Adventure photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}<p class="photo-source-journal">Journal: {{ photo.journal_entry.title|default:"Journal Entry" }}</p>{% if can_manage_adventure %}<div class="photo-actions">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span class="cover-photo-control-current">Adventure Cover</span>{% else %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Cover</button></form>{% endif %}</div>{% endif %}</figure>{% endif %}{% endfor %}
 </div></section>{% endif %}
 </section>
+{% endblock %}
+{% block extra_scripts %}
+{% if single_location_map_data %}
+<script src="{% static 'js/single-location-map.js' %}?v=001"></script>
+{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsSingleLocationMaps"></script>{% endif %}
+{% endif %}
 {% endblock %}

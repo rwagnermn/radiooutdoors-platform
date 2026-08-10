@@ -25,9 +25,12 @@ from .photo_moderation_views import (
     photo_quarantine_restore,
     photo_quarantine_thumbnail,
 )
+from .pota_reset_views import pota_test_reset, pota_test_reset_execute
 
 
 urlpatterns = [
+    path("pota-test-reset/", pota_test_reset, name="pota_test_reset"),
+    path("pota-test-reset/execute/", pota_test_reset_execute, name="pota_test_reset_execute"),
     path("photo-moderation/", photo_moderation_queue, name="photo_moderation_queue"),
     path("photo-moderation/bulk/preview/", photo_moderation_bulk_preview, name="photo_moderation_bulk_preview"),
     path("photo-moderation/bulk/apply/", photo_moderation_bulk_apply, name="photo_moderation_bulk_apply"),

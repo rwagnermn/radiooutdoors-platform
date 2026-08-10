@@ -30,9 +30,11 @@
 <a href="{% url 'my_adventures' %}">My Adventures</a>
 <a href="{% url 'add_adventure' %}">Create Adventure</a>
 <a href="{% url 'import_pota_history' %}">Import POTA History</a>
+<a href="{% url 'pota_pin_queue' %}">POTA Parks Needing Pins</a>
 <a href="{% url 'follower_management' %}">My Followers</a>
 {% endif %}
 {% if user.is_staff %}
+{% if is_development %}<a href="{% url 'pota_test_reset' %}">Reset POTA Test Imports</a>{% endif %}
 <a href="{% url 'stewardship_dashboard' %}">Stewardship</a>
 <a href="{% url 'member_admin_list' %}">Manage Members</a>
 <a href="{% url 'default_location_image_list' %}">Default Location Images</a>

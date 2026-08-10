@@ -56,6 +56,7 @@ def account_roles(request):
         "is_verified_member": verified_member,
         "is_pending_member": pending_member,
         "header_identity": header_identity,
+        "is_development": settings.DEBUG,
     }
 
 

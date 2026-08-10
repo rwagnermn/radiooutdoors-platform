@@ -15,6 +15,13 @@ ROW_RE = re.compile(
     re.I,
 )
 
+def clean_pota_park_name(reference, value):
+    name = re.sub(r"\s+", " ", (value or "").replace("\u00a0", " ")).strip()
+    reference = (reference or "").strip()
+    if reference:
+        name = re.sub(rf"^{re.escape(reference)}\s*", "", name, flags=re.IGNORECASE)
+    return re.sub(r"^[\s\-\u2013\u2014:]+", "", name).strip()
+
 @dataclass
 class PotaRow:
     line_number: int
@@ -66,7 +73,7 @@ def parse_pota_history(text, max_rows=1000):
         row.activation_date = parsed_date.isoformat()
         row.callsign = values["callsign"].upper()
         row.park_reference = values["reference"].upper()
-        row.park_name = re.sub(r"\s+", " ", values["park"]).strip()
+        row.park_name = clean_pota_park_name(row.park_reference, values["park"])
         row.entity = values["entity"].upper()
         row.cw = int(values["cw"])
         row.data = int(values["data"])

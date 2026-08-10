@@ -150,6 +150,19 @@ if not GOOGLE_MAPS_API_KEY and _google_maps_key_file.exists():
         encoding="utf-8"
     ).strip()
 
+# Server-side address geocoding uses a separate credential from the
+# browser-exposed Maps JavaScript key above. Never expose this setting through
+# a context processor or template.
+_google_geocoding_key_file = BASE_DIR / "google_geocoding_api_key.txt"
+GOOGLE_GEOCODING_API_KEY = os.environ.get(
+    "GOOGLE_GEOCODING_API_KEY",
+    "",
+).strip()
+if not GOOGLE_GEOCODING_API_KEY and _google_geocoding_key_file.exists():
+    GOOGLE_GEOCODING_API_KEY = _google_geocoding_key_file.read_text(
+        encoding="utf-8"
+    ).strip()
+
 # OpenAI image moderation. Environment configuration takes precedence; a local
 # key file is supported only as a development convenience and is gitignored.
 _openai_key_file = BASE_DIR / "openai_api_key.txt"

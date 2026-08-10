@@ -16,7 +16,7 @@
   <p class="contact-map-line-note" data-contact-map-line-note hidden></p>
   {{ contact_map|json_script:contact_map_data_id }}
   <script src="{% static 'js/contact-map.js' %}"></script>
-  {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=marker&callback=initRadioOutdoorsContactMaps&loading=async" async defer></script>{% else %}<p class="form-help">Map display is unavailable because the map service is not configured.</p>{% endif %}
+  {% if google_maps_api_key %}{% if not single_location_map_data %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=marker&callback=initRadioOutdoorsContactMaps&loading=async" async defer></script>{% endif %}{% else %}<p class="form-help">Map display is unavailable because the map service is not configured.</p>{% endif %}
   {% elif contact_map.available %}<div class="location-card empty-contact-message" role="status">No contacts with coordinates or a valid grid square are available to map.</div>
   {% else %}<div class="location-card empty-contact-message" role="status">{{ contact_map.message }}</div>{% endif %}
   {% if contact_map.available and contact_map.unmapped %}<details class="contact-map-unmapped"><summary>{{ contact_map.unmapped }} of {{ contact_map.total }} contacts cannot be mapped because they do not include coordinates or a grid square.</summary>{% if contact_map.unmapped_contacts %}<ul>{% for contact in contact_map.unmapped_contacts %}<li>{{ contact.callsign }} — {{ contact.date }} — {{ contact.journal }}</li>{% endfor %}</ul>{% endif %}</details>{% endif %}

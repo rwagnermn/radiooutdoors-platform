@@ -100,6 +100,11 @@ class Location(models.Model):
         null=True,
         blank=True,
     )
+    needs_pin_review = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Imported historical Location is waiting for a general map pin.",
+    )
     official_website = models.URLField(
         blank=True,
         help_text="Official park, campground, government, or location website.",
@@ -460,6 +465,26 @@ class PotaActivationImport(models.Model):
 
     class Meta:
         ordering = ["-activation_date", "park_reference"]
+
+
+class PotaTestResetAudit(models.Model):
+    staff_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pota_test_reset_audits",
+    )
+    performed_at = models.DateTimeField(auto_now_add=True)
+    database_identifier = models.CharField(max_length=500)
+    deleted_counts = models.JSONField(default=dict, blank=True)
+    blocked_counts = models.JSONField(default=dict, blank=True)
+    backup_path = models.CharField(max_length=500, blank=True)
+    succeeded = models.BooleanField(default=False)
+    error_category = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        ordering = ["-performed_at"]
 
 
 class JournalEntry(models.Model):

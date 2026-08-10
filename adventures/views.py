@@ -326,6 +326,7 @@ def adventure_detail(request, slug):
     else:
         photo_add_url = ""
     can_view_adventure_location = can_view_location(request.user, adventure.location)
+    visible_location = adventure.location if can_view_adventure_location else None
     display_cover_photo = adventure.display_cover_photo
     if (
         can_manage_adventure
@@ -357,6 +358,21 @@ def adventure_detail(request, slug):
             "can_manage_journals": can_manage_journals,
             "photo_add_url": photo_add_url,
             "can_view_adventure_location": can_view_adventure_location,
+            "can_edit_adventure_location_pin": bool(
+                visible_location
+                and can_edit_location_pin(request.user, visible_location)
+            ),
+            "single_location_map_data": (
+                {
+                    "name": visible_location.name,
+                    "latitude": float(visible_location.latitude),
+                    "longitude": float(visible_location.longitude),
+                }
+                if visible_location
+                and visible_location.latitude is not None
+                and visible_location.longitude is not None
+                else None
+            ),
             "display_cover_photo": display_cover_photo,
         },
     )

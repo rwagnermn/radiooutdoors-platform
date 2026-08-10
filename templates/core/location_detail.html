@@ -39,9 +39,8 @@
     </div>
 
     <header class="location-detail-header">
-        {% if location.display_photo_url %}<img src="{{ location.display_photo_url }}{% if location.photo %}?v={{ location.updated_at|date:'U' }}{% endif %}" alt="{{ location.name }}" class="location-primary-photo">
-        {% else %}<div class="location-primary-photo location-primary-photo-placeholder"><img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors Location photo placeholder"></div>{% endif %}
-        {% if location.uses_default_photo %}<p class="location-photo-credit">Representative default photo: <a href="{{ location.default_photo_info.source_url }}" target="_blank" rel="noopener noreferrer">{{ location.default_photo_info.credit_text }}</a> · <a href="{{ location.default_photo_info.license_url }}" target="_blank" rel="noopener noreferrer">{{ location.default_photo_info.license_name }}</a> · resized by Radio Outdoors.</p>{% endif %}
+      <div class="location-detail-heading">
+        <div class="location-detail-copy">
         <p class="location-type-label">
             {{ location.get_location_type_display }}
         </p>
@@ -122,7 +121,25 @@
                 {{ location.description|linebreaks }}
             </div>
         {% endif %}
+        </div>
+
+        <figure class="adventure-cover-frame location-cover-frame">
+          {% if location.display_photo_url %}
+            <img src="{{ location.display_photo_url }}{% if location.photo %}?v={{ location.updated_at|date:'U' }}{% endif %}" alt="{{ location.name }}" class="adventure-cover-image location-primary-photo">
+          {% else %}
+            <div class="location-primary-photo-placeholder"><img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors Location photo placeholder"></div>
+          {% endif %}
+          {% if location.uses_default_photo %}
+            <figcaption class="location-photo-credit">Representative default photo: <a href="{{ location.default_photo_info.source_url }}" target="_blank" rel="noopener noreferrer">{{ location.default_photo_info.credit_text }}</a> · <a href="{{ location.default_photo_info.license_url }}" target="_blank" rel="noopener noreferrer">{{ location.default_photo_info.license_name }}</a> · resized by Radio Outdoors.</figcaption>
+          {% endif %}
+        </figure>
+      </div>
     </header>
+
+    {% if single_location_map_data or can_edit_location_pin %}
+      {% if can_edit_location_pin %}{% url 'edit_owned_pin_position' 'location' location.pk as pin_edit_path %}{% endif %}
+      {% include "partials/single_location_map.html" with map_id="location-view-map" map_data_id="location-view-map-data" map_heading="Location Map" map_kicker="Location position" pin_edit_url=pin_edit_path show_missing_pin=can_edit_location_pin %}
+    {% endif %}
 
 
     {% if False %}
@@ -302,99 +319,9 @@
 
 </section>
 
-{% if False %}
-<script>
-async function initLocationDetailMap() {
-    const mapElement = document.getElementById("location-detail-map");
-
-    if (!mapElement) {
-        return;
-    }
-
-    const points = [];
-
-    {% for operating_location in location.operating_locations.all %}
-        {% if operating_location.latitude != None and operating_location.longitude != None %}
-            points.push({
-                id: {{ operating_location.pk }},
-                name: "{{ operating_location.name|escapejs }}",
-                latitude: {{ operating_location.latitude }},
-                longitude: {{ operating_location.longitude }},
-                canEdit: {% if operating_location.pk in editable_position_ids %}true{% else %}false{% endif %},
-                editUrl: "{% url 'edit_owned_pin_position' 'operating_position' operating_location.pk %}?next={{ request.path|urlencode }}"
-            });
-        {% endif %}
-    {% endfor %}
-
-    if (!points.length) {
-        mapElement.innerHTML =
-            "<p class='map-empty-message'>No Operating Position pins have coordinates yet.</p>";
-        return;
-    }
-
-    const {Map, InfoWindow} =
-        await google.maps.importLibrary("maps");
-    const {AdvancedMarkerElement, PinElement} =
-        await google.maps.importLibrary("marker");
-
-    const map = new Map(mapElement, radioOutdoorsMapOptions({
-        center: {
-            lat: points[0].latitude,
-            lng: points[0].longitude
-        },
-        zoom: 15,
-        mapId: "DEMO_MAP_ID",
-        mapTypeControl: true,
-        streetViewControl: true,
-        fullscreenControl: true
-    }));
-
-    const bounds = new google.maps.LatLngBounds();
-    const infoWindow = new InfoWindow();
-
-    points.forEach(function (point) {
-        const pin = new PinElement({
-            background: "{% if location.has_operating_advisory %}#b51f2e{% else %}#2e6fd8{% endif %}",
-            borderColor: "#ffffff",
-            glyphColor: "#ffffff",
-            glyph: "O"
-        });
-
-        const marker = new AdvancedMarkerElement({
-            map: map,
-            position: {
-                lat: point.latitude,
-                lng: point.longitude
-            },
-            title: point.name,
-            content: pin.element
-        });
-
-        marker.addListener("click", function () {
-            infoWindow.setContent(
-                "<strong>" + point.name + "</strong><br>Operating Position"
-                + (point.canEdit ? "<br><a href='" + point.editUrl + "'>Edit Pin Position</a>" : "")
-            );
-            infoWindow.open({
-                map: map,
-                anchor: marker
-            });
-        });
-
-        bounds.extend(marker.position);
-    });
-
-    if (points.length > 1) {
-        map.fitBounds(bounds, 35);
-    }
-}
-
-window.initLocationDetailMap = initLocationDetailMap;
-</script>
-<script
-    async
-    src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initLocationDetailMap"
-></script>
+{% if single_location_map_data %}
+<script src="{% static 'js/single-location-map.js' %}?v=001"></script>
+{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsSingleLocationMaps"></script>{% endif %}
 {% endif %}
 {% endblock %}
 
