@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Account Deactivated | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><div class="location-card account-deactivated-confirmation">
+<h1>Account Deactivated</h1>
+<p>{{ callsign }} has been deactivated and you have been signed out.</p>
+<p>Your Radio Outdoors data remains preserved. Contact <a href="mailto:{{ radio_outdoors_contact_email }}">Radio Outdoors Support</a> when you want an administrator to reactivate your account.</p>
+<a href="{% url 'home' %}" class="ro-small-action">Return Home</a>
+</div></section>
+{% endblock %}

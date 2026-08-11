@@ -2,13 +2,13 @@
     "use strict";
 
     const menus = document.querySelectorAll(
-        "details.account-menu, details.ro-action-menu"
+        "details.account-menu, details.admin-tools-menu, details.ro-action-menu"
     );
 
     menus.forEach(function (menu) {
         const summary = menu.querySelector("summary");
         const panel = menu.querySelector(
-            ".account-menu-panel, .ro-action-menu-panel"
+            ".account-menu-panel, .admin-tools-submenu, .ro-action-menu-panel"
         );
 
         function closeMenu(returnFocus) {

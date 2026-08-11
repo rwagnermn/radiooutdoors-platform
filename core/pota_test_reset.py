@@ -5,7 +5,7 @@ import sqlite3
 
 from django.conf import settings
 from django.db import connection, transaction
-from django.db.models import Count
+from django.db.models import Q
 
 from .models import (
     Adventure,
@@ -15,12 +15,14 @@ from .models import (
     Location,
     Photo,
     PotaActivationImport,
+    PotaCallsignAttestation,
     PotaImportBatch,
     PotaTestResetAudit,
+    CoordinateChangeAudit,
 )
 
 CONFIRMATION_PHRASE = "DELETE POTA TEST DATA"
-IMPORT_LOCATION_PREFIX = "Created from POTA historical import."
+IMPORT_LOCATION_PREFIX = "Created from POTA"
 
 
 class PotaResetSafetyError(RuntimeError):
@@ -59,30 +61,15 @@ def build_reset_preview():
     adventure_ids = list(audits.values_list("adventure_id", flat=True))
     batch_ids = list(audits.order_by().values_list("batch_id", flat=True).distinct())
     journals = JournalEntry.objects.filter(adventure_id__in=adventure_ids)
-    contacts = JournalContact.objects.filter(journal_entry__adventure_id__in=adventure_ids)
+    adventure_contacts = JournalContact.objects.filter(
+        Q(journal_entry__adventure_id__in=adventure_ids) | Q(adventure_id__in=adventure_ids)
+    ).distinct()
+    hunter_contacts = JournalContact.objects.filter(source=JournalContact.Source.POTA_HUNTER)
+    preserved_manual_contacts = adventure_contacts.filter(source=JournalContact.Source.MANUAL)
     photos = Photo.objects.filter(journal_entry__adventure_id__in=adventure_ids)
     comments = Comment.objects.filter(adventure_id__in=adventure_ids)
 
     blocked = []
-    blocked_adventure_ids = set()
-    for adventure in Adventure.objects.filter(pk__in=adventure_ids).annotate(
-        journal_total=Count("journal_entries", distinct=True),
-        comment_total=Count("comments", distinct=True),
-    ).order_by("pk"):
-        contact_total = contacts.filter(journal_entry__adventure=adventure).count()
-        photo_total = photos.filter(journal_entry__adventure=adventure).count()
-        if adventure.journal_total or contact_total or photo_total or adventure.comment_total:
-            blocked_adventure_ids.add(adventure.pk)
-            blocked.append({
-                "type": "Adventure",
-                "id": adventure.pk,
-                "label": adventure.title,
-                "reason": "Attached content is not importer-provenanced.",
-                "journals": adventure.journal_total,
-                "contacts": contact_total,
-                "photos": photo_total,
-                "comments": adventure.comment_total,
-            })
 
     location_ids = list(
         Adventure.objects.filter(pk__in=adventure_ids)
@@ -96,10 +83,9 @@ def build_reset_preview():
     deletable_location_ids = []
     retained_locations = []
     for location in imported_locations:
-        non_pota_uses = location.adventures.filter(pota_import__isnull=True).count()
+        non_pota_uses = location.adventures.exclude(pk__in=adventure_ids).count()
         has_manual_location_content = location.operating_locations.exists() or bool(location.photo)
-        blocked_uses = location.adventures.filter(pk__in=blocked_adventure_ids).count()
-        if non_pota_uses or has_manual_location_content or blocked_uses:
+        if non_pota_uses or has_manual_location_content:
             retained_locations.append({
                 "id": location.pk,
                 "name": location.name,
@@ -108,11 +94,10 @@ def build_reset_preview():
         else:
             deletable_location_ids.append(location.pk)
 
-    safe_adventure_ids = [pk for pk in adventure_ids if pk not in blocked_adventure_ids]
     return {
         "adventure_ids": adventure_ids,
-        "safe_adventure_ids": safe_adventure_ids,
-        "blocked_adventure_ids": sorted(blocked_adventure_ids),
+        "safe_adventure_ids": adventure_ids,
+        "blocked_adventure_ids": [],
         "location_ids": location_ids,
         "deletable_location_ids": deletable_location_ids,
         "retained_locations": retained_locations,
@@ -122,12 +107,15 @@ def build_reset_preview():
             "adventures": len(adventure_ids),
             "locations": imported_locations.count(),
             "journals": journals.count(),
-            "contacts": contacts.count(),
+            "contacts": adventure_contacts.exclude(source=JournalContact.Source.MANUAL).count(),
+            "hunter_contacts": hunter_contacts.count(),
+            "manual_contacts_preserved": preserved_manual_contacts.count(),
             "photos": photos.count(),
             "batches": len(batch_ids),
             "audits": audits.count(),
             "fingerprints": audits.exclude(fingerprint="").count(),
             "attestations": sum(batch.callsign_attestations.count() for batch in PotaImportBatch.objects.filter(pk__in=batch_ids)),
+            "reset_audits": PotaTestResetAudit.objects.count(),
         },
     }
 
@@ -156,23 +144,54 @@ def execute_reset(*, actor=None, allow_test_database=False, backup_factory=None)
     backup_path = ""
     try:
         backup_path = (backup_factory or create_database_backup)()
-        deleted = {key: 0 for key in ("adventures", "locations", "journals", "contacts", "photos", "batches", "audits", "fingerprints", "attestations")}
+        deleted = {key: 0 for key in ("adventures", "locations", "journals", "contacts", "hunter_contacts", "photos", "comments", "batches", "activation_imports", "fingerprints", "attestations", "coordinate_audits", "reset_audits")}
         with transaction.atomic():
             safe_ids = preview["safe_adventure_ids"]
+            adventure_contacts = JournalContact.objects.filter(
+                Q(journal_entry__adventure_id__in=safe_ids) | Q(adventure_id__in=safe_ids)
+            ).distinct()
+            manual_contacts = adventure_contacts.filter(source=JournalContact.Source.MANUAL)
+            # Preserve explicitly manual Contacts by detaching them before their
+            # importer-created Journal and Adventure are removed.
+            manual_contacts.update(journal_entry=None, adventure=None)
             deleted["journals"] = JournalEntry.objects.filter(adventure_id__in=safe_ids).count()
-            deleted["contacts"] = JournalContact.objects.filter(journal_entry__adventure_id__in=safe_ids).count()
+            hunter_contacts = JournalContact.objects.filter(source=JournalContact.Source.POTA_HUNTER)
+            deleted["hunter_contacts"] = hunter_contacts.count()
+            hunter_contacts.delete()
+            disposable_contacts = adventure_contacts.exclude(
+                source__in=[JournalContact.Source.MANUAL, JournalContact.Source.POTA_HUNTER]
+            )
+            deleted["contacts"] = disposable_contacts.count()
+            disposable_contacts.delete()
             deleted["photos"] = Photo.objects.filter(journal_entry__adventure_id__in=safe_ids).count()
-            deleted["audits"] = PotaActivationImport.objects.filter(adventure_id__in=safe_ids).count()
+            deleted["comments"] = Comment.objects.filter(adventure_id__in=safe_ids).count()
+            activation_imports = PotaActivationImport.objects.filter(adventure_id__in=safe_ids)
+            deleted["activation_imports"] = activation_imports.count()
             deleted["fingerprints"] = PotaActivationImport.objects.filter(adventure_id__in=safe_ids).exclude(fingerprint="").count()
+            activation_imports.delete()
             deleted["adventures"] = len(safe_ids)
             Adventure.objects.filter(pk__in=safe_ids).delete()
+            coordinate_audits = CoordinateChangeAudit.objects.filter(
+                record_type="location", record_id__in=preview["deletable_location_ids"]
+            )
+            deleted["coordinate_audits"] = coordinate_audits.count()
+            coordinate_audits.delete()
             deletable_locations = Location.objects.filter(pk__in=preview["deletable_location_ids"])
             deleted["locations"] = deletable_locations.count()
             deletable_locations.delete()
-            empty_batches = PotaImportBatch.objects.filter(pk__in=preview["batch_ids"], activations__isnull=True)
-            deleted["attestations"] = sum(batch.callsign_attestations.count() for batch in empty_batches)
-            deleted["batches"] = empty_batches.count()
-            empty_batches.delete()
+            batches = PotaImportBatch.objects.all()
+            deleted["attestations"] = PotaCallsignAttestation.objects.filter(batch__in=batches).count()
+            deleted["batches"] = batches.count()
+            batches.delete()
+            deleted["reset_audits"] = PotaTestResetAudit.objects.count()
+            PotaTestResetAudit.objects.all().delete()
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA foreign_key_check")
+                violations = cursor.fetchall()
+                cursor.execute("PRAGMA integrity_check")
+                integrity = cursor.fetchone()[0]
+            if violations or integrity != "ok":
+                raise PotaResetSafetyError("Post-reset database integrity verification failed.")
             PotaTestResetAudit.objects.create(
                 staff_user=actor,
                 database_identifier=database_identifier(),
@@ -181,19 +200,14 @@ def execute_reset(*, actor=None, allow_test_database=False, backup_factory=None)
                 backup_path=backup_path,
                 succeeded=True,
             )
-        with connection.cursor() as cursor:
-            cursor.execute("PRAGMA foreign_key_check")
-            violations = cursor.fetchall()
-            cursor.execute("PRAGMA integrity_check")
-            integrity = cursor.fetchone()[0]
-        if violations or integrity != "ok":
-            raise PotaResetSafetyError("Post-reset database integrity verification failed.")
         return PotaResetResult(
             backup_path=backup_path,
             deleted=deleted,
             retained={
-                "adventures": len(preview["blocked_adventure_ids"]),
+                "adventures": 0,
                 "locations": len(preview["retained_locations"]),
+                "manual_contacts": preview["counts"]["manual_contacts_preserved"],
+                "location_details": preview["retained_locations"],
             },
             blocked=preview["blocked"],
             integrity=integrity,

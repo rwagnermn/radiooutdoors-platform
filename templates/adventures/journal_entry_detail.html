@@ -32,10 +32,12 @@
 </span>
 {% endif %}
 </div>
-<h1>{{ entry.title|default:"Journal Entry" }}</h1>
+<h1>{{ entry.title|default:"Journal Entry" }}{% include "partials/_staff_record_id.html" with object=entry label="Journal ID" %}</h1>
 </div>
 {% if user == adventure.owner and is_verified_member %}
 <div class="journal-heading-actions">
+<a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a>
+<a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}" class="button-secondary-dark">Import POTA Hunter Log</a>
 <a href="{% url 'import_adif' entry.pk %}" class="button-secondary-dark">Import Contacts</a>
 <a href="{% url 'edit_journal_entry' entry.pk %}" class="ro-small-action">Edit Journal</a>
 <form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
@@ -44,6 +46,8 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 <button type="submit" class="ro-small-action ro-danger-action">Delete Journal</button>
 </form>
 </div></div>
+{% elif user.is_staff %}
+<div class="journal-heading-actions"><a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a></div></div>
 {% endif %}
 </div>
 
@@ -58,8 +62,9 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 </div></section>
 {% endif %}
 
+<section class="journal-view-section"><h2>Contacts — {{ contact_count }}</h2>
+{% if can_manage_contacts %}<p class="ro-page-actions"><a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a> <a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}" class="button-secondary-dark">Import POTA Hunter Log</a></p>{% endif %}
 {% if contact_count %}
-<section class="journal-view-section"><h2>Contacts</h2>
 <div class="contact-summary-grid">
 <div><strong>{{ contact_count }}</strong><span>Contacts</span></div>
 <div><strong>{{ state_count }}</strong><span>States / Provinces</span></div>
@@ -78,17 +83,15 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 {% endif %}
 </div>
 <div class="contact-table-scroll ro-scroll-table-region" role="region" aria-label="Journal contacts" tabindex="0"><table id="journal-contact-table" class="compact-contact-table ro-data-table">
-<thead><tr>{% if user == adventure.owner and is_verified_member %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
-<th>Date</th><th>Time</th><th>Callsign</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Miles</th><th>Comment</th></tr></thead>
-<tbody>{% for contact in contacts %}<tr>
+<thead><tr>{% if user.is_staff %}<th class="staff-id-column">ID</th>{% endif %}{% if user == adventure.owner and is_verified_member %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
+<th>Date/Time</th><th>Callsign / Worked</th><th>Park</th><th>Source</th><th>Actions</th></tr></thead>
+<tbody>{% for contact in contacts %}<tr>{% if user.is_staff %}<td class="staff-id-column">{{ contact.pk }}</td>{% endif %}
 {% if user == adventure.owner and is_verified_member %}<td class="contact-select-column"><input type="checkbox" name="contact_ids" value="{{ contact.pk }}" class="contact-row-checkbox"></td>{% endif %}
-<td>{{ contact.qso_date|date:"M j, Y" }}</td>
-<td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
-<td class="contact-call">{{ contact.callsign }}</td><td>{{ contact.mode|default:"—" }}</td>
-<td>{{ contact.name|default:"—" }}</td><td>{{ contact.location_label|default:"—" }}</td>
-<td>{{ contact.distance_miles|default_if_none:"—" }}</td><td>{{ contact.comment|default:"" }}</td>
-</tr>{% endfor %}</tbody></table></div></form></div></section>
-{% endif %}
+<td>{{ contact.qso_date|date:"M j, Y" }} {% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% endif %}</td>
+<td class="contact-call">{{ contact.callsign }}</td><td>{% if contact.pota_park_reference %}{{ contact.pota_park_reference }}{% if contact.pota_park_name %} — {{ contact.pota_park_name }}{% endif %}{% else %}—{% endif %}</td>
+<td>{{ contact.get_source_display }}</td><td>—</td>
+</tr>{% endfor %}</tbody></table></div></form></div>
+{% else %}<p>No Contacts have been added to this Journal yet.</p>{% endif %}</section>
 </article></section>
 
 <script>

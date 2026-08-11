@@ -2,13 +2,14 @@ import logging
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .account_forms import FollowerRegistrationForm, MemberRegistrationForm
+from .member_forms import AccountDeactivateForm
 from .models import FollowerInvitation, FollowRelationship, MemberProfile
 from .policy_acceptance import record_policy_acceptance
 from .qrz_service import (
@@ -87,8 +88,9 @@ def register(request):
             except QRZConfigurationError as exc:
                 support_contact_needed = True
                 logger.warning(
-                    "Registration QRZ verification failed category=configuration exception_type=%s",
+                    "Registration QRZ verification failed category=configuration exception_type=%s configuration_key=%s",
                     type(exc).__name__,
+                    exc.configuration_key or "unknown",
                 )
                 form.add_error(
                     None,
@@ -257,6 +259,7 @@ def account_home(request):
     profile = getattr(request.user, "member_profile", None)
     following = (
         FollowRelationship.objects.filter(follower=request.user)
+        .filter(member__user__is_active=True)
         .select_related("member", "member__user")
         .order_by("status", "member__callsign")
     )
@@ -264,4 +267,48 @@ def account_home(request):
         request,
         "accounts/account_home.html",
         {"profile": profile, "following": following},
+    )
+
+
+@login_required
+def deactivate_account(request):
+    profile = getattr(request.user, "member_profile", None)
+    if not profile:
+        messages.error(request, "Only Member accounts can use this deactivation workflow.")
+        return redirect("account_home")
+    if request.user.is_staff or request.user.is_superuser:
+        messages.error(
+            request,
+            "Staff and administrator accounts cannot be deactivated here.",
+        )
+        return redirect("account_home")
+
+    if request.method == "POST":
+        form = AccountDeactivateForm(
+            request.POST,
+            expected_callsign=profile.callsign,
+        )
+        if form.is_valid():
+            callsign = profile.callsign
+            user_id = request.user.pk
+            request.user.is_active = False
+            request.user.save(update_fields=["is_active"])
+            logout(request)
+            logger.info(
+                "Member self-deactivated user_id=%s callsign=%s",
+                user_id,
+                callsign,
+            )
+            return render(
+                request,
+                "accounts/account_deactivated.html",
+                {"callsign": callsign},
+            )
+    else:
+        form = AccountDeactivateForm(expected_callsign=profile.callsign)
+
+    return render(
+        request,
+        "accounts/deactivate_account.html",
+        {"profile": profile, "form": form},
     )

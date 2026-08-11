@@ -170,6 +170,13 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 if DEBUG and not OPENAI_API_KEY and _openai_key_file.exists():
     OPENAI_API_KEY = _openai_key_file.read_text(encoding="utf-8").strip()
 
+# QRZ XML API credentials. Environment variables are preferred on deployed
+# systems; gitignored project-root files are supported for local development.
+QRZ_USERNAME = os.environ.get("QRZ_USERNAME", "").strip()
+QRZ_PASSWORD = os.environ.get("QRZ_PASSWORD", "").strip()
+QRZ_USERNAME_FILE = BASE_DIR / "qrz_username.txt"
+QRZ_PASSWORD_FILE = BASE_DIR / "qrz_password.txt"
+
 EMAIL_BACKEND = os.environ.get(
     "DJANGO_EMAIL_BACKEND",
     (

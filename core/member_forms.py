@@ -102,13 +102,29 @@ class MemberProfileForm(forms.ModelForm):
 
 
 class MemberDeleteForm(forms.Form):
+    confirmation = forms.CharField(
+        label='Type "DELETE MEMBER" to confirm permanent deletion',
+        max_length=13,
+    )
+
+    def __init__(self, *args, expected_callsign="", **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def clean_confirmation(self):
+        value = self.cleaned_data["confirmation"].strip().upper()
+        if value != "DELETE MEMBER":
+            raise forms.ValidationError('Type "DELETE MEMBER" exactly to continue.')
+        return value
+
+
+class AccountDeactivateForm(forms.Form):
     callsign = forms.CharField(
-        label="Type the callsign to confirm deletion",
+        label="Type your callsign to confirm deactivation",
         max_length=20,
     )
 
     def __init__(self, *args, expected_callsign="", **kwargs):
-        self.expected_callsign = expected_callsign.upper()
+        self.expected_callsign = expected_callsign.strip().upper()
         super().__init__(*args, **kwargs)
 
     def clean_callsign(self):

@@ -45,7 +45,7 @@
             {{ location.get_location_type_display }}
         </p>
 
-        <h1>{{ location.name }} {% if is_private_location %}<span class="private-location-badge">🔒 Private</span>{% endif %}</h1>
+        <h1>{{ location.name }} {% if is_private_location %}<span class="private-location-badge">🔒 Private</span>{% endif %}{% include "partials/_staff_record_id.html" with object=location label="Location ID" %}</h1>
 
         <p class="location-place-line">
             {% if location.city %}{{ location.city }}{% endif %}
@@ -320,7 +320,7 @@
 </section>
 
 {% if single_location_map_data %}
-<script src="{% static 'js/single-location-map.js' %}?v=001"></script>
+<script src="{% static 'js/single-location-map.js' %}?v=002"></script>
 {% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsSingleLocationMaps"></script>{% endif %}
 {% endif %}
 {% endblock %}

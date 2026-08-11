@@ -3,7 +3,7 @@
 {% block content %}
 <section class="content"><div class="location-card journal-form-card">
 <div class="journal-edit-heading">
-<div><p><a href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal Entry</a></p><h1>Edit Journal Entry</h1></div>
+<div><p><a href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal Entry</a></p><h1>Edit Journal Entry{% include "partials/_staff_record_id.html" with object=entry label="Journal ID" %}</h1></div>
 <div class="ro-page-actions">
 <a href="{% url 'journal_entry_detail' entry.pk %}" class="primary-feature-button">View Journal</a>
 <form method="post" action="{% url 'delete_journal_entry' entry.pk %}"

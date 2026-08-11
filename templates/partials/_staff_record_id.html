@@ -1,0 +1,1 @@
+{% if user.is_staff and object %}<small class="staff-record-id">{{ label|default:"Record ID" }} {{ object.pk }}</small>{% endif %}

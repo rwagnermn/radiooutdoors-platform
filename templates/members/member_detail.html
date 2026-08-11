@@ -11,7 +11,7 @@
 <img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="Radio Outdoors profile picture placeholder" class="member-profile-photo member-profile-photo-large member-profile-photo-placeholder">
 {% endif %}
 <div>
-<div class="member-callsign-row"><h1>{{ profile.callsign }}</h1>{% if profile.callsign_verified %}<span class="member-verified">{{ profile.get_verification_method_display }}</span>{% endif %}</div>
+<div class="member-callsign-row"><h1>{{ profile.callsign }}</h1>{% if profile.callsign_verified %}<span class="member-verified">{{ profile.get_verification_method_display }}</span>{% endif %}{% if user.is_staff %}<small class="staff-record-id">Member ID {{ profile.pk }}</small><small class="staff-record-id">User ID {{ profile.user_id }}</small>{% endif %}</div>
 <h2>{{ profile.public_name }}</h2>
 {% if profile.home_label %}<p>{{ profile.home_label }}</p>{% endif %}
 {% if is_verified_member and profile.email_visible_to_members and profile.user.email %}<p class="member-profile-email"><strong>Email:</strong> <a class="member-email-link" href="mailto:{{ profile.user.email }}">{{ profile.user.email }}</a></p>{% endif %}

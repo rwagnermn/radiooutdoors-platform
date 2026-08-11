@@ -1,16 +1,19 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Adventure Book | Radio Outdoors{% endblock %}
-{% block body_class %}interior-page adventure-book-page{% endblock %}
+{% block title %}Public Adventures | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page adventure-book-page adventure-list-page public-adventures-page{% endblock %}
 
 {% block content %}
 <section class="content">
 
-    <div class="adventure-book-heading">
+    <div class="adventure-list-heading adventure-book-heading">
         <div>
-            <h1>Adventure Book</h1>
-            <p>Explore the stories and experiences shared by Radio Outdoors members.</p>
+            <div class="adventure-mode-title-row">
+                <h1>Public Adventures</h1>
+                <span class="adventure-mode-badge">PUBLIC ADVENTURES</span>
+            </div>
+            <p>Adventures shared publicly by Radio Outdoors members.</p>
         </div>
         {% if is_verified_member %}
         <a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a>
@@ -78,18 +81,19 @@
 
     {% if is_verified_member %}
     <nav class="adventure-view-switch" aria-label="Adventure views">
-        <a href="{% url 'my_adventures' %}" class="ro-small-action">View My Adventures</a>
+        <a href="{% url 'my_adventures' %}" class="adventure-mode-switch-action">View My Adventures</a>
     </nav>
     {% endif %}
 
-    <div class="ro-record-table-wrap adventure-book-table-wrap ro-scroll-table-region" role="region" aria-label="Adventure Book results" tabindex="0">
-        <table class="ro-record-table adventure-book-table">
+    <div class="adventure-list-table-wrap ro-record-table-wrap adventure-book-table-wrap ro-scroll-table-region" role="region" aria-label="Public Adventures results" tabindex="0">
+        <table class="adventure-list-table adventure-shared-column-table ro-record-table adventure-book-table">
+            {% include "adventures/_adventure_table_colgroup.html" with include_public_columns=True %}
             <thead>
                 <tr>
-                    <th>Photo</th><th>Status</th><th>Adventure</th><th>Operator</th>
-                    <th>State</th><th>Location</th><th>Date</th>
-                    <th class="center-column">Journal</th><th class="center-column">Photos</th>
-                    <th class="center-column">Comments</th><th class="ro-actions-column">Action</th>
+                    <th class="adventure-col-photo">Photo</th><th class="adventure-col-status">Status</th><th class="adventure-col-adventure">Adventure</th><th class="adventure-col-operator">Operator</th>
+                    <th class="adventure-col-state">State</th><th class="adventure-col-location">Location</th><th class="adventure-col-date">Date</th>
+                    <th class="adventure-col-count adventure-col-journal center-column">Journal</th><th class="adventure-col-count adventure-col-photos center-column">Photos</th>
+                    <th class="adventure-col-count adventure-col-contacts center-column">Contacts</th><th class="adventure-col-actions ro-actions-column">Actions</th>
                 </tr>
             </thead>
 
@@ -99,7 +103,7 @@
                         onclick="window.location='{{ adventure.get_absolute_url }}';"
                         onkeydown="if(event.key==='Enter'){window.location='{{ adventure.get_absolute_url }}';}"
                     >
-                        <td class="adventure-photo-cell">
+                        <td class="adventure-col-photo adventure-photo-cell">
                             {% if adventure.display_cover_photo %}
                                 <img
                                     src="{{ adventure.display_cover_photo.public_thumbnail_url }}"
@@ -111,12 +115,12 @@
                             {% endif %}
                         </td>
 
-                        <td class="nowrap">
+                        <td class="adventure-col-status nowrap">
                             {% include "adventures/_status_control.html" %}
                         </td>
 
-                        <td>
-                            <strong>{{ adventure.title }}</strong>
+                        <td class="adventure-col-adventure">
+                            <strong>{{ adventure.title }}</strong>{% include "partials/_staff_record_id.html" with object=adventure label="Adventure ID" %}
 
                             {% if adventure.summary %}
                                 <div class="adventure-list-summary">
@@ -125,26 +129,26 @@
                             {% endif %}
                         </td>
 
-                        <td>
+                        <td class="adventure-col-operator">
                             {{ adventure.owner }}
                         </td>
 
-                        <td>
+                        <td class="adventure-col-state">
                             {% if adventure.location and adventure.can_view_location %}{{ adventure.location.state|default:"—" }}{% elif adventure.location %}Private{% else %}—{% endif %}
                         </td>
 
-                        <td>
+                        <td class="adventure-col-location">
                             {% if adventure.location %}{% if adventure.can_view_location %}{{ adventure.location.name }}{% else %}Private Location{% endif %}{% else %}—{% endif %}
                         </td>
 
-                        <td class="nowrap">
+                        <td class="adventure-col-date nowrap">
                             {{ adventure.started_at|date:"M j, Y" }}
                         </td>
 
-                        <td class="center-column">{{ adventure.journal_count }}</td>
-                        <td class="center-column">{{ adventure.photo_count }}</td>
-                        <td class="center-column">{{ adventure.comment_count }}</td>
-                        <td class="ro-actions-column" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+                        <td class="adventure-col-count adventure-col-journal center-column">{{ adventure.journal_count }}</td>
+                        <td class="adventure-col-count adventure-col-photos center-column">{{ adventure.photo_count }}</td>
+                        <td class="adventure-col-count adventure-col-contacts center-column">{{ adventure.contact_count }}</td>
+                        <td class="adventure-col-actions ro-actions-column" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
                             {% include "adventures/_row_action_menu.html" %}
                         </td>
                     </tr>

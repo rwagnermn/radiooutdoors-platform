@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Reset All Application Data | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content-card narrow-card">
+    <h1>Reset All Application Data</h1>
+    <div class="form-error" role="alert">
+        <strong>Destructive operation: this cannot be undone.</strong>
+        <p>This permanently deletes all Adventures, Journals, contacts, photos, Locations, non-administrator Members, imports, moderation records, and operational history. Uploaded application files and safe orphaned uploads will also be removed.</p>
+    </div>
+    <p>Staff and superuser accounts, their profiles and policy acceptances, Location Types, default Location images, blocked-domain configuration, schema, static files, and configuration files are preserved.</p>
+    {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <label for="confirmation_phrase">Type <strong>{{ confirmation_phrase }}</strong> exactly:</label>
+        <input id="confirmation_phrase" name="confirmation_phrase" type="text" autocomplete="off" required>
+        <button type="submit" class="button-primary ro-danger-action">Permanently Reset Application Data</button>
+    </form>
+</section>
+{% endblock %}

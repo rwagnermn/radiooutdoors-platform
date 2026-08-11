@@ -2,11 +2,52 @@ import socket
 import ssl
 import urllib.error
 from unittest.mock import patch
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
-from .qrz_service import QRZUnavailableError, _request
+from .qrz_service import (
+    QRZConfigurationError,
+    QRZUnavailableError,
+    _read_secret,
+    _request,
+    lookup_callsign,
+)
+
+
+class QRZConfigurationTests(SimpleTestCase):
+    def test_missing_configuration_identifies_key_without_a_value(self):
+        with TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.txt"
+            with override_settings(QRZ_USERNAME="", QRZ_USERNAME_FILE=missing):
+                with self.assertRaises(QRZConfigurationError) as raised:
+                    _read_secret("QRZ_USERNAME", "QRZ_USERNAME_FILE")
+        self.assertEqual(raised.exception.configuration_key, "QRZ_USERNAME")
+        self.assertIn("Missing QRZ_USERNAME", str(raised.exception))
+
+    def test_environment_setting_takes_precedence_over_missing_file(self):
+        with override_settings(
+            QRZ_USERNAME="configured-value",
+            QRZ_USERNAME_FILE=Path("does-not-exist.txt"),
+        ):
+            self.assertEqual(
+                _read_secret("QRZ_USERNAME", "QRZ_USERNAME_FILE"),
+                "configured-value",
+            )
+
+    @override_settings(QRZ_USERNAME="configured-user", QRZ_PASSWORD="configured-password")
+    @patch("core.qrz_service._request")
+    def test_configured_credentials_reach_successful_callsign_verification(self, request):
+        request.side_effect = [
+            b"<QRZDatabase><Session><Key>session-key</Key></Session></QRZDatabase>",
+            b"<QRZDatabase><Callsign><call>VK5CP</call><fname>Test</fname><name>Operator</name><country>Australia</country><type>P</type></Callsign><Session /></QRZDatabase>",
+        ]
+        result = lookup_callsign("vk5cp")
+        self.assertEqual(result.callsign, "VK5CP")
+        self.assertTrue(result.is_person_identity)
+        self.assertEqual(request.call_count, 2)
 
 
 class QRZTransportLoggingTests(SimpleTestCase):

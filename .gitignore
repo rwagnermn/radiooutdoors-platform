@@ -32,6 +32,7 @@ google_geocoding_api_key.txt
 qrz_username.txt
 qrz_password.txt
 openai_api_key.txt
+openai_api_key2.txt
 
 # Build artifacts
 *.zip

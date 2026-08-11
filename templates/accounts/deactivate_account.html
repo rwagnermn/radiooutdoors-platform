@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Deactivate My Account | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content"><div class="location-card account-deactivation-confirmation">
+<h1>Deactivate My Account</h1>
+<p>Deactivation is reversible. It disables future login and removes your profile from active Member listings until an administrator reactivates it.</p>
+<p>Your callsign identity, Adventures, Journals, Contacts, Photos, POTA imports and history, policy records, and other account data will remain unchanged.</p>
+<p>Your existing public Adventures may remain visible with their historical callsign attribution. Private information remains private.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}
+<button type="submit" class="button-secondary-dark">Deactivate My Account</button>
+<a href="{% url 'account_home' %}">Cancel</a>
+</form>
+</div></section>
+{% endblock %}

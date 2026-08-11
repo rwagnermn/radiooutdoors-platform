@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Confirm Contact Deletion | Radio Outdoors{% endblock %}
+{% block content %}<section class="content narrow-content">
+<h1>Delete {{ selected_count }} selected Contact{{ selected_count|pluralize }}?</h1>
+<div class="form-error-summary" role="alert"><p><strong>{{ selected_count }} Contact{{ selected_count|pluralize }} will be permanently deleted.</strong></p><p>Adventure and Journal records will remain.</p></div>
+<form method="post" action="{% url 'bulk_delete_contacts' %}">{% csrf_token %}<input type="hidden" name="confirm_delete" value="1">{% for contact_id in contact_ids %}<input type="hidden" name="contact_ids" value="{{ contact_id }}">{% endfor %}<button type="submit" class="button-danger">Delete Selected Contacts</button> <a href="{% url 'my_contact_log' %}" class="button-secondary-dark">Cancel</a></form>
+</section>{% endblock %}

@@ -12,10 +12,12 @@ from .follower_views import (
 from .member_views import (
     member_admin_list,
     member_admin_verify,
+    member_deactivate,
     member_delete,
     member_detail,
     member_list,
     member_mark_verified_for_development,
+    member_reactivate,
     member_toggle_active,
     member_verify_qrz,
     my_member_profile,
@@ -65,6 +67,16 @@ urlpatterns = [
         "manage/<int:member_id>/active/",
         member_toggle_active,
         name="member_toggle_active",
+    ),
+    path(
+        "manage/<int:member_id>/deactivate/",
+        member_deactivate,
+        name="member_deactivate",
+    ),
+    path(
+        "manage/<int:member_id>/reactivate/",
+        member_reactivate,
+        name="member_reactivate",
     ),
     path(
         "manage/<int:member_id>/verify-qrz/",

@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.db.models.functions import Lower
 from PIL import Image, UnidentifiedImageError
 
-from core.models import Adventure, Comment, JournalEntry, Location, LocationType as LocationTypeRecord, OperatingLocation
+from core.models import Adventure, Comment, JournalContact, JournalEntry, Location, LocationType as LocationTypeRecord, OperatingLocation
 from core.profile_images import MAX_PROFILE_PHOTO_BYTES, optimize_location_photo
 from core.photo_moderation import validate_image_file
 from core.location_privacy import visible_locations
@@ -456,6 +456,28 @@ class CommentForm(forms.ModelForm):
         labels = {
             "body": "Comment",
         }
+
+
+class JournalContactForm(forms.ModelForm):
+    class Meta:
+        model = JournalContact
+        fields = ["qso_date", "time_on", "callsign", "band", "mode", "frequency", "signal_report", "comment", "pota_park_reference", "pota_park_name"]
+        labels = {
+            "qso_date": "Date", "time_on": "Time", "callsign": "Worked callsign",
+            "comment": "Notes", "pota_park_reference": "POTA park reference",
+            "pota_park_name": "POTA park name",
+        }
+        widgets = {
+            "qso_date": forms.DateInput(attrs={"type": "date"}),
+            "time_on": forms.TimeInput(attrs={"type": "time"}),
+            "comment": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def clean_callsign(self):
+        return self.cleaned_data["callsign"].strip().upper()
+
+    def clean_pota_park_reference(self):
+        return self.cleaned_data["pota_park_reference"].strip().upper()
 
 
 class AdifImportForm(forms.Form):

@@ -21,6 +21,14 @@
 {% endif %}
 </section>
 
+{% if profile and not user.is_staff %}
+<section class="location-card account-deactivation-card">
+<h2>Account Status</h2>
+<p>Need to step away? Deactivation disables login and hides your active Member profile while preserving your Adventures and account history for later restoration.</p>
+<a href="{% url 'deactivate_account' %}" class="ro-small-action">Deactivate My Account</a>
+</section>
+{% endif %}
+
 <h2>Following</h2>
 <div class="member-table-scroll ro-scroll-table-region" role="region" aria-label="Account members" tabindex="0"><table class="member-directory-table ro-record-table"><thead><tr><th>Callsign</th><th>Member</th><th>Status</th></tr></thead><tbody>
 {% for relationship in following %}<tr><td><a href="{% url 'member_detail' relationship.member.callsign %}"><strong>{{ relationship.member.callsign }}</strong></a></td><td>{{ relationship.member.public_name }}</td><td>{{ relationship.get_status_display }}</td></tr>{% empty %}<tr><td colspan="3">You are not following anyone yet.</td></tr>{% endfor %}

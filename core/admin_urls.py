@@ -1,5 +1,7 @@
 from django.urls import path
 
+from .application_data_reset_views import reset_all_application_data_view
+
 from .default_image_views import (
     default_location_image_detail,
     default_location_image_edit,
@@ -29,6 +31,7 @@ from .pota_reset_views import pota_test_reset, pota_test_reset_execute
 
 
 urlpatterns = [
+    path("reset-all-application-data/", reset_all_application_data_view, name="reset_all_application_data"),
     path("pota-test-reset/", pota_test_reset, name="pota_test_reset"),
     path("pota-test-reset/execute/", pota_test_reset_execute, name="pota_test_reset_execute"),
     path("photo-moderation/", photo_moderation_queue, name="photo_moderation_queue"),

@@ -24,11 +24,14 @@ ATTESTATION = "I confirm that I was authorized to use each listed former or alte
 
 def _key(token): return f"pota-import:{token}"
 
-def _fingerprint(owner_id, row):
+def _fingerprint(owner_id, row, source=PotaImportBatch.Source.ACTIVATION_HISTORY):
+    if source == PotaImportBatch.Source.HUNTER_LOG:
+        values = (owner_id, source, row["callsign"], row["activation_date"], row["park_reference"], row["first_qso_time"], row["last_qso_time"])
+        return hashlib.sha256("|".join(str(value) for value in values).encode()).hexdigest()
     source = "|".join(str(v) for v in (owner_id, row["callsign"], row["activation_date"], row["park_reference"], row["cw"], row["data"], row["phone"], row["total"]))
     return hashlib.sha256(source.encode()).hexdigest()
 
-def _decorate_rows(user, rows):
+def _decorate_rows(user, rows, source=PotaImportBatch.Source.ACTIVATION_HISTORY):
     current = getattr(getattr(user, "member_profile", None), "callsign", "").upper()
     former = set(MemberCallsignAudit.objects.filter(member__user=user).values_list("old_callsign", flat=True))
     others = set(MemberProfile.objects.exclude(user=user).values_list("callsign", flat=True))
@@ -37,10 +40,15 @@ def _decorate_rows(user, rows):
     others.update(other_audits.values_list("new_callsign", flat=True))
     for index, row in enumerate(rows):
         row["index"] = index
-        row["fingerprint"] = _fingerprint(user.pk, row)
+        row["fingerprint"] = _fingerprint(user.pk, row, source)
         call = row["callsign"].upper()
         row["callsign_status"] = "current" if call == current else "former" if call in {x.upper() for x in former} else "conflict" if call in {x.upper() for x in others} else "attestation"
-        row["duplicate"] = PotaActivationImport.objects.filter(fingerprint=row["fingerprint"]).exists()
+        other_source = PotaImportBatch.Source.HUNTER_LOG if source == PotaImportBatch.Source.ACTIVATION_HISTORY else PotaImportBatch.Source.ACTIVATION_HISTORY
+        equivalent = PotaActivationImport.objects.filter(
+            batch__owner=user, source=other_source, activation_date=row["activation_date"],
+            callsign__iexact=row["callsign"], park_reference__iexact=row["park_reference"],
+        ).exists()
+        row["duplicate"] = PotaActivationImport.objects.filter(fingerprint=row["fingerprint"]).exists() or equivalent
     return rows
 
 def _park_key(reference):
@@ -113,7 +121,7 @@ def import_pota_history(request):
         rows = _decorate_rows(request.user, [row.as_dict() for row in parsed])
         parks = _unique_parks(rows, request.user)
         token = uuid4().hex
-        cache.set(_key(token), {"owner": request.user.pk, "rows": rows, "parks": parks, "ignored": ignored}, 3600)
+        cache.set(_key(token), {"owner": request.user.pk, "source": PotaImportBatch.Source.ACTIVATION_HISTORY, "rows": rows, "parks": parks, "ignored": ignored}, 3600)
         return redirect("preview_pota_history", token=token)
     return render(request, "adventures/pota_history_import.html", {"submitted_text": ""})
 
@@ -132,29 +140,34 @@ def preview_pota_history(request, token):
         row["location_status"] = statuses.get(normalize_pota_reference(row["park_reference"]), "Pin pending")
     return render(request, "adventures/pota_history_preview.html", {"token": token, "rows": payload["rows"], "parks": parks, "ignored": payload["ignored"], "locations": locations, "attestation": ATTESTATION, "needs_attestation": any(r["callsign_status"] == "attestation" and not r["errors"] and not r["duplicate"] for r in payload["rows"]), "lookup_unavailable": any(park["geocode_status"] == "unavailable" for park in parks), "existing_match_count": sum(bool(park["matched_location_id"]) for park in parks), "approximate_count": sum(bool(park["latitude"] and park["longitude"] and not park["matched_location_id"]) for park in parks), "pending_count": sum(not park["matched_location_id"] and not (park["latitude"] and park["longitude"]) for park in parks)})
 
+
 @verified_member_required
 @require_POST
 def confirm_pota_history(request, token):
     payload = cache.get(_key(token))
+    source = payload.get("source", PotaImportBatch.Source.ACTIVATION_HISTORY) if payload else PotaImportBatch.Source.ACTIVATION_HISTORY
+    is_hunter = source == PotaImportBatch.Source.HUNTER_LOG
+    import_route = "import_pota_hunter_log" if is_hunter else "import_pota_history"
+    preview_route = "preview_pota_hunter_log" if is_hunter else "preview_pota_history"
     if not payload or payload["owner"] != request.user.pk:
         messages.error(request, "That import preview expired or was already processed.")
-        return redirect("import_pota_history")
+        return redirect(import_route)
     chosen = {int(x) for x in request.POST.getlist("selected") if x.isdigit()}
     selected = [r for r in payload["rows"] if r["index"] in chosen and not r["errors"] and not r["duplicate"] and r["callsign_status"] != "conflict"]
     needs_attestation = any(r["callsign_status"] == "attestation" for r in selected)
     if needs_attestation and request.POST.get("callsign_attestation") != "yes":
         messages.error(request, "Confirm authorization for the listed former or alternate callsigns before importing.")
-        return redirect("preview_pota_history", token=token)
+        return redirect(preview_route, token=token)
     if not selected:
         messages.error(request, "Select at least one eligible activation to import.")
-        return redirect("preview_pota_history", token=token)
+        return redirect(preview_route, token=token)
     selected_references = {normalize_pota_reference(row["park_reference"]) for row in selected}
     parks = {park["reference"]: park for park in (payload.get("parks") or _unique_parks(payload["rows"], request.user)) if park["reference"] in selected_references}
     # Historical POTA imports alone may continue with a null general pin.
     # Normal Location forms retain their existing coordinate validation.
     created, duplicates, needs_location, links = 0, 0, 0, []
     with transaction.atomic():
-        batch = PotaImportBatch.objects.create(owner=request.user, diagnostics={"ignored_lines": payload["ignored"], "selected_rows": len(selected)})
+        batch = PotaImportBatch.objects.create(owner=request.user, source=source, diagnostics={"ignored_lines": payload["ignored"], "selected_rows": len(selected), "source_qso_count": payload.get("qso_count", 0)})
         for callsign in sorted({r["callsign"] for r in selected if r["callsign_status"] == "attestation"}):
             PotaCallsignAttestation.objects.create(batch=batch, member=request.user, callsign=callsign, attestation_text=ATTESTATION)
         resolved_locations = {}
@@ -201,7 +214,7 @@ def confirm_pota_history(request, token):
                 allowed_provider_names = {candidate.get("provider_name", "") for candidate in park.get("candidates", [])}
                 provider_name = submitted_provider if submitted_provider in allowed_provider_names else park.get("provider_name", "")
                 provider_note = f" Provider suggestion: {provider_name}." if provider_name else ""
-                description = "Created from POTA historical import. " + coordinate_note + provider_note
+                description = ("Created from POTA Hunter Log import. " if is_hunter else "Created from POTA historical import. ") + coordinate_note + provider_note
                 entity = park.get("entity", "")
                 if location is not None:
                     location.name = park["display_name"]
@@ -216,20 +229,25 @@ def confirm_pota_history(request, token):
                     location = Location.objects.create(name=park["display_name"], created_by=request.user, visibility=Location.Visibility.PRIVATE if request.POST.get(f"park_private_{key}") == "yes" else Location.Visibility.PUBLIC, location_type=Location.LocationType.PARK, location_type_record=park_type, state=entity.split("-", 1)[1] if entity.startswith("US-") else entity, country="USA" if entity.startswith("US-") else "", latitude=latitude, longitude=longitude, reference_code=reference, description=description, needs_pin_review=latitude is None or longitude is None)
             resolved_locations[reference] = location
         for row in selected:
-            if PotaActivationImport.objects.filter(fingerprint=row["fingerprint"]).exists():
+            other_source = PotaImportBatch.Source.ACTIVATION_HISTORY if is_hunter else PotaImportBatch.Source.HUNTER_LOG
+            equivalent = PotaActivationImport.objects.filter(batch__owner=request.user, source=other_source, activation_date=row["activation_date"], callsign__iexact=row["callsign"], park_reference__iexact=row["park_reference"]).exists()
+            if PotaActivationImport.objects.filter(fingerprint=row["fingerprint"]).exists() or equivalent:
                 duplicates += 1; continue
             location = resolved_locations.get(normalize_pota_reference(row["park_reference"]))
             started = timezone.make_aware(datetime.combine(datetime.fromisoformat(row["activation_date"]).date(), time(12)))
             row_visibility = request.POST.get(f"row_visibility_{row['index']}", "batch")
             batch_public = request.POST.get("publish_pota_batch") == "yes"
             is_public = row_visibility == "public" or (row_visibility == "batch" and batch_public)
-            adventure = Adventure.objects.create(owner=request.user, title=f"POTA Activation — {row['park_name']}", location=location, operating_callsign=row["callsign"], status=Adventure.Status.COMPLETED, is_public=is_public, summary="Imported from POTA activation history. Add any Journal details or contacts you want.", started_at=started, completed_at=started)
-            PotaActivationImport.objects.create(adventure=adventure, batch=batch, activation_date=row["activation_date"], callsign=row["callsign"], park_reference=row["park_reference"], park_name=row["park_name"], entity=row["entity"], cw_contacts=row["cw"], data_contacts=row["data"], phone_contacts=row["phone"], total_contacts=row["total"], fingerprint=row["fingerprint"], location_resolution="unresolved" if location is None or location.needs_pin_review else "existing")
+            summary = "Imported from POTA Hunter Log as a grouped activation session." if is_hunter else "Imported from POTA activation history. Add any Journal details or contacts you want."
+            adventure = Adventure.objects.create(owner=request.user, title=f"POTA Activation — {row['park_name']}", location=location, operating_callsign=row["callsign"], status=Adventure.Status.COMPLETED, is_public=is_public, summary=summary, started_at=started, completed_at=started)
+            source_metadata = ({"qso_count": row["qso_count"], "bands": row["bands"], "modes": row["modes"], "first_qso_time": row["first_qso_time"], "last_qso_time": row["last_qso_time"], "session_number": row["session_number"], "source_row_ids": row["source_row_ids"], "source_line_numbers": row["source_line_numbers"], "worked_callsigns": row["worked_callsigns"]} if is_hunter else {})
+            PotaActivationImport.objects.create(adventure=adventure, batch=batch, source=source, source_metadata=source_metadata, activation_date=row["activation_date"], callsign=row["callsign"], park_reference=row["park_reference"], park_name=row["park_name"], entity=row["entity"], cw_contacts=row["cw"], data_contacts=row["data"], phone_contacts=row["phone"], total_contacts=row["total"], fingerprint=row["fingerprint"], location_resolution="unresolved" if location is None or location.needs_pin_review else "existing")
             created += 1; needs_location += int(location is None or location.latitude is None or location.longitude is None); links.append({"title": adventure.title, "url": adventure.get_absolute_url()})
         batch.confirmed_at = timezone.now(); batch.save(update_fields=["confirmed_at"])
     cache.delete(_key(token))
-    request.session["pota_import_result"] = {"created": created, "duplicates": duplicates, "needs_location": needs_location, "links": links}
-    return redirect("pota_history_result")
+    request.session["pota_import_result"] = {"created": created, "duplicates": duplicates, "needs_location": needs_location, "links": links, "source_label": "POTA Hunter Log" if is_hunter else "POTA Activation History"}
+    return redirect("pota_hunter_result" if is_hunter else "pota_history_result")
+
 
 @verified_member_required
 def pota_history_result(request):
@@ -239,7 +257,7 @@ def pota_history_result(request):
 def _pin_review_locations(user):
     queryset = Location.objects.filter(
         needs_pin_review=True,
-        description__startswith="Created from POTA historical import.",
+        description__startswith="Created from POTA",
     )
     if not user.is_staff:
         queryset = queryset.filter(created_by=user)

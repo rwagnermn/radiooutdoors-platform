@@ -6,8 +6,8 @@
 <h1>Manual Verification Queue</h1>
 <p>Review Pending Member requests without changing or recreating their accounts.</p>
 <div class="member-table-scroll ro-scroll-table-region" role="region" aria-label="Manual verification requests" tabindex="0">
-<table class="ro-record-table"><thead><tr><th>Callsign</th><th>Name</th><th>Country</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>
-{% for item in verification_requests %}<tr><td><strong>{{ item.member.callsign }}</strong></td><td>{{ item.full_name }}</td><td>{{ item.country }}</td><td>{{ item.get_status_display }}</td><td>{{ item.created_at|date:"M j, Y" }}</td><td><a href="{% url 'manual_verification_review' item.pk %}" class="ro-table-action">Review</a></td></tr>{% empty %}<tr><td colspan="6">No manual verification requests.</td></tr>{% endfor %}
+<table class="ro-record-table"><thead><tr><th class="staff-id-column">Request ID</th><th>Callsign</th><th>Name</th><th>Country</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>
+{% for item in verification_requests %}<tr><td class="staff-id-column">{{ item.pk }}</td><td><strong>{{ item.member.callsign }}</strong><br><small>Member {{ item.member_id }} · User {{ item.member.user_id }}</small></td><td>{{ item.full_name }}</td><td>{{ item.country }}</td><td>{{ item.get_status_display }}</td><td>{{ item.created_at|date:"M j, Y" }}</td><td><a href="{% url 'manual_verification_review' item.pk %}" class="ro-table-action">Review</a></td></tr>{% empty %}<tr><td colspan="7">No manual verification requests.</td></tr>{% endfor %}
 </tbody></table></div>
 </section>
 {% endblock %}

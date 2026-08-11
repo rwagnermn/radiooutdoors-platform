@@ -75,6 +75,7 @@ def build_contact_map(adventure, contacts: Iterable[JournalContact], user):
     bands = set()
     modes = set()
     for contact in contacts:
+        journal_title = contact.journal_entry.title or "Journal Entry" if contact.journal_entry_id else "Adventure Contact"
         coordinates, source, approximate = _contact_coordinates(contact)
         contact.map_coordinate_source = source
         contact.is_mappable = coordinates is not None
@@ -82,13 +83,13 @@ def build_contact_map(adventure, contacts: Iterable[JournalContact], user):
             unmapped_contacts.append(
                 {
                     "callsign": contact.callsign,
-                    "journal": contact.journal_entry.title or "Journal Entry",
+                    "journal": journal_title,
                     "date": contact.qso_date.isoformat(),
                 }
             )
             continue
-        journal_title = contact.journal_entry.title or "Journal Entry"
-        journals[contact.journal_entry_id] = journal_title
+        if contact.journal_entry_id:
+            journals[contact.journal_entry_id] = journal_title
         if contact.band:
             bands.add(contact.band)
         if contact.mode:

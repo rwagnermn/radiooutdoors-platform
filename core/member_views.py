@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -11,6 +12,11 @@ from django.views.decorators.http import require_POST
 
 from .auth import verified_member_required
 from .member_forms import MemberDeleteForm, MemberProfileForm
+from .member_deletion import (
+    delete_member_account,
+    member_deletion_preview,
+    summarize_member_deletion,
+)
 from .models import MemberProfile
 from .location_privacy import mark_adventure_location_visibility
 from .photo_moderation import moderate_profile_photo
@@ -99,6 +105,9 @@ def member_detail(request, callsign):
         _members(), callsign__iexact=callsign
     )
     owner = request.user.is_authenticated and request.user == profile.user
+
+    if not profile.user.is_active and not request.user.is_staff:
+        raise Http404("Member not found.")
 
     if (
         (
@@ -375,12 +384,46 @@ def member_toggle_active(request, member_id):
         MemberProfile.objects.select_related("user"),
         pk=member_id,
     )
-    if profile.user == request.user:
-        messages.error(request, "You cannot deactivate your own account.")
+    if profile.user.is_staff or profile.user.is_superuser:
+        messages.error(request, "Staff and administrator accounts cannot be changed here.")
     else:
         profile.user.is_active = not profile.user.is_active
         profile.user.save(update_fields=["is_active"])
     return redirect("member_admin_list")
+
+
+def _set_member_active(request, member_id, *, active):
+    profile = get_object_or_404(
+        MemberProfile.objects.select_related("user"),
+        pk=member_id,
+    )
+    if profile.user.is_staff or profile.user.is_superuser:
+        messages.error(request, "Staff and administrator accounts cannot be changed here.")
+        return redirect("member_admin_list")
+
+    profile.user.is_active = active
+    profile.user.save(update_fields=["is_active"])
+    action = "reactivated" if active else "deactivated"
+    messages.success(request, f"{profile.callsign} was {action}.")
+    logger.info(
+        "Member %s member_id=%s staff_id=%s",
+        action,
+        profile.pk,
+        request.user.pk,
+    )
+    return redirect("member_admin_list")
+
+
+@staff_member_required
+@require_POST
+def member_deactivate(request, member_id):
+    return _set_member_active(request, member_id, active=False)
+
+
+@staff_member_required
+@require_POST
+def member_reactivate(request, member_id):
+    return _set_member_active(request, member_id, active=True)
 
 
 @staff_member_required
@@ -390,8 +433,8 @@ def member_delete(request, member_id):
         pk=member_id,
     )
 
-    if profile.user == request.user:
-        messages.error(request, "You cannot delete your own account.")
+    if profile.user.is_staff or profile.user.is_superuser:
+        messages.error(request, "Staff and administrator accounts cannot be deleted here.")
         return redirect("member_admin_list")
 
     if request.method == "POST":
@@ -401,10 +444,38 @@ def member_delete(request, member_id):
         )
         if form.is_valid():
             callsign = profile.callsign
-            profile.user.delete()
+            try:
+                deleted_counts = delete_member_account(profile.user)
+            except ProtectedError:
+                logger.exception(
+                    "Member deletion blocked member_id=%s staff_id=%s",
+                    profile.pk,
+                    request.user.pk,
+                )
+                messages.error(
+                    request,
+                    "The member could not be deleted because associated data could not be safely removed.",
+                )
+                return redirect("member_delete", member_id=profile.pk)
+            deletion_summary = summarize_member_deletion(deleted_counts)
             messages.success(
                 request,
-                f"{callsign} and all associated data were deleted.",
+                (
+                    f"Member deleted: {callsign}. "
+                    f"Adventures deleted: {deletion_summary['adventures']}; "
+                    f"Journals deleted: {deletion_summary['journals']}; "
+                    f"Contacts deleted: {deletion_summary['contacts']}; "
+                    f"Photos deleted: {deletion_summary['photos']}; "
+                    f"POTA batches deleted: {deletion_summary['pota_batches']}; "
+                    f"POTA import records deleted: {deletion_summary['pota_imports']}; "
+                    f"Other history/audit records deleted: {deletion_summary['other_history']}."
+                ),
+            )
+            logger.info(
+                "Member deleted callsign=%s staff_id=%s deleted_counts=%s",
+                callsign,
+                request.user.pk,
+                deleted_counts,
             )
             return redirect("member_admin_list")
     else:
@@ -416,5 +487,6 @@ def member_delete(request, member_id):
         {
             "profile": profile,
             "form": form,
+            "deletion_preview": member_deletion_preview(profile.user),
         },
     )

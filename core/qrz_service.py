@@ -8,6 +8,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
+from django.conf import settings
+
 
 QRZ_URL = "https://xmldata.qrz.com/xml/current/"
 USER_AGENT = "RadioOutdoors/0.32"
@@ -19,7 +21,9 @@ class QRZError(Exception):
 
 
 class QRZConfigurationError(QRZError):
-    pass
+    def __init__(self, message, *, configuration_key=""):
+        super().__init__(message)
+        self.configuration_key = configuration_key
 
 
 class QRZNotFoundError(QRZError):
@@ -59,16 +63,31 @@ class QRZResult:
         )
 
 
-def _read_secret(filename):
-    path = Path(filename)
+def _read_secret(setting_name, file_setting_name):
+    value = str(getattr(settings, setting_name, "") or "").strip()
+    if value:
+        logger.info(
+            "QRZ credential configured configuration_key=%s source=environment_or_setting",
+            setting_name,
+        )
+        return value
+
+    path = Path(getattr(settings, file_setting_name))
     if not path.exists():
         raise QRZConfigurationError(
-            f"Missing {filename}. Add the QRZ credential file in the project folder."
+            f"Missing {setting_name}. Set the environment variable or add its local credential file.",
+            configuration_key=setting_name,
         )
     value = path.read_text(encoding="utf-8-sig").strip()
     if not value:
-        raise QRZConfigurationError(f"{filename} is empty.")
-    logger.info("QRZ credential file loaded file=%s nonempty=true", filename)
+        raise QRZConfigurationError(
+            f"The local credential file for {setting_name} is empty.",
+            configuration_key=setting_name,
+        )
+    logger.info(
+        "QRZ credential configured configuration_key=%s source=local_file nonempty=true",
+        setting_name,
+    )
     return value
 
 
@@ -164,8 +183,8 @@ def _text(parent, name):
 
 def _login():
     logger.info("QRZ authentication starting")
-    username = _read_secret("qrz_username.txt")
-    password = _read_secret("qrz_password.txt")
+    username = _read_secret("QRZ_USERNAME", "QRZ_USERNAME_FILE")
+    password = _read_secret("QRZ_PASSWORD", "QRZ_PASSWORD_FILE")
     xml_bytes = _request(
         {
             "username": username,

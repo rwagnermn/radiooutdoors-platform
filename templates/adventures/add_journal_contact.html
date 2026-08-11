@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Add Contact | Radio Outdoors{% endblock %}
+{% block content %}<section class="content narrow-content"><p><a class="back-link-button" href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal</a></p><h1>Add Contact</h1><p>Add a Contact to <strong>{{ entry.title|default:"Journal Entry" }}</strong> in {{ adventure.title }}.</p><form method="post" class="stacked-form">{% csrf_token %}{{ form.as_p }}<button class="button-primary" type="submit">Add Contact</button> <a class="button-secondary-dark" href="{% url 'journal_entry_detail' entry.pk %}">Cancel</a></form></section>{% endblock %}

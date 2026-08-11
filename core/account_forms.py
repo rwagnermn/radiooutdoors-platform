@@ -73,11 +73,28 @@ class MemberRegistrationForm(PolicyAcceptanceFormMixin, UserCreationForm):
         callsign = self.cleaned_data["callsign"].strip().upper()
         if not callsign:
             raise forms.ValidationError("Enter a callsign.")
-        if MemberProfile.objects.filter(callsign__iexact=callsign).exists():
+        existing_profile = MemberProfile.objects.select_related("user").filter(
+            callsign__iexact=callsign
+        ).first()
+        existing_user = User.objects.filter(username__iexact=callsign).first()
+        existing_account = existing_profile.user if existing_profile else existing_user
+        if existing_account and not existing_account.is_active:
+            raise forms.ValidationError(
+                "This callsign belongs to a deactivated Radio Outdoors account. Request reactivation instead of creating a second account.",
+                code="inactive_account",
+            )
+        if existing_profile:
             raise forms.ValidationError("That callsign is already registered.")
-        if User.objects.filter(username__iexact=callsign).exists():
+        if existing_user:
             raise forms.ValidationError("That callsign is already registered.")
         return callsign
+
+    @property
+    def has_inactive_account_error(self):
+        return any(
+            error.code == "inactive_account"
+            for error in self.errors.as_data().get("callsign", [])
+        )
 
     def clean_email(self):
         return validate_registration_email(self.cleaned_data["email"])

@@ -22,6 +22,7 @@ from .models import (
     Comment,
     FollowerInvitation,
     FollowRelationship,
+    JournalContact,
     JournalEntry,
     Location,
     MemberProfile,
@@ -206,14 +207,17 @@ class AdventureBookTerminologyTests(TestCase):
         self.assertNotContains(response, "Explore Adventures")
         self.assertNotContains(response, "Explore Locations")
 
-    def test_public_collection_page_uses_adventure_book(self):
+    def test_public_collection_page_identifies_public_adventures_mode(self):
         response = self.client.get(reverse("all_adventures"))
-        self.assertContains(response, "<title>Adventure Book | Radio Outdoors</title>")
-        self.assertContains(response, "<h1>Adventure Book</h1>")
+        self.assertContains(response, "<title>Public Adventures | Radio Outdoors</title>")
+        self.assertContains(response, "<h1>Public Adventures</h1>")
         self.assertContains(
             response,
-            "Explore the stories and experiences shared by Radio Outdoors members.",
+            "Adventures shared publicly by Radio Outdoors members.",
         )
+        self.assertContains(response, '<span class="adventure-mode-badge">PUBLIC ADVENTURES</span>')
+        self.assertContains(response, "adventure-list-page")
+        self.assertContains(response, "adventure-list-table-wrap")
         self.assertContains(
             response,
             "Search for an Adventure or select one below.",
@@ -224,6 +228,95 @@ class AdventureBookTerminologyTests(TestCase):
         self.assertNotContains(response, "View My Adventures")
         self.assertContains(response, "adventure-book-search-instruction")
         self.assertContains(response, "adventure-book-filter-actions")
+
+    def test_public_collection_summarizes_contacts_instead_of_comments(self):
+        owner = get_user_model().objects.create_user(
+            username="W5COUNTS",
+            password="test-password",
+        )
+        MemberProfile.objects.create(
+            user=owner,
+            callsign="W5COUNTS",
+            callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
+        )
+        with_contacts = Adventure.objects.create(
+            owner=owner,
+            title="Adventure With Contacts",
+            is_public=True,
+        )
+        without_contacts = Adventure.objects.create(
+            owner=owner,
+            title="Adventure Without Contacts",
+            is_public=True,
+        )
+        entry = JournalEntry.objects.create(
+            adventure=with_contacts,
+            title="Contact Journal",
+            body="Journal notes",
+        )
+        JournalContact.objects.create(
+            journal_entry=entry,
+            qso_date=timezone.localdate(),
+            callsign="W1FIRST",
+            fingerprint="first-contact",
+        )
+        JournalContact.objects.create(
+            journal_entry=entry,
+            qso_date=timezone.localdate(),
+            callsign="W2SECOND",
+            fingerprint="second-contact",
+        )
+        JournalContact.objects.bulk_create(
+            [
+                JournalContact(
+                    journal_entry=entry,
+                    qso_date=timezone.localdate(),
+                    callsign=f"W3{i:04d}",
+                    fingerprint=f"contact-{i}",
+                )
+                for i in range(1780)
+            ]
+        )
+        Comment.objects.create(
+            adventure=with_contacts,
+            operator=owner,
+            body="This comment must not affect the Contact count.",
+        )
+
+        response = self.client.get(reverse("all_adventures"))
+        adventures = {item.pk: item for item in response.context["adventures"]}
+
+        self.assertContains(
+            response,
+            '<th class="adventure-col-count adventure-col-contacts center-column">Contacts</th>',
+        )
+        self.assertContains(
+            response,
+            '<td class="adventure-col-count adventure-col-contacts center-column">1782</td>',
+        )
+        self.assertNotContains(response, '<th class="center-column">Comments</th>')
+        self.assertTrue(hasattr(adventures[with_contacts.pk], "contact_count"))
+        self.assertFalse(hasattr(adventures[with_contacts.pk], "comment_count"))
+        self.assertEqual(adventures[with_contacts.pk].contact_count, 1782)
+        self.assertEqual(adventures[with_contacts.pk].journal_count, 1)
+        self.assertEqual(adventures[with_contacts.pk].photo_count, 0)
+        self.assertEqual(adventures[without_contacts.pk].contact_count, 0)
+
+        self.client.force_login(owner)
+        response = self.client.get(reverse("my_adventures"))
+        adventures = {item.pk: item for item in response.context["adventures"]}
+        self.assertContains(
+            response,
+            '<th class="adventure-col-count adventure-col-contacts center-column">Contacts</th>',
+        )
+        self.assertContains(
+            response,
+            '<td class="adventure-col-count adventure-col-contacts center-column">1782</td>',
+        )
+        self.assertNotContains(response, '<th class="center-column">Comments</th>')
+        self.assertEqual(adventures[with_contacts.pk].contact_count, 1782)
+        self.assertEqual(adventures[without_contacts.pk].contact_count, 0)
 
     def test_verified_member_sees_only_the_opposite_adventure_view(self):
         user = get_user_model().objects.create_user(
@@ -241,11 +334,17 @@ class AdventureBookTerminologyTests(TestCase):
         self.assertContains(response, "View My Adventures")
         self.assertContains(response, reverse("my_adventures"))
         self.assertNotContains(response, "View All Public Adventures")
+        self.assertContains(response, '<span class="adventure-mode-badge">PUBLIC ADVENTURES</span>')
 
         response = self.client.get(reverse("my_adventures"))
         self.assertContains(response, "View All Public Adventures")
         self.assertContains(response, reverse("all_adventures"))
         self.assertNotContains(response, "View My Adventures")
+        self.assertContains(response, "<h1>My Adventures</h1>")
+        self.assertContains(response, "Adventures created and managed by your signed-in account.")
+        self.assertContains(response, '<span class="adventure-mode-badge">MY ADVENTURES</span>')
+        self.assertContains(response, "adventure-list-page")
+        self.assertContains(response, "adventure-list-table-wrap")
 
 
 class BrandHierarchyTests(TestCase):
@@ -1012,8 +1111,11 @@ class MemberSignupDiscoverabilityTests(TestCase):
         self.assertContains(response, '<details class="account-menu">')
         self.assertContains(response, 'aria-label="Open account menu"')
         self.assertContains(response, "My Account")
-        self.assertContains(response, "My Adventures")
-        self.assertContains(response, "My Followers")
+        self.assertContains(response, "Adventure Book")
+        self.assertContains(response, "Locations")
+        self.assertContains(response, "Map")
+        self.assertContains(response, "Import POTA History")
+        self.assertNotContains(response, "Admin Tools")
         self.assertContains(response, "About")
         self.assertContains(response, "Help")
         self.assertContains(response, "Support Radio Outdoors")
@@ -1425,7 +1527,7 @@ class MemberManagementVerificationTests(TestCase):
         self.assertContains(response, "Verify with QRZ")
         self.assertContains(response, "Admin Verify")
         self.assertContains(response, "Deactivate Member")
-        self.assertContains(response, "Delete Member")
+        self.assertContains(response, "Permanently Delete Account")
         self.assertContains(response, "header-menu.js")
         self.assertContains(response, "ro-data-table")
 
@@ -1442,10 +1544,11 @@ class MemberManagementVerificationTests(TestCase):
 
         delete_url = reverse("member_delete", args=[self.profile.pk])
         confirmation = self.client.get(delete_url)
-        self.assertContains(confirmation, "confirm deletion")
-        self.client.post(delete_url, {"callsign": "WRONG"})
+        self.assertContains(confirmation, "confirm permanent deletion")
+        self.assertContains(confirmation, "DELETE MEMBER")
+        self.client.post(delete_url, {"confirmation": "WRONG"})
         self.assertTrue(MemberProfile.objects.filter(pk=self.profile.pk).exists())
-        self.client.post(delete_url, {"callsign": "W5VERIFY"})
+        self.client.post(delete_url, {"confirmation": "DELETE MEMBER"})
         self.assertFalse(MemberProfile.objects.filter(pk=self.profile.pk).exists())
 
     def test_verification_action_is_post_only(self):

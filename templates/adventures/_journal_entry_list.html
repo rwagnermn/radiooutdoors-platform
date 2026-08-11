@@ -1,13 +1,13 @@
 {% if journal_entries %}
 <div class="contact-table-scroll journal-list-wrap ro-scroll-table-region" role="region" aria-label="Journal entries" tabindex="0">
     <table class="compact-contact-table ro-data-table journal-list-table">
-        <thead><tr>
+        <thead><tr>{% if user.is_staff %}<th scope="col" class="staff-id-column">ID</th>{% endif %}
             <th scope="col">Date / Time</th><th scope="col">Journal Entry</th><th scope="col">Summary</th>
             <th scope="col" class="center-column">Photos</th><th scope="col">Action</th>
         </tr></thead>
         <tbody>
         {% for entry in journal_entries %}
-            <tr>
+            <tr>{% if user.is_staff %}<td class="staff-id-column">{{ entry.pk }}</td>{% endif %}
                 <td class="journal-list-date"><time datetime="{{ entry.entry_at|date:'c' }}"><span>{{ entry.entry_at|date:"M j" }}</span><span>{{ entry.entry_at|date:"g:i A" }}</span></time></td>
                 <td class="journal-list-entry"><a class="journal-list-title" href="{% url 'journal_entry_detail' entry.pk %}" title="{{ entry.title|default:'Journal Entry' }}">{{ entry.title|default:"Journal Entry" }}</a>{% if manage_journals and not entry.is_public %}<span class="visibility-badge">Private</span>{% endif %}</td>
                 <td class="journal-list-summary" title="{{ entry.body|striptags|truncatechars:300 }}">{{ entry.body|striptags|truncatechars:150 }}</td>

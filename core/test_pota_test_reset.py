@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from .models import (
     Adventure,
+    JournalContact,
     JournalEntry,
     Location,
     PotaActivationImport,
@@ -92,14 +93,22 @@ class PotaResetToolTests(TestCase):
         self.assertTrue(PotaImportBatch.objects.filter(pk=batch.pk).exists())
 
     @patch("core.pota_test_reset.create_database_backup", return_value="test-backup.sqlite3")
-    def test_manual_content_blocks_affected_import(self, backup):
+    def test_manual_contact_is_preserved_when_imported_adventure_is_removed(self, backup):
         adventure, location, batch, _ = self.make_import(manual_content=True)
+        journal = adventure.journal_entries.get()
+        contact = JournalContact.objects.create(
+            owner=self.user, adventure=adventure, journal_entry=journal,
+            qso_date="2026-08-11", callsign="K1KEEP", fingerprint="manual-keep",
+            source=JournalContact.Source.MANUAL,
+        )
         result = execute_reset(allow_test_database=True)
-        self.assertTrue(Adventure.objects.filter(pk=adventure.pk).exists())
-        self.assertTrue(Location.objects.filter(pk=location.pk).exists())
-        self.assertTrue(PotaImportBatch.objects.filter(pk=batch.pk).exists())
-        self.assertEqual(result.retained["adventures"], 1)
-        self.assertEqual(len(result.blocked), 1)
+        self.assertFalse(Adventure.objects.filter(pk=adventure.pk).exists())
+        self.assertFalse(Location.objects.filter(pk=location.pk).exists())
+        self.assertFalse(PotaImportBatch.objects.filter(pk=batch.pk).exists())
+        contact.refresh_from_db()
+        self.assertIsNone(contact.adventure_id)
+        self.assertIsNone(contact.journal_entry_id)
+        self.assertEqual(result.retained["manual_contacts"], 1)
 
     @patch("core.pota_test_reset.create_database_backup", return_value="test-backup.sqlite3")
     def test_shared_import_location_is_retained(self, backup):
@@ -109,6 +118,28 @@ class PotaResetToolTests(TestCase):
         self.assertFalse(Adventure.objects.filter(pk=imported.pk).exists())
         self.assertTrue(Adventure.objects.filter(pk=manual.pk).exists())
         self.assertTrue(Location.objects.filter(pk=location.pk).exists())
+
+    @patch("core.pota_test_reset.create_database_backup", return_value="test-backup.sqlite3")
+    def test_reset_removes_large_contact_set_hunter_contacts_and_prior_audits(self, backup):
+        imported, _, batch, _ = self.make_import(manual_content=True)
+        journal = imported.journal_entries.get()
+        JournalContact.objects.bulk_create([
+            JournalContact(owner=self.user, adventure=imported, journal_entry=journal,
+                qso_date="2026-08-11", callsign=f"K{i:04d}", fingerprint=f"large-{i}",
+                source=JournalContact.Source.ADIF)
+            for i in range(1782)
+        ])
+        JournalContact.objects.create(owner=self.user, qso_date="2026-08-11", callsign="K1HUNT",
+            fingerprint="hunter-reset", source=JournalContact.Source.POTA_HUNTER)
+        PotaTestResetAudit.objects.create(database_identifier="old", succeeded=True)
+        result = execute_reset(allow_test_database=True)
+        self.assertFalse(Adventure.objects.filter(pk=imported.pk).exists())
+        self.assertFalse(PotaImportBatch.objects.filter(pk=batch.pk).exists())
+        self.assertEqual(JournalContact.objects.count(), 0)
+        self.assertEqual(result.deleted["contacts"], 1782)
+        self.assertEqual(result.deleted["hunter_contacts"], 1)
+        self.assertEqual(result.deleted["reset_audits"], 1)
+        self.assertEqual(PotaTestResetAudit.objects.count(), 1)
 
     @override_settings(DEBUG=False)
     def test_execute_and_staff_page_are_disabled_in_production(self):
@@ -122,7 +153,7 @@ class PotaResetToolTests(TestCase):
         self.make_import()
         self.client.force_login(self.staff)
         home = self.client.get(reverse("home"))
-        self.assertContains(home, "Reset POTA Test Imports")
+        self.assertContains(home, "Reset POTA Test Data")
         preview = self.client.get(reverse("pota_test_reset"))
         self.assertContains(preview, "Dry-run preview")
         bad = self.client.post(reverse("pota_test_reset"), {"confirmation_phrase": "wrong"})

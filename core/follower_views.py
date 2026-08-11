@@ -300,6 +300,7 @@ def invitation_action(request, invitation_id, action):
 def following_list(request):
     relationships = (
         FollowRelationship.objects.filter(follower=request.user)
+        .filter(member__user__is_active=True)
         .exclude(status=FollowRelationship.Status.BLOCKED)
         .select_related("member", "member__user")
         .order_by("member__callsign")

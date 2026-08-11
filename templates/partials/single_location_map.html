@@ -8,8 +8,8 @@
     {% if pin_edit_url %}<a href="{{ pin_edit_url }}" class="button-secondary-dark">Edit Pin Position</a>{% endif %}
   </div>
   {% if single_location_map_data %}
-    <div id="{{ map_id }}" class="single-location-map" data-single-location-map data-map-data-id="{{ map_data_id }}" role="region" aria-label="{{ map_heading }} for {{ single_location_map_data.name }}"></div>
-    <p class="single-location-map-fallback">Location shown: {{ single_location_map_data.name }}</p>
+    <div id="{{ map_id }}" class="single-location-map" data-single-location-map data-map-data-id="{{ map_data_id }}" data-map-status-id="{{ map_id }}-status" role="region" aria-label="{{ map_heading }} for {{ single_location_map_data.name }}" aria-busy="true"></div>
+    <p id="{{ map_id }}-status" class="single-location-map-fallback" aria-live="polite">Loading map for {{ single_location_map_data.name }}…</p>
     {{ single_location_map_data|json_script:map_data_id }}
   {% elif show_missing_pin %}
     <div class="map-empty-message" role="status">Location pin not yet set.</div>

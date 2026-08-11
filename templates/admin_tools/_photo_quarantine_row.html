@@ -1,5 +1,6 @@
 <tr>
 <td>History</td>
+<td class="staff-id-column">{{ row.object.pk }}</td>
 <td>{% if row.restricted %}<strong>Restricted safety review.</strong>{% else %}<a href="{{ row.preview_url }}" target="_blank" rel="noopener" aria-label="Preview removed photo for {{ row.association }}"><img src="{{ row.thumbnail_url }}" alt="Removed photo thumbnail for {{ row.association }}" class="moderation-thumbnail"></a>{% endif %}</td>
 <td><strong>{{ row.reference }}</strong><br>{{ row.uploader }}{% if row.callsign %}<br>{{ row.callsign }}{% endif %}</td>
 <td>{{ row.association }}</td>

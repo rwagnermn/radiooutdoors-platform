@@ -221,6 +221,10 @@ def confirm_adif_import(request, entry_id, token):
             pending.append(
                 JournalContact(
                     journal_entry=entry,
+                    owner=request.user,
+                    source=JournalContact.Source.ADIF,
+                    station_callsign=entry.operating_callsign or entry.adventure.operating_callsign,
+                    operator_callsign=entry.operating_callsign or entry.adventure.operating_callsign,
                     qso_date=date.fromisoformat(contact["qso_date"]),
                     time_on=(
                         time.fromisoformat(contact["time_on"])

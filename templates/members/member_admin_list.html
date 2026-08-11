@@ -5,14 +5,15 @@
 {% block content %}
 <section class="content">
 <h1>Manage Members</h1>
-<p>QRZ verification, account access, and permanent removal.</p>
+<p>QRZ verification, reversible account deactivation and reactivation, and exceptional permanent removal.</p>
 {% if development_verification_available %}<details class="development-verification-notice"><summary>Local test-account verification</summary><p>This DEBUG-only option is for intentional fake local accounts. Use Admin Verify for legitimate operators who cannot use QRZ.</p></details>{% endif %}
 <div class="member-table-scroll ro-scroll-table-region" role="region" aria-label="Member administration results" tabindex="0">
 <table class="member-directory-table member-admin-table ro-data-table ro-record-table">
-<thead><tr><th><span class="visually-hidden">Photo</span></th><th>Callsign</th><th>Name</th><th>Verification</th><th>Account</th><th>Data</th><th class="ro-actions-column">Actions</th></tr></thead>
+<thead><tr><th class="staff-id-column">ID</th><th><span class="visually-hidden">Photo</span></th><th>Callsign</th><th>Name</th><th>Verification</th><th>Account</th><th>Data</th><th class="ro-actions-column">Actions</th></tr></thead>
 <tbody>
 {% for profile in members %}
 <tr{% if profile.callsign %} tabindex="0" role="link" onclick="window.location='{% url 'member_detail' profile.callsign %}';" onkeydown="if(event.key==='Enter'){window.location='{% url 'member_detail' profile.callsign %}';}"{% endif %}>
+<td class="staff-id-column"><strong>{{ profile.pk }}</strong><br><small>User {{ profile.user_id }}</small></td>
 <td>{% if profile.public_profile_photo_url %}<img src="{{ profile.public_profile_photo_url }}?v={{ profile.updated_at|date:'U' }}" alt="" class="member-profile-photo member-profile-photo-thumbnail">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-thumbnail member-profile-photo-placeholder">{% endif %}</td>
 <td><strong>{{ profile.callsign|default:"Incomplete" }}</strong></td>
 <td>{{ profile.public_name }}</td>
@@ -28,13 +29,13 @@
 <form method="post" action="{% url 'member_verify_qrz' profile.pk %}">{% csrf_token %}<button type="submit">{% if profile.callsign_verified %}Reverify with QRZ{% else %}Verify with QRZ{% endif %}</button></form>
 {% if profile.verification_method != 'admin' %}<form method="post" action="{% url 'member_admin_verify' profile.pk %}" onsubmit="return confirm('Admin Verify this person as a legitimate amateur-radio operator?');">{% csrf_token %}<button type="submit">Admin Verify</button></form>{% endif %}
 {% if development_verification_available and not profile.callsign_verified %}<form method="post" action="{% url 'member_mark_verified_for_development' profile.pk %}" onsubmit="return confirm('Give this intentional local test account DEBUG-only Member access without QRZ?');">{% csrf_token %}<button type="submit">Verify Local Test Account</button></form>{% endif %}
-<form method="post" action="{% url 'member_toggle_active' profile.pk %}">{% csrf_token %}<button type="submit">{% if profile.user.is_active %}Deactivate Member{% else %}Activate Member{% endif %}</button></form>
-<a href="{% url 'member_delete' profile.pk %}" class="danger-menu-item">Delete Member</a>
+{% if profile.user.is_active %}<form method="post" action="{% url 'member_deactivate' profile.pk %}">{% csrf_token %}<button type="submit">Deactivate Member</button></form>{% else %}<form method="post" action="{% url 'member_reactivate' profile.pk %}">{% csrf_token %}<button type="submit">Reactivate Member</button></form>{% endif %}
+<a href="{% url 'member_delete' profile.pk %}" class="danger-menu-item">Permanently Delete Account</a>
 </div>
 </details>
 </td>
 </tr>
-{% empty %}<tr><td colspan="7">No member profiles.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="8">No member profiles.</td></tr>{% endfor %}
 </tbody>
 </table>
 </div>

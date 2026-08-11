@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Application Data Reset Complete | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content-card">
+    <h1>Application Data Reset Complete</h1>
+    <dl>
+        {% for category, count in result.deleted.items %}<dt>{{ category|capfirst }}</dt><dd>{{ count }}</dd>{% endfor %}
+        <dt>Media files deleted</dt><dd>{{ result.media_files_deleted }}</dd>
+        <dt>Admin accounts preserved</dt><dd>{{ result.preserved_admins|length }}</dd>
+    </dl>
+    <h2>Preserved administrators</h2>
+    <ul>{% for admin in result.preserved_admins %}<li>{{ admin.username }}{% if admin.email %} — {{ admin.email }}{% endif %}{% if admin.is_superuser %} (superuser){% endif %}</li>{% endfor %}</ul>
+    {% if result.media_failures %}
+    <h2>Media cleanup warnings</h2>
+    <p>Database reset completed, but these media files could not be removed:</p>
+    <ul>{% for failure in result.media_failures %}<li>{{ failure }}</li>{% endfor %}</ul>
+    {% endif %}
+</section>
+{% endblock %}

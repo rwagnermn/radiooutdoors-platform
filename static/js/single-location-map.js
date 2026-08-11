@@ -17,6 +17,7 @@
     if (initialized.has(container) || !window.google || !google.maps || !google.maps.marker) return;
     const dataNode = document.getElementById(container.dataset.mapDataId);
     if (!dataNode) return;
+    const status = document.getElementById(container.dataset.mapStatusId);
     const point = JSON.parse(dataNode.textContent);
     const position = {lat: point.latitude, lng: point.longitude};
     const map = new google.maps.Map(container, radioOutdoorsMapOptions({
@@ -33,6 +34,10 @@
     });
     const infoWindow = new google.maps.InfoWindow({content: popupContent(point.name)});
     marker.addListener("click", function () { infoWindow.open({map, anchor: marker}); });
+    google.maps.event.addListenerOnce(map, "idle", function () {
+      container.removeAttribute("aria-busy");
+      if (status) status.textContent = "Location shown: " + point.name;
+    });
     initialized.add(container);
   }
 

@@ -14,6 +14,7 @@ class PolicyAcceptanceMiddleware:
         "login", "logout", "password_change", "password_change_done",
         "account_recovery", "account_recovery_done", "account_recovery_confirm",
         "account_recovery_complete", "moderated_media",
+        "reset_all_application_data",
     }
 
     def __init__(self, get_response):

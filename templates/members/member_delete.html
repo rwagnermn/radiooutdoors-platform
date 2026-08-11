@@ -2,10 +2,24 @@
 {% block title %}Delete {{ profile.callsign }} | Radio Outdoors{% endblock %}
 {% block content %}
 <section class="content"><div class="location-card member-delete-card">
-<h1>Delete {{ profile.callsign }}</h1>
-<p>This permanently deletes the account and all associated Adventures, Journals, photos, contacts, and comments.</p>
+<h1>Permanently Delete Account: {{ profile.callsign }}</h1>
+<p><small class="staff-record-id">Member ID {{ profile.pk }}</small> <small class="staff-record-id">User ID {{ profile.user_id }}</small></p>
+<p><strong>This is exceptional and irreversible. Use account deactivation for ordinary member removal.</strong></p>
+<p>This permanently deletes the account and its associated operational data and history, including Adventures, Journals, photos, contacts, comments, POTA import batches, POTA activation imports, callsign attestations, and account-owned moderation or coordinate-change records.</p>
+<p>System and reference data are preserved. Policy acceptance and reset-audit records are retained with the deleted account reference removed.</p>
+<ul class="member-delete-summary">
+<li>{{ deletion_preview.adventures }} Adventure{{ deletion_preview.adventures|pluralize }}</li>
+<li>{{ deletion_preview.journals }} Journal{{ deletion_preview.journals|pluralize }}</li>
+<li>{{ deletion_preview.contacts }} contact{{ deletion_preview.contacts|pluralize }}</li>
+<li>{{ deletion_preview.photos }} photo{{ deletion_preview.photos|pluralize }}</li>
+<li>{{ deletion_preview.comments }} comment{{ deletion_preview.comments|pluralize }}</li>
+<li>{{ deletion_preview.pota_batches }} POTA import batch{{ deletion_preview.pota_batches|pluralize:"es" }}</li>
+<li>{{ deletion_preview.pota_activations }} POTA activation import{{ deletion_preview.pota_activations|pluralize }}</li>
+<li>{{ deletion_preview.pota_attestations }} POTA callsign attestation{{ deletion_preview.pota_attestations|pluralize }}</li>
+<li>{{ deletion_preview.operational_audits }} account-owned operational audit record{{ deletion_preview.operational_audits|pluralize }}</li>
+</ul>
 <form method="post">{% csrf_token %}{{ form.as_p }}
-<button type="submit" class="member-danger-button">Delete Member and All Data</button>
+<button type="submit" class="member-danger-button">Permanently Delete Account and All Data</button>
 <a href="{% url 'member_admin_list' %}">Cancel</a>
 </form>
 </div></section>

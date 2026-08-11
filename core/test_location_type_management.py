@@ -27,11 +27,11 @@ class LocationTypeManagementTests(TestCase):
     def test_staff_only_routes_and_menu(self):
         self.client.force_login(self.member)
         self.assertEqual(self.client.get(reverse("location_type_list")).status_code, 302)
-        self.assertNotContains(self.client.get(reverse("home")), "Manage Location Types")
+        self.assertNotContains(self.client.get(reverse("home")), "Location Types")
 
         self.client.force_login(self.staff)
         self.assertEqual(self.client.get(reverse("location_type_list")).status_code, 200)
-        self.assertContains(self.client.get(reverse("home")), "Manage Location Types")
+        self.assertContains(self.client.get(reverse("home")), "Location Types")
 
     def test_add_trim_duplicate_and_active_choices(self):
         self.client.force_login(self.staff)

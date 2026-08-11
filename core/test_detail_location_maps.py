@@ -108,6 +108,8 @@ class DetailLocationMapTests(TestCase):
         self.assertNotIn("gmpDraggable", source)
         self.assertNotIn('map.addListener("click"', source)
         self.assertNotIn("GOOGLE_GEOCODING_API_KEY", source)
+        self.assertIn('addListenerOnce(map, "idle"', source)
+        self.assertIn('removeAttribute("aria-busy")', source)
 
     def test_assigned_location_photo_uses_adventure_cover_layout(self):
         with patch.object(

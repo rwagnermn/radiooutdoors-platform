@@ -49,12 +49,28 @@ from .pota_views import (
     review_pota_pin,
     preview_pota_history,
 )
+from .contact_log_views import (
+    add_journal_contact,
+    bulk_delete_contacts,
+    confirm_pota_hunter_contacts,
+    import_pota_hunter_contacts,
+    my_contact_log,
+    pota_hunter_contact_result,
+    preview_pota_hunter_contacts,
+)
 
 urlpatterns = [
     path("", my_adventures, name="my_adventures"),
     path("all/", all_adventures, name="all_adventures"),
     path("add/", add_adventure, name="add_adventure"),
     path("import/pota/", import_pota_history, name="import_pota_history"),
+    path("contacts/", my_contact_log, name="my_contact_log"),
+    path("contacts/delete-selected/", bulk_delete_contacts, name="bulk_delete_contacts"),
+    path("journal/<int:entry_id>/contacts/add/", add_journal_contact, name="add_journal_contact"),
+    path("contacts/import/pota-hunter/", import_pota_hunter_contacts, name="import_pota_hunter_log"),
+    path("contacts/import/pota-hunter/preview/<str:token>/", preview_pota_hunter_contacts, name="preview_pota_hunter_log"),
+    path("contacts/import/pota-hunter/confirm/<str:token>/", confirm_pota_hunter_contacts, name="confirm_pota_hunter_log"),
+    path("contacts/import/pota-hunter/result/", pota_hunter_contact_result, name="pota_hunter_result"),
     path(
         "import/pota/preview/<str:token>/",
         preview_pota_history,

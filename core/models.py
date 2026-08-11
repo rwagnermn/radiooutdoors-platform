@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -430,7 +431,12 @@ class Adventure(models.Model):
 
 
 class PotaImportBatch(models.Model):
+    class Source(models.TextChoices):
+        ACTIVATION_HISTORY = "activation_history", "POTA Activation History"
+        HUNTER_LOG = "hunter_log", "POTA Hunter Log"
+
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pota_import_batches")
+    source = models.CharField(max_length=24, choices=Source.choices, default=Source.ACTIVATION_HISTORY)
     created_at = models.DateTimeField(auto_now_add=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
     diagnostics = models.JSONField(default=dict, blank=True)
@@ -459,6 +465,8 @@ class PotaActivationImport(models.Model):
     data_contacts = models.PositiveIntegerField(default=0)
     phone_contacts = models.PositiveIntegerField(default=0)
     total_contacts = models.PositiveIntegerField(default=0)
+    source = models.CharField(max_length=24, choices=PotaImportBatch.Source.choices, default=PotaImportBatch.Source.ACTIVATION_HISTORY)
+    source_metadata = models.JSONField(default=dict, blank=True)
     fingerprint = models.CharField(max_length=64, unique=True)
     location_resolution = models.CharField(max_length=20, choices=[("existing", "Existing Location"), ("unresolved", "Needs Location")])
     imported_at = models.DateTimeField(auto_now_add=True)
@@ -567,24 +575,41 @@ class JournalEntry(models.Model):
 
 
 class JournalContact(models.Model):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        POTA_HUNTER = "pota_hunter", "POTA Hunter Log"
+        ADIF = "adif", "ADIF"
+        OTHER = "other", "Other"
+
     journal_entry = models.ForeignKey(
         JournalEntry,
         on_delete=models.CASCADE,
         related_name="contacts",
+        null=True,
+        blank=True,
     )
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="contacts", null=True, blank=True)
+    adventure = models.ForeignKey(Adventure, on_delete=models.CASCADE, related_name="direct_contacts", null=True, blank=True)
     qso_date = models.DateField()
     time_on = models.TimeField(null=True, blank=True)
     callsign = models.CharField(max_length=32)
+    station_callsign = models.CharField(max_length=32, blank=True)
+    operator_callsign = models.CharField(max_length=32, blank=True)
     band = models.CharField(max_length=24, blank=True)
     frequency = models.DecimalField(
         max_digits=12, decimal_places=6, null=True, blank=True
     )
     mode = models.CharField(max_length=32, blank=True)
+    submode = models.CharField(max_length=32, blank=True)
     name = models.CharField(max_length=120, blank=True)
     state = models.CharField(max_length=80, blank=True)
     country = models.CharField(max_length=120, blank=True)
     distance_miles = models.PositiveIntegerField(null=True, blank=True)
     comment = models.TextField(blank=True)
+    signal_report = models.CharField(max_length=20, blank=True)
+    source = models.CharField(max_length=24, choices=Source.choices, default=Source.MANUAL, db_index=True)
+    pota_park_reference = models.CharField(max_length=30, blank=True, db_index=True)
+    pota_park_name = models.CharField(max_length=200, blank=True)
     grid_square = models.CharField(max_length=12, blank=True)
     latitude = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True
@@ -610,6 +635,29 @@ class JournalContact(models.Model):
             return f"{self.state}, {self.country}"
 
         return self.state or self.country
+
+    def clean(self):
+        super().clean()
+        if self.journal_entry_id:
+            journal_adventure_id = self.journal_entry.adventure_id
+            if self.adventure_id and self.adventure_id != journal_adventure_id:
+                raise ValidationError({
+                    "adventure": "A Contact's Adventure must match its Journal's Adventure."
+                })
+
+    def save(self, *args, **kwargs):
+        if self.journal_entry_id:
+            owner_was_missing = not self.owner_id
+            self.adventure_id = self.journal_entry.adventure_id
+            if owner_was_missing:
+                self.owner_id = self.journal_entry.adventure.owner_id
+            if kwargs.get("update_fields") is not None:
+                update_fields = set(kwargs["update_fields"])
+                update_fields.add("adventure")
+                if owner_was_missing:
+                    update_fields.add("owner")
+                kwargs["update_fields"] = update_fields
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.callsign} â€” {self.qso_date}"

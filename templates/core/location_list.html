@@ -79,7 +79,7 @@
         <table class="location-table ro-record-table">
             <thead>
                 <tr>
-                    <th aria-label="Photo"></th>
+                    {% if user.is_staff %}<th class="staff-id-column">ID</th>{% endif %}<th aria-label="Photo"></th>
                     <th>Location</th>
                     <th>Type</th>
                     <th>City</th>
@@ -96,7 +96,7 @@
                         role="link"
                         onclick="window.location='{% url 'location_detail' location.pk %}';"
                         onkeydown="if(event.key==='Enter'){window.location='{% url 'location_detail' location.pk %}';}"
-                    >
+                    >{% if user.is_staff %}<td class="staff-id-column">{{ location.pk }}</td>{% endif %}
                         <td class="location-photo-cell">
                             {% if location.display_photo_url %}<img src="{{ location.display_photo_url }}{% if location.photo %}?v={{ location.updated_at|date:'U' }}{% endif %}" alt="">
                             {% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="location-photo-placeholder">{% endif %}
@@ -140,7 +140,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                            <td colspan="6" class="empty-table-message">
+                            <td colspan="{% if user.is_staff %}7{% else %}6{% endif %}" class="empty-table-message">
                             No locations match these filters.
                         </td>
                     </tr>

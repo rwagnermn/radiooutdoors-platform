@@ -347,6 +347,78 @@ class PotaImportEntryPointTests(TestCase):
         self.client.post(reverse("confirm_pota_history", args=[token]), post)
         self.assertEqual(Location.objects.filter(reference_code="US-9999").count(), 1)
 
+    def test_preview_selection_posts_to_confirm_and_creates_adventure(self):
+        self.client.force_login(self.user)
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
+        token = start.url.rstrip("/").split("/")[-1]
+        preview = self.client.get(start.url)
+        self.assertContains(preview, 'action="' + reverse("confirm_pota_history", args=[token]) + '"')
+        self.assertContains(preview, 'name="selected" value="0" checked')
+
+        result = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {"selected": ["0"], "publish_pota_batch": "yes", "row_visibility_0": "batch"},
+        )
+
+        self.assertRedirects(result, reverse("pota_history_result"))
+        self.assertEqual(Adventure.objects.filter(owner=self.user).count(), 1)
+        self.assertEqual(PotaActivationImport.objects.filter(adventure__owner=self.user).count(), 1)
+
+    @override_settings(POTA_PARK_REFERENCE_DATA={"US-1234": {"name": "Pike Lake", "entity": "US-MN", "latitude": "46.123456", "longitude": "-92.654321"}})
+    def test_imported_coordinates_reach_adventure_and_location_detail_maps(self):
+        self.client.force_login(self.user)
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
+        token = start.url.rstrip("/").split("/")[-1]
+        key = _park_key("US-1234")
+        imported = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0"], f"park_resolution_{key}": "create",
+            f"park_latitude_{key}": "46.123456", f"park_longitude_{key}": "-92.654321",
+        })
+        self.assertRedirects(imported, reverse("pota_history_result"))
+        adventure = Adventure.objects.get(owner=self.user)
+        location = adventure.location
+        self.assertEqual(str(location.latitude), "46.123456")
+        self.assertEqual(str(location.longitude), "-92.654321")
+
+        for response in (
+            self.client.get(adventure.get_absolute_url()),
+            self.client.get(reverse("location_detail", args=[location.pk])),
+        ):
+            self.assertContains(response, "data-single-location-map", count=1)
+            self.assertContains(response, '"latitude": 46.123456')
+            self.assertContains(response, '"longitude": -92.654321')
+            self.assertContains(response, 'aria-busy="true"')
+
+    def test_no_selection_returns_to_preview_with_meaningful_error(self):
+        self.client.force_login(self.user)
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
+        token = start.url.rstrip("/").split("/")[-1]
+
+        result = self.client.post(reverse("confirm_pota_history", args=[token]), {}, follow=True)
+
+        self.assertRedirects(result, reverse("preview_pota_history", args=[token]))
+        self.assertContains(result, "Select at least one eligible activation to import.")
+        self.assertEqual(Adventure.objects.count(), 0)
+
+    def test_selected_alternate_callsign_requires_attestation_then_imports(self):
+        self.client.force_login(self.user)
+        row = "2024-06-01 K0ALT US-9999 Long Park Name US-MN 0 0 10 10"
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": row})
+        token = start.url.rstrip("/").split("/")[-1]
+        preview = self.client.get(start.url)
+        self.assertContains(preview, "data-requires-callsign-attestation")
+
+        rejected = self.client.post(reverse("confirm_pota_history", args=[token]), {"selected": ["0"]}, follow=True)
+        self.assertRedirects(rejected, reverse("preview_pota_history", args=[token]))
+        self.assertContains(rejected, "Confirm authorization for the listed former or alternate callsigns before importing.")
+        self.assertEqual(Adventure.objects.count(), 0)
+
+        imported = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0"], "callsign_attestation": "yes",
+        })
+        self.assertRedirects(imported, reverse("pota_history_result"))
+        self.assertEqual(Adventure.objects.count(), 1)
+
     def test_confirmation_creates_review_queued_pinless_location(self):
         self.client.force_login(self.user)
         start = self.client.post(reverse("import_pota_history"), {"pota_history": "2024-06-01 W5TEST US-9999 Long Park Name US-MN 0 0 10 10"})

@@ -158,7 +158,7 @@ def my_adventures(request):
         .annotate(
             journal_count=Count("journal_entries", distinct=True),
             photo_count=Count("journal_entries__photos", distinct=True),
-            comment_count=Count("comments", distinct=True),
+            contact_count=Count("journal_entries__contacts", distinct=True) + Count("direct_contacts", filter=Q(direct_contacts__journal_entry__isnull=True), distinct=True),
         )
         .order_by("status", "-updated_at")
     )
@@ -184,7 +184,7 @@ def all_adventures(request):
         .annotate(
             journal_count=Count("journal_entries", distinct=True),
             photo_count=Count("journal_entries__photos", distinct=True),
-            comment_count=Count("comments", distinct=True),
+            contact_count=Count("journal_entries__contacts", distinct=True) + Count("direct_contacts", filter=Q(direct_contacts__journal_entry__isnull=True), distinct=True),
         )
     )
 
@@ -305,8 +305,9 @@ def adventure_detail(request, slug):
             moderation_status=Photo.ModerationStatus.APPROVED
         )
     contacts = list(JournalContact.objects.filter(
-        journal_entry__in=journal_entries,
-    ).select_related("journal_entry"))
+        Q(journal_entry__in=journal_entries)
+        | Q(adventure=adventure, journal_entry__isnull=True),
+    ).distinct().select_related("journal_entry"))
     contact_count = len(contacts)
     contact_map = build_contact_map(adventure, contacts, request.user)
     can_manage_journals = bool(
@@ -394,8 +395,9 @@ def adventure_contacts(request, slug):
         journal_entries = journal_entries.filter(is_public=True)
 
     contacts = list(JournalContact.objects.filter(
-        journal_entry__in=journal_entries,
-    ).select_related("journal_entry").order_by(
+        Q(journal_entry__in=journal_entries)
+        | Q(adventure=adventure, journal_entry__isnull=True),
+    ).distinct().select_related("journal_entry").order_by(
         "-qso_date", "-time_on", "callsign"
     ))
     contact_map = build_contact_map(adventure, contacts, request.user)
@@ -905,6 +907,7 @@ def journal_entry_detail(request, entry_id):
             "longest_contact": longest_contact,
             "country_count": country_count,
             "state_count": state_count,
+            "can_manage_contacts": bool(request.user == entry.adventure.owner or request.user.is_staff),
         },
     )
 
@@ -1190,6 +1193,10 @@ def confirm_adif_import(request, entry_id, token):
             pending.append(
                 JournalContact(
                     journal_entry=entry,
+                    owner=request.user,
+                    source=JournalContact.Source.ADIF,
+                    station_callsign=entry.operating_callsign or entry.adventure.operating_callsign,
+                    operator_callsign=entry.operating_callsign or entry.adventure.operating_callsign,
                     qso_date=date.fromisoformat(contact["qso_date"]),
                     time_on=(
                         time.fromisoformat(contact["time_on"])

@@ -1,5 +1,6 @@
 <tr>
 <td><label class="photo-checkbox-target"><input type="checkbox" name="selected" value="{{ row.token }}" form="photo-bulk-form" aria-label="Select {{ row.association }}" data-photo-select></label></td>
+<td class="staff-id-column">{{ row.object.pk }}</td>
 <td>{% if row.restricted %}<strong>Restricted safety review.</strong>{% else %}<a href="{{ row.detail_url }}" aria-label="Review {{ row.association }}"><img src="{{ row.thumbnail_url }}" alt="Moderation thumbnail for {{ row.association }}" class="moderation-thumbnail"></a>{% endif %}</td>
 <td><strong>{{ row.reference }}</strong><br>{{ row.uploader }}{% if row.callsign %}<br>{{ row.callsign }}{% endif %}</td>
 <td><a href="{{ row.association_url }}">{{ row.association }}</a></td>

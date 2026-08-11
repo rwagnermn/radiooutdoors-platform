@@ -1,6 +1,12 @@
 from django.urls import path
 
-from .account_views import account_home, follower_register, member_welcome, register
+from .account_views import (
+    account_home,
+    deactivate_account,
+    follower_register,
+    member_welcome,
+    register,
+)
 from .password_views import password_requirement_status
 from .manual_verification_views import (
     manual_verification_request,
@@ -16,6 +22,7 @@ urlpatterns = [
         name="password_requirement_status",
     ),
     path("welcome/", member_welcome, name="member_welcome"),
+    path("deactivate/", deactivate_account, name="deactivate_account"),
     path("verification/", manual_verification_status, name="manual_verification_status"),
     path("verification/request/", manual_verification_request, name="manual_verification_request"),
     path(
