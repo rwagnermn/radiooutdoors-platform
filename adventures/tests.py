@@ -841,7 +841,10 @@ class AddAdventureWorkflowTests(TestCase):
             reverse("location_detail", kwargs={"location_id": location.pk})
         )
         self.assertContains(detail_response, location.photo.url)
-        self.assertContains(detail_response, 'class="location-primary-photo"')
+        self.assertRegex(
+            detail_response.content.decode(),
+            r'class="[^"]*\blocation-primary-photo\b[^"]*"',
+        )
 
         self.client.post(
             reverse("edit_location", kwargs={"location_id": location.pk}),

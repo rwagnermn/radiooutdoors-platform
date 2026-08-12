@@ -12,9 +12,14 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
 from core.auth import verified_member_or_staff_required, verified_member_required
-from core.models import Adventure, JournalContact, JournalEntry
+from core.location_privacy import visible_locations
+from core.models import Adventure, JournalContact, JournalEntry, Location, LocationType
+from .adif_parser import haversine_miles
 from .forms import JournalContactForm
-from .pota_import import parse_pota_hunter_log
+from .pota_geocoding import entity_region
+from .pota_import import clean_pota_park_name, parse_pota_hunter_log
+from .pota_parks import normalize_pota_reference
+from .pota_views import _matching_pota_location, _unique_parks
 
 
 def _hunter_key(token):
@@ -54,9 +59,59 @@ def _requested_journal(user, value):
     return get_object_or_404(_owned_journals(user), pk=value)
 
 
+def _resolve_hunter_locations(user, parks):
+    """Create/reuse Locations from the activation importer's park-resolution results."""
+    resolved = {}
+    park_type = LocationType.objects.filter(key="park").first()
+    for park in parks:
+        reference = normalize_pota_reference(park["reference"])
+        region = entity_region(park.get("entity", ""))
+        clean_name = clean_pota_park_name(reference, park.get("name", ""))
+        locations = visible_locations(user).select_for_update()
+        location = _matching_pota_location(
+            list(locations.order_by("name")), reference, clean_name, park.get("entity", "")
+        )
+        latitude, longitude = park.get("latitude"), park.get("longitude")
+        if location is None and latitude not in (None, "") and longitude not in (None, ""):
+            provider = park.get("provider_name", "")
+            provider_note = f" Provider suggestion: {provider}." if provider else ""
+            location = Location.objects.create(
+                name=clean_name,
+                created_by=user,
+                visibility=Location.Visibility.PRIVATE,
+                location_type=Location.LocationType.PARK,
+                location_type_record=park_type,
+                state=region["region_code"],
+                country="USA" if region["country_code"] == "US" else region["country_name"],
+                latitude=latitude,
+                longitude=longitude,
+                reference_code=reference,
+                description=(
+                    "Created from POTA Hunter Log import. Coordinate source: geocoded park name. "
+                    "Coordinate quality: approximate/general park location." + provider_note
+                ),
+                needs_pin_review=False,
+            )
+        resolved[reference] = location
+    return resolved
+
+
+def _hunter_distance_miles(destination, resolved_location):
+    origin = destination.adventure.location if destination else None
+    if not origin or not resolved_location:
+        return None
+    coordinates = (
+        origin.latitude, origin.longitude,
+        resolved_location.latitude, resolved_location.longitude,
+    )
+    if any(value is None for value in coordinates):
+        return None
+    return round(haversine_miles(*(float(value) for value in coordinates)))
+
+
 @verified_member_required
 def my_contact_log(request):
-    contacts = _owned_contacts(request.user).select_related("adventure", "journal_entry__adventure")
+    contacts = _owned_contacts(request.user).select_related("adventure", "journal_entry__adventure", "resolved_location")
     if request.GET.get("date_from"):
         contacts = contacts.filter(qso_date__gte=request.GET["date_from"])
     if request.GET.get("date_to"):
@@ -114,9 +169,9 @@ def import_pota_hunter_contacts(request):
     if request.method == "POST":
         pasted = request.POST.get("pota_hunter_log", "")
         adventure_id = request.POST.get("adventure")
-        if destination is None:
+        if adventure_id and destination is None:
             return render(request, "adventures/pota_hunter_import.html", {
-                "error": "Select a destination Journal before previewing this import.",
+                "error": "Select a Journal for the selected Adventure, or leave both destinations blank.",
                 "submitted_text": pasted, "adventures": _owned_adventures(request.user),
                 "journals": _owned_journals(request.user), "selected_adventure_id": adventure_id,
             })
@@ -141,8 +196,16 @@ def import_pota_hunter_contacts(request):
             serialized["fingerprint"] = _hunter_fingerprint(request.user.pk, row)
             serialized["duplicate"] = serialized["fingerprint"] in existing
             rows.append(serialized)
+        parks = _unique_parks(rows, request.user)
+        park_statuses = {
+            park["reference"]: bool(park.get("matched_location_id") or (
+                park.get("latitude") not in (None, "") and park.get("longitude") not in (None, "")
+            )) for park in parks
+        }
+        for row in rows:
+            row["has_pin"] = park_statuses.get(normalize_pota_reference(row["park_reference"]), False)
         token = uuid4().hex
-        cache.set(_hunter_key(token), {"owner": request.user.pk, "rows": rows, "ignored": ignored, "invalid": len(invalid), "journal_entry": destination.pk if destination else None}, 3600)
+        cache.set(_hunter_key(token), {"owner": request.user.pk, "rows": rows, "parks": parks, "ignored": ignored, "invalid": len(invalid), "journal_entry": destination.pk if destination else None}, 3600)
         return redirect("preview_pota_hunter_log", token=token)
     return render(request, "adventures/pota_hunter_import.html", {**destination_context, "submitted_text": ""})
 
@@ -154,10 +217,7 @@ def preview_pota_hunter_contacts(request, token):
         messages.error(request, "That Hunter Log preview expired.")
         return redirect("import_pota_hunter_log")
     destination = _requested_journal(request.user, payload.get("journal_entry"))
-    if destination is None:
-        messages.error(request, "That Hunter Log preview has no destination Journal. Start the import again.")
-        return redirect("import_pota_hunter_log")
-    return render(request, "adventures/pota_hunter_contact_preview.html", {"token": token, **payload, "destination_journal": destination, "duplicate_count": sum(row["duplicate"] for row in payload["rows"])})
+    return render(request, "adventures/pota_hunter_contact_preview.html", {"token": token, **payload, "destination_journal": destination, "duplicate_count": sum(row["duplicate"] for row in payload["rows"]), "no_pin_count": sum(not row.get("has_pin", False) for row in payload["rows"])})
 
 
 @verified_member_or_staff_required
@@ -170,13 +230,20 @@ def confirm_pota_hunter_contacts(request, token):
     selected_values = request.POST.getlist("selected")
     # Destination is fixed at preview creation; confirmation cannot drop or replace it.
     destination = _requested_journal(request.user, payload.get("journal_entry"))
-    if destination is None:
-        messages.error(request, "This import has no destination Journal. Start the import again.")
-        return redirect("import_pota_hunter_log")
     selected = ({row["index"] for row in payload["rows"]} if "all" in selected_values else {int(value) for value in selected_values if value.isdigit()})
     existing = set(_owned_contacts(request.user).filter(source=JournalContact.Source.POTA_HUNTER).values_list("fingerprint", flat=True))
     pending, duplicates = [], 0
+    importable_references = {
+        normalize_pota_reference(row["park_reference"])
+        for row in payload["rows"]
+        if row["index"] in selected and row["fingerprint"] not in existing
+    }
+    selected_parks = [
+        park for park in payload.get("parks", [])
+        if normalize_pota_reference(park["reference"]) in importable_references
+    ]
     with transaction.atomic():
+        resolved_locations = _resolve_hunter_locations(request.user, selected_parks)
         for row in payload["rows"]:
             if row["index"] not in selected:
                 continue
@@ -189,6 +256,7 @@ def confirm_pota_hunter_contacts(request, token):
                 mode, submode = mode_text.split("(", 1)
                 mode, submode = mode.strip(), submode[:-1].strip()
             qso_at = row["qso_at"]
+            resolved_location = resolved_locations.get(normalize_pota_reference(row["park_reference"]))
             pending.append(JournalContact(
                 owner=request.user, journal_entry=destination,
                 adventure=destination.adventure if destination else None,
@@ -197,12 +265,16 @@ def confirm_pota_hunter_contacts(request, token):
                 station_callsign=row["station_callsign"], operator_callsign=row["operator_callsign"],
                 callsign=row["worked_callsign"], band=row["band"], mode=mode, submode=submode,
                 state=row["entity"], pota_park_reference=row["park_reference"], pota_park_name=row["park_name"],
+                is_p2p=row.get("is_p2p", False),
+                resolved_location=resolved_location,
+                distance_miles=_hunter_distance_miles(destination, resolved_location),
                 source=JournalContact.Source.POTA_HUNTER, fingerprint=row["fingerprint"],
             ))
             existing.add(row["fingerprint"])
         JournalContact.objects.bulk_create(pending, batch_size=1000)
     cache.delete(_hunter_key(token))
-    messages.success(request, f"{len(pending)} Hunter Log contact{'s' if len(pending) != 1 else ''} imported.")
+    no_pin_count = sum(contact.resolved_location is None for contact in pending)
+    messages.success(request, f"{len(pending)} Hunter Log contact{'s' if len(pending) != 1 else ''} imported; {no_pin_count} No Pin.")
     if duplicates:
         messages.info(request, f"{duplicates} duplicate contact{'s' if duplicates != 1 else ''} skipped.")
     if destination:

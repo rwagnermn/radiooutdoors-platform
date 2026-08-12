@@ -186,11 +186,14 @@ class ManualVerificationWorkflowTests(TestCase):
             verification_request.status,
             ManualVerificationRequest.Status.APPROVED,
         )
+        self.pending_user.refresh_from_db()
+        self.assertTrue(self.pending_user.is_active)
+        self.assertTrue(is_verified_member(self.pending_user))
 
         response = self.pending_client.get(reverse("home"))
         self.assertContains(response, "VE3PENDING - Bob")
         self.assertNotContains(response, "Pending —")
-        self.assertContains(response, "My Adventures")
+        self.assertContains(response, f'href="{reverse("my_adventures")}"')
         self.assertNotEqual(
             self.pending_client.get(reverse("add_adventure")).status_code, 403
         )

@@ -106,6 +106,7 @@ HUNTER_HEADER_ALIASES = {
     "park_name": {"park name", "name"},
     "entity": {"state/entity", "state", "entity", "location"},
     "source_id": {"id", "qso id", "qso_id", "contact id"},
+    "is_p2p": {"p2p", "park to park", "park-to-park"},
 }
 
 
@@ -134,7 +135,7 @@ def _hunter_time(value):
     return None
 
 
-def _hunter_qso(values, mapping, line_number):
+def _hunter_qso(values, mapping, line_number, *, is_p2p=False):
     get = lambda key: values[mapping[key]].strip() if key in mapping and mapping[key] < len(values) else ""
     parsed_date = _date(get("date"))
     parsed_time = _hunter_time(get("time"))
@@ -152,6 +153,7 @@ def _hunter_qso(values, mapping, line_number):
         "park_name": clean_pota_park_name(reference, get("park_name")) or reference,
         "entity": get("entity").upper(), "band": get("band").upper(),
         "mode": get("mode").upper(), "source_id": get("source_id"),
+        "is_p2p": is_p2p or get("is_p2p").strip().casefold() in {"p2p", "yes", "true", "1"},
     }
 
 
@@ -189,10 +191,18 @@ def _screen_copy_hunter_rows(text, max_rows):
     for line_number, line in page_lines:
         parts = [part.strip() for part in line.split("|") if part.strip()] if "|" in line else [line]
         for part in parts:
-            boundary = re.match(r"^Hunter\s+(?P<remainder>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)$", part, re.I)
+            boundary = re.match(
+                r"^Hunter(?P<row_p2p>P2P)?(?:\s+(?:(?P<badge_p2p>P2P)\s+)?"
+                r"(?P<remainder>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?))?$",
+                part,
+                re.I,
+            )
             if boundary:
                 cells.append((line_number, "Hunter"))
-                cells.append((line_number, boundary.group("remainder")))
+                if boundary.group("row_p2p") or boundary.group("badge_p2p"):
+                    cells.append((line_number, "P2P"))
+                if boundary.group("remainder"):
+                    cells.append((line_number, boundary.group("remainder")))
             else:
                 cells.append((line_number, part))
     boundaries = [index for index, (_, value) in enumerate(cells) if value.casefold() == "hunter"]
@@ -205,6 +215,9 @@ def _screen_copy_hunter_rows(text, max_rows):
             raise ValueError(f"No more than {max_rows} Hunter Log QSOs may be imported at once.")
         end = boundaries[index + 1] if index + 1 < len(boundaries) else len(cells)
         values = [value for _, value in cells[boundary + 1:end]]
+        is_p2p = bool(values and values[0].casefold() == "p2p")
+        if is_p2p:
+            values = values[1:]
         logical = " ".join(values)
         match = DIRECT_HUNTER_RE.match(logical)
         line_number = cells[boundary][0]
@@ -233,6 +246,7 @@ def _screen_copy_hunter_rows(text, max_rows):
             [values["date"], values["time"], values["station"], values["operator"], values["worked"], values["band"], values["mode"], values["reference"], values["park"], values["entity"], ""],
             {"date": 0, "time": 1, "station_callsign": 2, "operator_callsign": 3, "worked_callsign": 4, "band": 5, "mode": 6, "park_reference": 7, "park_name": 8, "entity": 9, "source_id": 10},
             line_number,
+            is_p2p=is_p2p,
         )
         if row:
             rows.append(row)

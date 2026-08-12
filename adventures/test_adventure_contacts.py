@@ -233,6 +233,82 @@ class AdventureContactHubTests(TestCase):
         self.assertEqual(result["contacts"][1]["coordinate_source"], "Grid-square center")
         self.assertTrue(result["contacts"][1]["approximate"])
 
+    def test_contact_map_uses_visible_resolved_park_as_approximate_pin(self):
+        origin = Location.objects.create(
+            name="Mapped Origin", created_by=self.owner,
+            latitude="44.100000", longitude="-93.200000",
+        )
+        park = Location.objects.create(
+            name="Nearby Park", created_by=self.owner,
+            visibility=Location.Visibility.PRIVATE,
+            latitude="36.454000", longitude="-94.034000",
+        )
+        self.adventure.location = origin
+        self.adventure.save(update_fields=["location"])
+        contact = self.add_contact(self.add_entry("Hunter Map"), "K1PARK", "resolved-map")
+        contact.resolved_location = park
+        contact.save(update_fields=["resolved_location"])
+
+        owner_result = build_contact_map(self.adventure, [contact], self.owner)
+        self.assertEqual(owner_result["mapped"], 1)
+        self.assertEqual(owner_result["contacts"][0]["coordinate_source"], "Approximate resolved park location")
+        self.assertTrue(owner_result["contacts"][0]["approximate"])
+        self.assertEqual(owner_result["contacts"][0]["latitude"], 36.454)
+
+        visitor_result = build_contact_map(self.adventure, [contact], self.other)
+        self.assertEqual(visitor_result["mapped"], 0)
+        self.assertEqual(visitor_result["unmapped"], 1)
+
+    def test_journal_map_contains_only_its_contacts_and_primary_location(self):
+        origin = Location.objects.create(
+            name="Journal Origin", created_by=self.owner,
+            latitude="44.100000", longitude="-93.200000",
+        )
+        destination_a = Location.objects.create(
+            name="Journal A Park", created_by=self.owner,
+            latitude="36.454000", longitude="-94.034000",
+        )
+        destination_b = Location.objects.create(
+            name="Journal B Park", created_by=self.owner,
+            latitude="40.000000", longitude="-90.000000",
+        )
+        self.adventure.location = origin
+        self.adventure.save(update_fields=["location"])
+        journal_a = self.add_entry("Journal A")
+        journal_b = self.add_entry("Journal B")
+        contact_a = self.add_contact(journal_a, "K1JOURNALA", "journal-a-map")
+        contact_a.resolved_location = destination_a
+        contact_a.save(update_fields=["resolved_location"])
+        contact_b = self.add_contact(journal_b, "K1JOURNALB", "journal-b-map")
+        contact_b.resolved_location = destination_b
+        contact_b.save(update_fields=["resolved_location"])
+        no_pin = self.add_contact(journal_a, "K1NOPIN", "journal-no-pin")
+
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("journal_entry_detail", args=[journal_a.pk]))
+        self.assertContains(response, "Contacts From This Journal")
+        self.assertContains(response, "Journal Origin")
+        self.assertContains(response, "K1JOURNALA")
+        self.assertNotContains(response, "K1JOURNALB")
+        self.assertContains(response, "1 mapped of 2 total contacts")
+        self.assertContains(response, "K1NOPIN")
+
+    def test_contact_only_hunter_location_is_absent_from_global_map(self):
+        normal = Location.objects.create(
+            name="Normal Global Location", created_by=self.owner,
+            latitude="44.100000", longitude="-93.200000",
+        )
+        contact_only = Location.objects.create(
+            name="Hunter Contact Destination", created_by=self.owner,
+            visibility=Location.Visibility.PRIVATE,
+            latitude="36.454000", longitude="-94.034000",
+            description="Created from POTA Hunter Log import. Coordinate source: geocoded park name.",
+        )
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("map_explorer"))
+        self.assertContains(response, normal.name)
+        self.assertNotContains(response, contact_only.name)
+
     def test_missing_origin_uses_required_message_and_no_coordinates(self):
         entry = self.add_entry("No Origin")
         contact = self.add_contact(entry, "K1GRID", "no-origin")

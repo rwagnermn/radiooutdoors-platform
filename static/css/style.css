@@ -5639,6 +5639,18 @@ body.interior-page .header-container{
     white-space:nowrap;
 }
 
+.journal-contact-table{width:100%;min-width:1380px;table-layout:auto}
+.journal-contact-table th,
+.journal-contact-table td{padding:6px 8px;vertical-align:middle}
+.journal-contact-table .journal-contact-nowrap,
+.journal-contact-table .contact-call,
+.journal-contact-table .journal-contact-actions{white-space:nowrap}
+.journal-contact-table .journal-contact-park{min-width:280px}
+.journal-contact-table .journal-contact-actions{width:52px;text-align:center}
+.journal-contact-table .journal-contact-actions .ro-action-menu-panel{right:42px;left:auto}
+.pota-p2p-badge{display:inline-block;padding:1px 5px;border-radius:999px;background:#e8f1e9;color:#234231;font-size:11px;font-weight:800;line-height:1.4;white-space:nowrap}
+.pota-p2p-secondary{display:block;height:14px;margin-top:1px;line-height:12px}
+
 @media(max-width:700px){
     :root{--ro-page-gutter:12px}
     body.interior-page .content,

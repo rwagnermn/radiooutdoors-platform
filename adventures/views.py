@@ -307,7 +307,7 @@ def adventure_detail(request, slug):
     contacts = list(JournalContact.objects.filter(
         Q(journal_entry__in=journal_entries)
         | Q(adventure=adventure, journal_entry__isnull=True),
-    ).distinct().select_related("journal_entry"))
+    ).distinct().select_related("journal_entry", "resolved_location"))
     contact_count = len(contacts)
     contact_map = build_contact_map(adventure, contacts, request.user)
     can_manage_journals = bool(
@@ -397,7 +397,7 @@ def adventure_contacts(request, slug):
     contacts = list(JournalContact.objects.filter(
         Q(journal_entry__in=journal_entries)
         | Q(adventure=adventure, journal_entry__isnull=True),
-    ).distinct().select_related("journal_entry").order_by(
+    ).distinct().select_related("journal_entry", "resolved_location").order_by(
         "-qso_date", "-time_on", "callsign"
     ))
     contact_map = build_contact_map(adventure, contacts, request.user)
@@ -719,6 +719,19 @@ def delete_selected_contacts(request, entry_id):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
+@verified_member_required
+@require_POST
+def delete_journal_contact(request, entry_id, contact_id):
+    entry = get_object_or_404(JournalEntry.objects.select_related("adventure"), pk=entry_id)
+    if entry.adventure.owner != request.user:
+        return HttpResponseForbidden("Only the Adventure owner can delete contacts.")
+    contact = get_object_or_404(entry.contacts, pk=contact_id)
+    contact.delete()
+    entry.adventure.save(update_fields=["updated_at"])
+    messages.success(request, "Contact deleted.")
+    return redirect("journal_entry_detail", entry_id=entry.pk)
+
+
 @verified_member_or_staff_required
 @require_POST
 def mark_adventure_done(request, slug):
@@ -870,14 +883,15 @@ def journal_entry_detail(request, entry_id):
             "adventure",
             "adventure__owner",
             "adventure__location",
-        ).prefetch_related("photos", "contacts"),
+        ).prefetch_related("photos", "contacts__resolved_location"),
         pk=entry_id,
     )
 
     if entry.adventure.owner != request.user and (not entry.adventure.is_public or not entry.is_public):
         raise Http404("Journal Entry not found.")
 
-    contacts = entry.contacts.order_by("-qso_date", "-time_on", "callsign")
+    contacts = entry.contacts.select_related("journal_entry", "resolved_location").order_by("-qso_date", "-time_on", "callsign")
+    contact_map = build_contact_map(entry.adventure, contacts, request.user)
     longest_contact = (
         contacts.exclude(distance_miles__isnull=True)
         .order_by("-distance_miles")
@@ -907,6 +921,10 @@ def journal_entry_detail(request, entry_id):
             "longest_contact": longest_contact,
             "country_count": country_count,
             "state_count": state_count,
+            "contact_map": contact_map,
+            "contact_map_dom_id": f"journal-{entry.pk}-contact-map",
+            "contact_map_data_id": f"journal-{entry.pk}-contact-map-data",
+            "contact_map_heading": "Contacts From This Journal",
             "can_manage_contacts": bool(request.user == entry.adventure.owner or request.user.is_staff),
         },
     )

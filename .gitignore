@@ -33,6 +33,8 @@ qrz_username.txt
 qrz_password.txt
 openai_api_key.txt
 openai_api_key2.txt
+local-backups/
+project-manager-logs/
 
 # Build artifacts
 *.zip

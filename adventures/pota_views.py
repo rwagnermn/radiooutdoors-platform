@@ -54,6 +54,21 @@ def _decorate_rows(user, rows, source=PotaImportBatch.Source.ACTIVATION_HISTORY)
 def _park_key(reference):
     return hashlib.sha256(normalize_pota_reference(reference).encode()).hexdigest()[:12]
 
+def _matching_pota_location(locations, reference, clean_name, entity):
+    """Apply the shared activation/Hunter Location matching order."""
+    region = entity_region(entity)
+    name_matches = [
+        location for location in locations
+        if location.name.strip().casefold() == clean_name.casefold()
+        and (not region["region_code"] or location.state.strip().upper() == region["region_code"])
+    ]
+    reference_matches = [
+        location for location in locations
+        if normalize_pota_reference(location.reference_code) == reference
+    ]
+    matches = name_matches or reference_matches
+    return matches[0] if len(matches) == 1 else None
+
 def _unique_parks(rows, user):
     locations = list(visible_locations(user).order_by("name"))
     parks = {}
@@ -61,22 +76,19 @@ def _unique_parks(rows, user):
         reference = normalize_pota_reference(row["park_reference"])
         if reference not in parks:
             clean_name = clean_pota_park_name(reference, row["park_name"])
-            row_region = entity_region(row["entity"])
-            reference_matches = [loc for loc in locations if normalize_pota_reference(loc.reference_code) == reference]
-            name_matches = [loc for loc in locations if loc.name.strip().casefold() == clean_name.casefold() and (not row_region["region_code"] or loc.state.strip().upper() == row_region["region_code"])]
-            matched = (reference_matches or name_matches)
+            matched = _matching_pota_location(locations, reference, clean_name, row["entity"])
             matched_location_id = (
-                matched[0].pk
-                if len(matched) == 1
-                and matched[0].latitude is not None
-                and matched[0].longitude is not None
+                matched.pk
+                if matched is not None
+                and matched.latitude is not None
+                and matched.longitude is not None
                 else None
             )
             repair_location_id = (
-                matched[0].pk
-                if len(matched) == 1
+                matched.pk
+                if matched is not None
                 and matched_location_id is None
-                and matched[0].description.startswith("Created from POTA historical import.")
+                and matched.description.startswith("Created from POTA historical import.")
                 else None
             )
             lookup = None if matched_location_id else lookup_pota_park(reference)

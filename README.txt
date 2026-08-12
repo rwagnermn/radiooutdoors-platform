@@ -1,13 +1,55 @@
-RADIO OUTDOORS BUILD 0.38.8 - ADVENTURE STATUS FIX
+RADIO OUTDOORS PROJECT MANAGER v1
 
-Extract into C:\Projects\radiooutdoors-platform and overwrite files.
+Copy these files into:
+C:\Users\rwagn\Development\radiooutdoors-platform\
 
-Run:
-powershell -ExecutionPolicy Bypass -File .\Install_RadioOutdoors_0_38_8.ps1
+Then double-click:
+Start-RadioOutdoors-Project-Manager.bat
 
-Changes:
-- Adds Adventure Status directly to the Edit Adventure form.
-- Status can be changed between Active and Completed.
-- Saving the Adventure saves the status with the other fields.
-- Removes the unreliable separate status buttons.
-- New Adventures still start as Active automatically.
+Recommended .gitignore additions:
+local-backups/
+project-manager-logs/
+
+Dashboard metrics:
+- Git branch
+- Working tree
+- GitHub ahead/behind
+- Last commit
+- Django check
+- Applied/unapplied migrations
+- Missing migrations
+- Last recorded test result
+- Port 8000 / Django server PID
+- Extra Radio Outdoors runserver processes
+- Python / .venv
+- Django version
+- Secret-file protection
+- Database backup age
+- Media backup age
+- Disk space
+- Overall checkpoint safety
+
+Buttons:
+- Refresh Status
+- Full Checkpoint & Push
+- Quick Checkpoint
+- Run Tests
+- Apply Migrations
+- Start Server
+- Stop Server
+- Backup Database
+- Backup Media
+- Project Folder
+- Logs
+
+Full Checkpoint & Push blocks when:
+- Django check fails
+- models need migrations
+- migrations are unapplied
+- secrets/local files are unsafe
+- git diff --check fails
+
+It stages only after your approval, rechecks staged safety, commits with a timestamp,
+pushes main to origin, and logs the result.
+
+The manager never displays the contents of API keys or passwords.

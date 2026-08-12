@@ -94,13 +94,13 @@ class PotaImportEntryPointTests(TestCase):
 
         shared_header_response = self.client.get(reverse("home"))
         self.assertEqual(shared_header_response.status_code, 200)
-        self.assertContains(shared_header_response, "Import POTA History")
-        self.assertContains(shared_header_response, f'href="{import_url}"')
+        self.assertNotContains(shared_header_response, "Import POTA History")
+        self.assertNotContains(shared_header_response, "Import POTA Hunter Log")
 
         adventures_response = self.client.get(reverse("my_adventures"))
         self.assertEqual(adventures_response.status_code, 200)
-        self.assertContains(adventures_response, "Import POTA History", count=2)
-        self.assertContains(adventures_response, f'href="{import_url}"', count=2)
+        self.assertContains(adventures_response, "Import POTA History", count=1)
+        self.assertContains(adventures_response, f'href="{import_url}"', count=1)
 
         importer_response = self.client.get(import_url)
         self.assertEqual(importer_response.status_code, 200)
@@ -501,6 +501,26 @@ class PotaImportEntryPointTests(TestCase):
         self.assertIn("Provider suggestion: Caribou Falls State Wayside.", location.description)
         self.assertIn("Coordinate source: geocoded park name.", location.description)
         self.assertTrue(Adventure.objects.get().is_public)
+
+    @override_settings(GOOGLE_GEOCODING_API_KEY="test-key")
+    @patch("adventures.pota_geocoding.urlopen")
+    def test_provider_ranked_nearby_park_is_approximate_fallback(self, mocked_open):
+        response = mocked_open.return_value.__enter__.return_value
+        response.read.return_value = json.dumps({"status": "OK", "results": [{
+            "formatted_address": "Garfield Public Use Area, Garfield, AR, USA",
+            "types": ["park", "point_of_interest"],
+            "geometry": {"location": {"lat": 36.454, "lng": -94.034}},
+            "address_components": [
+                {"short_name": "AR", "types": ["administrative_area_level_1"]},
+                {"short_name": "US", "types": ["country"]},
+            ],
+        }]}).encode()
+        result = geocode_pota_park(
+            "US-0721", "Pea Ridge National Military Park", "US-AR", force_refresh=True,
+        )
+        self.assertEqual(result["status"], "found")
+        self.assertEqual(result["candidates"][0]["match_kind"], "nearby")
+        self.assertEqual(result["candidates"][0]["provider_name"], "Garfield Public Use Area")
 
     def test_new_imports_default_public_with_per_row_private_override(self):
         self.client.force_login(self.user)

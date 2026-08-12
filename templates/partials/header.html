@@ -25,12 +25,7 @@
 <a href="{% url 'manual_verification_request' %}">Complete/Edit Verification Request</a>
 <a href="{% url 'password_change' %}">Change Password</a>
 {% else %}
-<a href="{% if is_verified_member %}{% url 'my_adventures' %}{% else %}{% url 'all_adventures' %}{% endif %}">Adventure Book</a>
-<a href="{% url 'locations' %}">Locations</a>
-<a href="{% url 'map_explorer' %}">Map</a>
 {% if is_verified_member %}
-<a href="{% url 'import_pota_history' %}">Import POTA History</a>
-<a href="{% url 'import_pota_hunter_log' %}">Import POTA Hunter Log</a>
 <a href="{% url 'my_contact_log' %}">My Contact Log</a>
 {% endif %}
 <a href="{% url 'account_home' %}">My Account</a>

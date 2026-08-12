@@ -69,6 +69,13 @@ def _candidate_is_relevant(imported_name, provider_name, item):
     unrelated = bool(types & UNRELATED_TYPES) and not bool(types & REASONABLE_TYPES)
     return strong_name and reasonable_type and not unrelated, "close"
 
+def _candidate_is_reasonable_place(item):
+    """Allow a provider-ranked nearby geographic feature after named lookup fails."""
+    types = set(item.get("types", []))
+    reasonable_type = bool(types & REASONABLE_TYPES)
+    unrelated = bool(types & UNRELATED_TYPES) and not reasonable_type
+    return reasonable_type and not unrelated
+
 def _request(query, api_key):
     url = "https://maps.googleapis.com/maps/api/geocode/json?" + urlencode({"address": query, "key": api_key})
     with urlopen(url, timeout=8) as response:
@@ -116,7 +123,7 @@ def geocode_pota_park(reference, park_name, entity, *, force_refresh=False):
     simplified = _remove_generic_suffix(park_name)
     if simplified and _simple_name(simplified) != _simple_name(park_name):
         search_names.append(simplified)
-    queries, candidates, wrong_region = [], [], False
+    queries, candidates, nearby_candidates, wrong_region = [], [], [], False
     try:
         for search_name in search_names:
             query = ", ".join(value for value in (search_name, region["region_name"], region["country_name"]) if value)
@@ -143,6 +150,8 @@ def geocode_pota_park(reference, park_name, entity, *, force_refresh=False):
                 accepted, match_kind = _candidate_is_relevant(park_name, provider_name, item)
                 if accepted:
                     candidates.append({"label": str(item.get("formatted_address") or provider_name), "provider_name": provider_name, "latitude": str(location["lat"]), "longitude": str(location["lng"]), "match_kind": match_kind})
+                elif _candidate_is_reasonable_place(item):
+                    nearby_candidates.append({"label": str(item.get("formatted_address") or provider_name), "provider_name": provider_name, "latitude": str(location["lat"]), "longitude": str(location["lng"]), "match_kind": "nearby"})
             if candidates:
                 break
     except Exception as exc:
@@ -166,6 +175,11 @@ def geocode_pota_park(reference, park_name, entity, *, force_refresh=False):
         cache.set(cache_key, result, 900)
         return result
 
+    if not candidates and nearby_candidates:
+        # Google orders geocoding results by relevance to the named query. After
+        # enforcing state/country and geographic-feature type, retain its first
+        # result as an explicitly approximate nearby-place fallback.
+        candidates = nearby_candidates[:1]
     status = "found" if len(candidates) == 1 else "ambiguous" if candidates else "wrong_region" if wrong_region else "not_found"
     result = {"status": status, "query": initial_query, "queries": queries, "candidates": candidates[:5], "failure_reason": ""}
     cache.set(cache_key, result, 604800 if status == "found" else 3600)

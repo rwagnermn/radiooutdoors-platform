@@ -610,6 +610,15 @@ class JournalContact(models.Model):
     source = models.CharField(max_length=24, choices=Source.choices, default=Source.MANUAL, db_index=True)
     pota_park_reference = models.CharField(max_length=30, blank=True, db_index=True)
     pota_park_name = models.CharField(max_length=200, blank=True)
+    is_p2p = models.BooleanField(default=False)
+    resolved_location = models.ForeignKey(
+        Location,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contacts",
+        help_text="Approximate park Location resolved for this Contact.",
+    )
     grid_square = models.CharField(max_length=12, blank=True)
     latitude = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True
@@ -635,6 +644,10 @@ class JournalContact(models.Model):
             return f"{self.state}, {self.country}"
 
         return self.state or self.country
+
+    @property
+    def has_no_pin(self):
+        return bool(self.pota_park_reference and self.resolved_location_id is None)
 
     def clean(self):
         super().clean()

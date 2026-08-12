@@ -195,7 +195,9 @@ def about(request):
 
 def map_explorer(request):
     locations = (
-        visible_locations(request.user).annotate(
+        visible_locations(request.user).exclude(
+            description__startswith="Created from POTA Hunter Log import."
+        ).annotate(
             adventure_count=Count("adventures", distinct=True),
         )
         .select_related("location_type_record")
