@@ -24,9 +24,11 @@ function Run-Cmd($cmd,[int]$timeout=120) {
         # process tree so descendants cannot retain .git/index.lock.
         try{Start-Process taskkill.exe -ArgumentList '/PID',"$timedOutPid",'/T','/F' -Wait -WindowStyle Hidden -ErrorAction Stop|Out-Null}catch{try{$p.Kill()}catch{}}
         if(!$p.HasExited){[void]$p.WaitForExit(15000)}
-        return @{Exit=124;TimedOut=$true;ProcessId=$timedOutPid;Out=$outTask.GetAwaiter().GetResult().Trim();Err=("Timed out after $timeout seconds; process tree PID $timedOutPid was terminated and awaited.`r`n"+$errTask.GetAwaiter().GetResult()).Trim()}
+        return @{Exit=124;TimedOut=$true;ProcessId=$timedOutPid;Out=$outTask.GetAwaiter().GetResult().TrimEnd();Err=("Timed out after $timeout seconds; process tree PID $timedOutPid was terminated and awaited.`r`n"+$errTask.GetAwaiter().GetResult()).Trim()}
     }
-    return @{Exit=$p.ExitCode;Out=$outTask.GetAwaiter().GetResult().Trim();Err=$errTask.GetAwaiter().GetResult().Trim()}
+    # Preserve leading characters: Git porcelain uses a leading space as the
+    # unstaged status column. Trim() corrupts the first status line.
+    return @{Exit=$p.ExitCode;Out=$outTask.GetAwaiter().GetResult().TrimEnd();Err=$errTask.GetAwaiter().GetResult().Trim()}
 }
 function Py(){ $p=Join-Path $ProjectRoot ".venv\Scripts\python.exe"; if(Test-Path $p){$p}else{$null} }
 function Django($args,[int]$timeout=120){$p=Py;if(!$p){return @{Exit=9001;Out="";Err=".venv Python missing"}};Run-Cmd "`"$p`" manage.py $args" $timeout}
@@ -165,16 +167,25 @@ function RunTests(){
     $script:TestTimer.Start()
 }
 
+function Normalize-CheckpointPath($path){
+    if($null-eq$path){return $null}
+    $normalized=$path.Replace('\','/').TrimEnd()
+    if($normalized.StartsWith('./')){$normalized=$normalized.Substring(2)}
+    return $normalized
+}
+
 function Get-CheckpointPath($statusLine){
     if($statusLine.Length -lt 4){return $null}
-    $path=$statusLine.Substring(3).Trim()
+    # Porcelain v1 reserves exactly columns 0-1 for status and column 2 for
+    # the separator. Never TrimStart(): the first path character may be '.'.
+    $path=$statusLine.Substring(3).TrimEnd()
     if($path -match ' -> '){$path=($path -split ' -> ',2)[1]}
     if($path.StartsWith('"') -and $path.EndsWith('"')){
         # Quoted porcelain paths can contain Git escape sequences. Treating them as
         # unapproved is safer than staging a path we did not decode exactly.
         return $null
     }
-    $path.Replace('\','/')
+    Normalize-CheckpointPath $path
 }
 
 function Get-CheckpointExclusionReason($path){
@@ -196,18 +207,19 @@ function Get-CheckpointExclusionReason($path){
 }
 
 function Test-IntentionalCheckpointPath($path){
-    $p=$path.Replace('\','/')
+    $p=Normalize-CheckpointPath $path
     $leaf=[IO.Path]::GetFileName($p)
-    if($p -eq '.gitignore' -or $leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
+    # This is intentionally an exact repository-relative match. Do not broaden
+    # this to every dotfile or to nested .gitignore files.
+    if([string]::Equals($p,'.gitignore',[StringComparison]::OrdinalIgnoreCase)){return $true}
+    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
     if($p -notmatch '^(adventures|backend|core|static|templates|docs|tools)/'){return $false}
     return ($leaf -match '(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$')
 }
 
-function Get-CheckpointClassification(){
-    $status=Run-Cmd 'git status --short --untracked-files=all' 30
-    if($status.Exit-ne0){return [pscustomobject]@{Error=($status.Out+"`r`n"+$status.Err).Trim();Intentional=@();Excluded=@()}}
+function ConvertTo-CheckpointClassification($statusLines){
     $intentional=@();$excluded=@()
-    foreach($line in @($status.Out -split "`r?`n"|Where-Object{$_})){
+    foreach($line in @($statusLines|Where-Object{$_})){
         $path=Get-CheckpointPath $line
         if(!$path){$excluded += [pscustomobject]@{Status=$line.Substring(0,[Math]::Min(2,$line.Length));Path=$line.Substring([Math]::Min(3,$line.Length));Reason='path could not be safely decoded'};continue}
         $reason=Get-CheckpointExclusionReason $path
@@ -215,7 +227,14 @@ function Get-CheckpointClassification(){
         $item=[pscustomobject]@{Status=$line.Substring(0,2);Path=$path;Reason=$reason}
         if($reason){$excluded += $item}else{$intentional += $item}
     }
-    [pscustomobject]@{Error=$null;Intentional=@($intentional);Excluded=@($excluded)}
+    [pscustomobject]@{Intentional=@($intentional);Excluded=@($excluded)}
+}
+
+function Get-CheckpointClassification(){
+    $status=Run-Cmd 'git status --short --untracked-files=all' 30
+    if($status.Exit-ne0){return [pscustomobject]@{Error=($status.Out+"`r`n"+$status.Err).Trim();Intentional=@();Excluded=@()}}
+    $classified=ConvertTo-CheckpointClassification ($status.Out -split "`r?`n")
+    [pscustomobject]@{Error=$null;Intentional=$classified.Intentional;Excluded=$classified.Excluded}
 }
 
 function Show-CheckpointConfirmation($files){

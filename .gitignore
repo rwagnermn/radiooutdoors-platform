@@ -35,6 +35,10 @@ openai_api_key.txt
 openai_api_key2.txt
 local-backups/
 project-manager-logs/
+twilio_account_sid.txt
+twilio_api_key_sid.txt
+twilio_api_key_secret.txt
+twilio_verify_service_sid.txt
 
 # Build artifacts
 *.zip
@@ -42,3 +46,31 @@ BUILD_*
 Install_*.py
 Install_*.ps1
 Update_*.py
+
+# Project Manager checkpoint exclusions
+*.bak
+*.backup
+*.orig
+RO-*.ps1
+RO-*.zip
+*source-collection*.zip
+local-backups/
+media-backups/
+media-backup/
+media_backup/
+*.tmp
+*.temp
+*.swp
+*~
+tmp/
+temp/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db
+*_api_key.txt
+*_api_key_*.txt
+*_secret.txt
+*.pem

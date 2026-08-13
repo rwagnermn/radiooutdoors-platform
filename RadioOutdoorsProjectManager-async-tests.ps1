@@ -15,8 +15,8 @@ function Run-Cmd($cmd,[int]$timeout=120) {
     $psi.RedirectStandardOutput=$true; $psi.RedirectStandardError=$true
     $psi.CreateNoWindow=$true
     $p=New-Object System.Diagnostics.Process; $p.StartInfo=$psi; [void]$p.Start();$outTask=$p.StandardOutput.ReadToEndAsync();$errTask=$p.StandardError.ReadToEndAsync()
-    if(-not $p.WaitForExit($timeout*1000)){$timedOutPid=$p.Id;try{Start-Process taskkill.exe -ArgumentList '/PID',"$timedOutPid",'/T','/F' -Wait -WindowStyle Hidden -ErrorAction Stop|Out-Null}catch{try{$p.Kill()}catch{}};if(!$p.HasExited){[void]$p.WaitForExit(15000)};return @{Exit=124;TimedOut=$true;ProcessId=$timedOutPid;Out=$outTask.GetAwaiter().GetResult().Trim();Err=("Timed out after $timeout seconds; process tree PID $timedOutPid was terminated and awaited.`r`n"+$errTask.GetAwaiter().GetResult()).Trim()}}
-    return @{Exit=$p.ExitCode;Out=$outTask.GetAwaiter().GetResult().Trim();Err=$errTask.GetAwaiter().GetResult().Trim()}
+    if(-not $p.WaitForExit($timeout*1000)){$timedOutPid=$p.Id;try{Start-Process taskkill.exe -ArgumentList '/PID',"$timedOutPid",'/T','/F' -Wait -WindowStyle Hidden -ErrorAction Stop|Out-Null}catch{try{$p.Kill()}catch{}};if(!$p.HasExited){[void]$p.WaitForExit(15000)};return @{Exit=124;TimedOut=$true;ProcessId=$timedOutPid;Out=$outTask.GetAwaiter().GetResult().TrimEnd();Err=("Timed out after $timeout seconds; process tree PID $timedOutPid was terminated and awaited.`r`n"+$errTask.GetAwaiter().GetResult()).Trim()}}
+    return @{Exit=$p.ExitCode;Out=$outTask.GetAwaiter().GetResult().TrimEnd();Err=$errTask.GetAwaiter().GetResult().Trim()}
 }
 function Py(){ $p=Join-Path $ProjectRoot ".venv\Scripts\python.exe"; if(Test-Path $p){$p}else{$null} }
 function Django($args,[int]$timeout=120){$p=Py;if(!$p){return @{Exit=9001;Out="";Err=".venv Python missing"}};Run-Cmd "`"$p`" manage.py $args" $timeout}
@@ -157,7 +157,9 @@ function Checkpoint([bool]$quick=$false){
     $s=Run-Cmd "git status --short --untracked-files=all" 30;if(!$s.Out){[Windows.Forms.MessageBox]::Show("Working tree is clean.")|Out-Null;return}
     $intentional=@();$excluded=@()
     foreach($line in @($s.Out -split "`r?`n"|?{$_})){
-        $path=if($line.Length-ge4){$line.Substring(3).Trim().Replace('\','/')}else{''};if($path-match' -> '){$path=($path-split' -> ',2)[1]}
+        # Preserve a leading period: porcelain columns 0-1 are status and
+        # column 2 is the separator, so only trailing whitespace is trimmed.
+        $path=if($line.Length-ge4){$line.Substring(3).TrimEnd().Replace('\','/')}else{''};if($path.StartsWith('./')){$path=$path.Substring(2)};if($path-match' -> '){$path=($path-split' -> ',2)[1]}
         $leaf=[IO.Path]::GetFileName($path);$reason=$null
         if(!$path-or($path.StartsWith('"')-and$path.EndsWith('"'))){$reason='path could not be safely decoded'}
         elseif($leaf-match'(?i)\.bak$'){$reason='backup file (*.bak)'}
@@ -167,7 +169,8 @@ function Checkpoint([bool]$quick=$false){
         elseif($leaf-match'(?i)^(db\.sqlite3|.*\.(sqlite3?|db))$'){$reason='database file'}
         elseif($path-match'(?i)(^|/)(__pycache__|\.pytest_cache|\.mypy_cache|htmlcov|tmp|temp)(/|$)'-or$leaf-match'(?i)\.(pyc|pyo|tmp|temp|swp)$'){$reason='cache or temporary/generated file'}
         elseif($leaf-match'(?i)^\.env($|\.)'-or$leaf-match'(?i)(api[-_]?key|secret|credential|password).*\.(txt|key|pem|json)$'){$reason='secret or API-key file'}
-        $approved=($path-eq'.gitignore'-or$leaf-in@('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')-or($path-match'^(adventures|backend|core|static|templates|docs|tools)/'-and$leaf-match'(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$'))
+        $rootGitIgnore=[string]::Equals($path,'.gitignore',[StringComparison]::OrdinalIgnoreCase)
+        $approved=($rootGitIgnore-or$leaf-in@('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')-or($path-match'^(adventures|backend|core|static|templates|docs|tools)/'-and$leaf-match'(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$'))
         if(!$reason-and!$approved){$reason='not an approved source/config/migration/test/template/static path'}
         $item=[pscustomobject]@{Status=$line.Substring(0,[Math]::Min(2,$line.Length));Path=$path;Reason=$reason};if($reason){$excluded+=$item}else{$intentional+=$item}
     }
