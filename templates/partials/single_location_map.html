@@ -1,4 +1,4 @@
-<section class="single-location-map-section" aria-labelledby="{{ map_id }}-heading">
+<section class="single-location-map-section{% if embedded_map_layout %} embedded-detail-map-layout{% endif %}" aria-labelledby="{{ map_id }}-heading">
   <div class="single-location-map-heading">
     <div>
       {% if map_kicker %}<p class="section-kicker">{{ map_kicker }}</p>{% endif %}

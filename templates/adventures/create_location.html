@@ -281,9 +281,9 @@
 
 {% if google_maps_api_key %}
 <script src="{% static 'js/editable-map-pin.js' %}?v=001"></script>
+<script src="{% static 'js/location-place-autocomplete.js' %}?v=001"></script>
 <script>
 async function initLocationEditor() {
-    const {Autocomplete} = await google.maps.importLibrary("places");
     const form = document.getElementById("location-form");
     const locationName = document.getElementById("{{ location_form.name.id_for_label }}");
     const street = document.getElementById("{{ location_form.street_address.id_for_label }}");
@@ -325,33 +325,16 @@ async function initLocationEditor() {
     });
     {% endif %}
 
-    const autocomplete = new Autocomplete(locationName, {
-        fields: ["name", "formatted_address", "address_components", "geometry", "website"],
-        types: ["establishment", "geocode"]
-    });
-    autocomplete.addListener("place_changed", function () {
-        const place = autocomplete.getPlace();
-        if (!place.geometry || !place.geometry.location) return;
-        if (place.name) locationName.value = place.name;
+    await RadioOutdoorsLocationAutocomplete.attach(locationName, function (place) {
+        locationName.value = place.name;
         if (place.website && !website.value) website.value = place.website;
-        let streetNumber="",route="",locality="",admin="",zip="",nation="";
-        (place.address_components || []).forEach(function (component) {
-            const types = component.types || [];
-            if (types.includes("street_number")) streetNumber = component.long_name;
-            if (types.includes("route")) route = component.long_name;
-            if (types.includes("locality") || types.includes("postal_town")) locality = component.long_name;
-            if (!locality && types.includes("administrative_area_level_2")) locality = component.long_name;
-            if (types.includes("administrative_area_level_1")) admin = component.short_name;
-            if (types.includes("postal_code")) zip = component.long_name;
-            if (types.includes("country")) nation = component.long_name;
-        });
-        if (!street.value) street.value=[streetNumber,route].filter(Boolean).join(" ");
-        if (!city.value) city.value=locality;
-        if (!state.value) state.value=admin;
-        if (!postal.value) postal.value=zip;
-        if (!country.value) country.value=nation;
+        if (!street.value) street.value=place.address.street;
+        if (!city.value) city.value=place.address.city;
+        if (!state.value) state.value=place.address.state;
+        if (!postal.value) postal.value=place.address.postal;
+        if (!country.value) country.value=place.address.country;
         const oldLocation = locationMap.coordinates();
-        const pos={lat:place.geometry.location.lat(),lng:place.geometry.location.lng()};
+        const pos=place.position;
         locationMap.place(pos,true);
         if (positionMap && (positionMap.isEmpty() || positionMap.matches(oldLocation))) {
             positionMap.place(pos,true);

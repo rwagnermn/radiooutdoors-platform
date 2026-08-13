@@ -123,14 +123,18 @@ class DetailLocationMapTests(TestCase):
 
         self.assertIn(".adventure-story-page .single-location-map", css)
         self.assertIn("height:280px", css)
-        self.assertIn("height:230px", css)
+        self.assertIn(".journal-story-page .single-location-map{width:400px;height:400px", css)
+        self.assertIn("grid-template-columns:minmax(360px,440px) minmax(0,1fr)", css)
         self.assertIn("height:340px", css)
         self.assertIn("height:260px", css)
+        self.assertIn("@media(max-width:900px)", css)
         self.assertIn(".radio-outdoors-map", css)
         self.assertIn("height:720px", css)
         self.assertIn("radioOutdoorsWrappedBounds", shared_maps)
         self.assertIn("radioOutdoorsFitMap(map, positions, 32, 14)", contact_map)
+        self.assertIn("minZoom: 2", contact_map)
         self.assertIn("radioOutdoorsFitMap(map,positions,32,14)", adventure_detail)
+        self.assertIn("minZoom:2", adventure_detail)
         self.assertIn("fullscreenControl:true", adventure_detail)
 
     def test_assigned_location_photo_uses_adventure_cover_layout(self):

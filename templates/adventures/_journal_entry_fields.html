@@ -8,13 +8,21 @@
 {% for error in form.status.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
 </div>
 <div class="journal-form-section story-first-section">
-<label for="{{ form.location.id_for_label }}">Location <span class="required-field-label">Required Field</span></label>{{ form.location }}
+<label for="{{ form.location_name.id_for_label }}">Location <span class="required-field-label">Required Field</span></label>{{ form.location_name }}
+<p class="field-help">{{ form.location_name.help_text }}</p>
+<p class="field-help">Radio Outdoors matches appear below this field and are labeled. Google Places suggestions appear in the Google suggestion list.</p>
+{% for error in form.location_name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<div id="journal-location-results" class="journal-location-results" role="listbox" aria-label="Radio Outdoors Location matches" hidden></div>
+{{ form.location }}{{ form.location_source }}{{ form.google_formatted_address }}{{ form.google_city }}{{ form.google_state }}{{ form.google_country }}{{ form.google_location_type }}
 {% for error in form.location.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
 {{ form.latitude }}{{ form.longitude }}
 {% for error in form.latitude.errors %}<p class="form-error">{{ error }}</p>{% endfor %}{% for error in form.longitude.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
 <div id="journal-pin-map" class="journal-form-map" aria-label="Editable Journal location pin"></div>
-<p class="field-help">Drag the pin to the exact operating position for this Journal. The shared Location record is not moved.</p>
+<p class="field-help"><strong>This draggable pin is this Journal’s exact operating position.</strong> Moving it never moves a shared Location record.</p>
+<p class="form-error" data-journal-location-validation role="alert" hidden></p>
+<aside id="journal-nearest-location" class="journal-nearest-location" hidden aria-live="polite"><p data-nearest-location-message></p><div class="ro-page-actions"><button type="button" class="ro-small-action" data-use-nearest-location>Use Existing Location</button><button type="button" class="ro-small-action" data-keep-adhoc-location>Keep New Location</button></div></aside>
 {{ journal_location_choices|json_script:"journal-location-choice-data" }}
+{{ journal_map_defaults|json_script:"journal-map-defaults" }}
 </div>
 <div class="journal-form-section story-first-section">
 <label for="{{ form.operating_callsign.id_for_label }}">Operating Callsign <span class="required-field-label">Required Field</span></label>{{ form.operating_callsign }}

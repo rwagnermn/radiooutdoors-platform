@@ -374,10 +374,21 @@ class OperatingLocationForm(forms.ModelForm):
 
 
 class JournalEntryForm(forms.ModelForm):
-    location = AdventureLocationChoiceField(
-        queryset=Location.objects.none(), required=True, empty_label="Choose a Location",
-        help_text="Choose the Location for this day or Journal session."
+    location_name = forms.CharField(
+        required=True, max_length=150, label="Location",
+        widget=forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Start typing a Location name"}),
+        help_text="Start typing to find a Location. Choose a match, or keep what you typed and place the pin manually.",
     )
+    location = AdventureLocationChoiceField(
+        queryset=Location.objects.none(), required=False,
+        widget=forms.HiddenInput,
+    )
+    location_source = forms.CharField(required=False, widget=forms.HiddenInput)
+    google_formatted_address = forms.CharField(required=False, widget=forms.HiddenInput)
+    google_city = forms.CharField(required=False, widget=forms.HiddenInput)
+    google_state = forms.CharField(required=False, widget=forms.HiddenInput)
+    google_country = forms.CharField(required=False, widget=forms.HiddenInput)
+    google_location_type = forms.CharField(required=False, widget=forms.HiddenInput)
     photos = MultipleImageField(
         required=False,
         help_text="Select one or more JPG, PNG, WEBP, or HEIC images.",
@@ -444,6 +455,8 @@ class JournalEntryForm(forms.ModelForm):
             if adventure:
                 self.initial.setdefault("location", adventure.location_id)
                 if adventure.location_id:
+                    self.initial.setdefault("location_name", adventure.location.name)
+                if adventure.location_id:
                     self.initial.setdefault("latitude", adventure.location.latitude)
                     self.initial.setdefault("longitude", adventure.location.longitude)
             if adventure:
@@ -458,6 +471,9 @@ class JournalEntryForm(forms.ModelForm):
         self.fields["radio"].required = False
         self.fields["antenna"].required = False
         if self.instance and self.instance.pk and self.instance.entry_at:
+            if self.instance.location_id:
+                self.initial.setdefault("location_name", self.instance.location.name)
+                self.initial.setdefault("location", self.instance.location_id)
             self.initial["entry_at"] = self.instance.entry_at.strftime(
                 "%Y-%m-%dT%H:%M"
             )
@@ -467,6 +483,50 @@ class JournalEntryForm(forms.ModelForm):
         if not callsign:
             raise forms.ValidationError("Enter the callsign used for this Journal entry.")
         return callsign
+
+    def clean(self):
+        cleaned = super().clean()
+        name = (cleaned.get("location_name") or "").strip()
+        if not name:
+            self.add_error("location_name", "Enter a Location name.")
+        location = cleaned.get("location")
+        if location and name.casefold() != location.name.casefold():
+            cleaned["location"] = None
+            location = None
+        latitude, longitude = cleaned.get("latitude"), cleaned.get("longitude")
+        if location:
+            if latitude is None:
+                latitude = location.latitude
+                cleaned["latitude"] = latitude
+            if longitude is None:
+                longitude = location.longitude
+                cleaned["longitude"] = longitude
+        if latitude is None or longitude is None:
+            self.add_error("latitude", "Place the Journal operating-position pin on the map.")
+        elif not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            self.add_error("latitude", "Enter valid map coordinates.")
+        return cleaned
+
+    def resolve_location(self, user):
+        if self.cleaned_data.get("location"):
+            return self.cleaned_data.get("location")
+        source = self.cleaned_data.get("location_source")
+        type_mapping = {
+            "park": Location.LocationType.PARK, "campground": Location.LocationType.CAMPGROUND,
+            "airport": Location.LocationType.AIRPORT, "natural_feature": Location.LocationType.OTHER,
+        }
+        return Location.objects.create(
+            name=self.cleaned_data["location_name"].strip(),
+            created_by=user,
+            visibility=Location.Visibility.PUBLIC,
+            location_type=type_mapping.get(self.cleaned_data.get("google_location_type"), Location.LocationType.OTHER),
+            street_address=(self.cleaned_data.get("google_formatted_address") or "").strip() if source == "google" else "",
+            city=(self.cleaned_data.get("google_city") or "").strip(),
+            state=(self.cleaned_data.get("google_state") or "").strip(),
+            country=(self.cleaned_data.get("google_country") or "USA").strip(),
+            latitude=self.cleaned_data["latitude"],
+            longitude=self.cleaned_data["longitude"],
+        )
 
 
 class CommentForm(forms.ModelForm):

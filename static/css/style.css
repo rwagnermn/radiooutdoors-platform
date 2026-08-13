@@ -5241,7 +5241,7 @@ body.location-help-open { overflow: hidden; }
 /* Adventure Option 2 header and cover selection */
 .adventure-story-page .adventure-detail-heading {
     display: grid;
-    grid-template-columns: minmax(0, 58%) minmax(280px, 42%);
+    grid-template-columns: minmax(0, 68.5%) minmax(240px, 31.5%);
     align-items: stretch;
     gap: 28px;
 }
@@ -5252,7 +5252,7 @@ body.location-help-open { overflow: hidden; }
 .adventure-cover-frame {
     display: flex;
     min-width: 0;
-    height: clamp(280px, 28vw, 340px);
+    height: clamp(210px, 21vw, 255px);
     margin: 0;
     padding: 10px;
     align-items: center;
@@ -5360,7 +5360,7 @@ body.location-help-open { overflow: hidden; }
 }
 @media (max-width: 900px) {
     .adventure-story-page .adventure-detail-heading {
-        grid-template-columns: minmax(0, 55%) minmax(240px, 45%);
+        grid-template-columns: minmax(0, 65%) minmax(220px, 35%);
         gap: 20px;
     }
     .location-story-page .location-detail-heading {
@@ -5541,6 +5541,46 @@ form textarea{min-height:120px}
     .adventure-form-section,.location-editor-section{padding:16px}
     form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),form select,form textarea{font-size:16px}
     .registration-form .password-requirements ul{grid-template-columns:1fr}
+}
+
+/* Main Radio Outdoors Map page only: compact supporting controls, full map area. */
+.map-page-content .radio-map-heading-row{margin-bottom:8px}
+.map-page-content .radio-map-heading-copy{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;width:100%}
+.map-page-content .radio-map-heading-copy h1{margin:0}
+.map-page-content .radio-map-heading-copy h1::after{margin-top:5px;height:4px}
+.map-page-content .radio-map-description{margin:0;color:var(--ro-color-muted);line-height:1.35}
+.map-page-content .map-point-count{margin-left:auto;padding:7px 12px;white-space:nowrap}
+.map-page-content .radio-map-compact-toolbar{display:flex;align-items:center;gap:8px 16px;margin-bottom:8px;padding:8px 12px}
+.map-page-content .radio-map-filter-group{flex:1 1 520px;gap:4px 14px}
+.map-page-content .radio-map-filter-group legend,
+.map-page-content .radio-map-legend h2{width:auto;margin:0;font-size:15px;white-space:nowrap}
+.map-page-content .radio-map-filter-group label{min-height:44px}
+.map-page-content .radio-map-legend{display:flex;flex:1 1 520px;align-items:center;gap:7px 12px;min-width:0;padding-left:14px}
+.map-page-content .radio-map-legend-items{gap:6px 13px}
+.map-page-content .radio-map-legend p{flex:1 1 220px;margin:0;font-size:13px}
+.map-page-content .radio-map-toolbar-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.map-page-content .radio-map-controls .radio-map-toolbar-actions button{min-height:44px;margin-left:0;white-space:nowrap}
+.map-page-content .global-map-pin-instruction{margin-bottom:8px;padding:9px 12px}
+@media(max-width:900px){
+    .map-page-content .radio-map-description{flex:1 1 420px}
+    .map-page-content .radio-map-filter-group,
+    .map-page-content .radio-map-legend{flex-basis:100%}
+    .map-page-content .radio-map-legend{padding:7px 0 0;border-top:1px solid #c9d2cc;border-left:0}
+    .map-page-content .radio-map-toolbar-actions{margin-left:0}
+}
+@media(max-width:700px){
+    .map-page-content .radio-map-heading-row{margin-bottom:7px}
+    .map-page-content .radio-map-heading-copy{align-items:flex-start;gap:5px}
+    .map-page-content .radio-map-heading-copy h1,
+    .map-page-content .radio-map-description{flex-basis:100%}
+    .map-page-content .map-point-count{margin-left:0}
+    .map-page-content .radio-map-compact-toolbar{gap:6px;padding:8px}
+    .map-page-content .radio-map-filter-group,
+    .map-page-content .radio-map-legend{align-items:flex-start;flex-direction:column;gap:4px;width:100%}
+    .map-page-content .radio-map-filter-group label{width:100%}
+    .map-page-content .radio-map-legend p{flex-basis:auto}
+    .map-page-content .radio-map-toolbar-actions{display:grid;grid-template-columns:1fr;width:100%}
+    .map-page-content .radio-map-controls .radio-map-toolbar-actions button{width:100%}
 }
 
 /* Build 0.45 - unified near-full-width interior page architecture */
@@ -5979,23 +6019,80 @@ body.interior-page .content,
 .journal-status-badge{display:inline-block;padding:.3rem .65rem;border-radius:999px;font-weight:800}
 .journal-status-open{background:#ffd86b;color:#332400}
 .journal-status-completed{background:#d7ead9;color:#163d20}
-.journal-form-map{min-height:360px;border-radius:14px;margin:1rem 0}
+.journal-form-map{width:100%;height:280px;min-height:0;border-radius:14px;margin:1rem 0;overflow:hidden}
+.journal-location-results{display:grid;margin-top:4px;border:1px solid #a9b3aa;border-radius:8px;background:#fff;box-shadow:0 8px 18px rgba(18,47,31,.12)}
+.journal-location-results[hidden]{display:none}
+.journal-location-results button{display:flex;min-height:50px;flex-direction:column;align-items:flex-start;padding:8px 12px;border:0;border-bottom:1px solid #d7ded6;background:#fff;text-align:left;cursor:pointer}
+.journal-location-results button:last-child{border-bottom:0}.journal-location-results button:hover,.journal-location-results button:focus{background:#edf4ec}.journal-location-results small{color:#526458}
+.journal-nearest-location{margin:12px 0;padding:12px;border:2px solid #d87500;border-radius:10px;background:#fff8e8}
+.journal-nearest-location p{margin:0 0 8px;font-weight:750}
+
+/* Detail-page content photos are compact; viewer triggers still use full URLs. */
+.journal-story-page .journal-photo-grid.journal-view-photos,
+.adventure-story-page .journal-photo-grid.adventure-photo-masonry{display:grid;gap:12px;columns:auto;justify-content:start}
+.journal-story-page .journal-photo-grid.journal-view-photos{grid-template-columns:repeat(auto-fill,minmax(140px,160px))}
+.adventure-story-page .journal-photo-grid.adventure-photo-masonry{grid-template-columns:repeat(auto-fill,minmax(160px,200px))}
+.journal-story-page .journal-view-photos .journal-photo,
+.adventure-story-page .adventure-photo-masonry .journal-photo{display:block;width:100%;margin:0;break-inside:auto}
+.journal-story-page .journal-view-photos .journal-photo{max-width:160px}
+.adventure-story-page .adventure-photo-masonry .journal-photo{max-width:200px}
+.journal-story-page .journal-view-photos .journal-photo img,
+.adventure-story-page .adventure-photo-masonry .journal-photo img{width:100%;height:auto;max-height:none;object-fit:contain}
 .single-location-map{min-height:380px}
 
-/* Compact read-only maps on Adventure and Journal detail pages. */
+/* Narrow shared desktop layout for embedded detail maps; the main map is untouched. */
+.embedded-detail-map-layout{
+    display:grid;
+    grid-template-columns:minmax(360px,440px) minmax(0,1fr);
+    gap:20px;
+    align-items:start;
+}
+.embedded-detail-map-layout>.single-location-map,
+.embedded-detail-map-layout>.adventure-contact-map{grid-column:1;grid-row:1/span 10;width:100%}
+.embedded-detail-map-layout>.single-location-map-heading,
+.embedded-detail-map-layout>.embedded-map-information,
+.embedded-contact-map-layout>*:not(.adventure-contact-map):not(script){grid-column:2}
+.embedded-contact-map-layout>.contact-map-heading-row{grid-row:1}
+.embedded-contact-map-layout>.contact-map-controls{grid-row:2}
+.embedded-contact-map-layout>.contact-map-summary{grid-row:3}
+.embedded-contact-map-layout>.contact-map-legend{grid-row:4}
+.embedded-contact-map-layout>.contact-map-line-note{grid-row:5}
+.embedded-contact-map-layout>.contact-map-unmapped{grid-row:6}
+.adventure-journal-map-layout>.single-location-map{grid-column:1;grid-row:1;width:100%}
+.adventure-journal-map-layout>.embedded-map-information{grid-column:2;grid-row:1}
+
+/* Compact read-only map heights on Adventure and Journal detail pages. */
 .adventure-story-page .single-location-map,
-.journal-story-page .single-location-map{
+.adventure-story-page .adventure-journal-map-layout .single-location-map{
     height:280px;
     min-height:0;
 }
+.journal-story-page .single-location-map{width:400px;height:400px;min-height:0;max-width:100%}
 .adventure-story-page .adventure-contact-map,
 .journal-story-page .adventure-contact-map{
     height:340px;
     min-height:0;
 }
+@media(max-width:900px){
+    .embedded-detail-map-layout{grid-template-columns:1fr}
+    .embedded-detail-map-layout>.single-location-map,
+    .embedded-detail-map-layout>.adventure-contact-map,
+    .embedded-detail-map-layout>.single-location-map-heading,
+    .embedded-detail-map-layout>.embedded-map-information,
+    .embedded-contact-map-layout>*:not(script){grid-column:1;grid-row:auto;width:100%;max-width:100%}
+    .embedded-detail-map-layout>.single-location-map,
+    .embedded-detail-map-layout>.adventure-contact-map{grid-row:2}
+}
 @media(max-width:700px){
-    .adventure-story-page .single-location-map,
-    .journal-story-page .single-location-map{height:230px;}
+    .adventure-story-page .single-location-map{width:100%;height:230px;}
+    .journal-story-page .single-location-map{width:100%;height:300px;}
     .adventure-story-page .adventure-contact-map,
     .journal-story-page .adventure-contact-map{height:260px;}
+    .journal-form-map{height:230px;}
+    .journal-story-page .journal-photo-grid.journal-view-photos,
+    .adventure-story-page .journal-photo-grid.adventure-photo-masonry{grid-template-columns:minmax(0,1fr);width:100%;max-width:100%}
+    .journal-story-page .journal-view-photos .journal-photo,
+    .adventure-story-page .adventure-photo-masonry .journal-photo{max-width:100%}
+    .journal-story-page .journal-view-photos .journal-photo img,
+    .adventure-story-page .adventure-photo-masonry .journal-photo img{max-width:100%;max-height:none}
 }

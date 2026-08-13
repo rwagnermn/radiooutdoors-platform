@@ -59,6 +59,33 @@ def _journal_location_choices(user):
     ]
 
 
+def _journal_map_defaults(adventure, user, exclude_entry=None):
+    recent = adventure.journal_entries.exclude(
+        latitude__isnull=True, longitude__isnull=True
+    )
+    if exclude_entry is not None:
+        recent = recent.exclude(pk=exclude_entry.pk)
+    recent = recent.order_by("-entry_at", "-pk").first()
+    nearby_locations = visible_locations(user).exclude(
+        latitude__isnull=True, longitude__isnull=True
+    )
+    nearby = (
+        nearby_locations.filter(pk=adventure.location_id).first()
+        if adventure.location_id else None
+    ) or nearby_locations.order_by("name").first()
+    return {
+        "recent": (
+            {"latitude": float(recent.latitude), "longitude": float(recent.longitude)}
+            if recent else None
+        ),
+        "nearby": (
+            {"latitude": float(nearby.latitude), "longitude": float(nearby.longitude)}
+            if nearby else None
+        ),
+        "fallback": {"latitude": 39.5, "longitude": -98.35, "zoom": 4},
+    }
+
+
 def _can_manage_adventure(user, adventure):
     return bool(
         user.is_authenticated
@@ -811,6 +838,22 @@ def add_journal_entry(request, slug):
     if request.method == "POST":
         form_data = request.POST.copy()
         form_data.setdefault("operating_callsign", adventure.operating_callsign)
+        form_data.setdefault("status", JournalEntry.Status.OPEN)
+        if not form_data.get("location_name") and form_data.get("location"):
+            posted_location = visible_locations(request.user).filter(pk=form_data["location"]).first()
+            if posted_location:
+                form_data["location_name"] = posted_location.name
+        if not form_data.get("location_name") and not form_data.get("location") and adventure.location_id:
+            form_data["location"] = str(adventure.location_id)
+            form_data["location_name"] = adventure.location.name
+            latitude = adventure.location.latitude
+            longitude = adventure.location.longitude
+            if (latitude is None or longitude is None) and adventure.operating_location_id:
+                latitude = adventure.operating_location.latitude
+                longitude = adventure.operating_location.longitude
+            if latitude is not None and longitude is not None:
+                form_data.setdefault("latitude", str(latitude))
+                form_data.setdefault("longitude", str(longitude))
         if (
             "journal_visibility_present" not in form_data
             and "is_public" not in form_data
@@ -819,14 +862,18 @@ def add_journal_entry(request, slug):
         form = JournalEntryForm(form_data, request.FILES, adventure=adventure, user=request.user)
 
         if form.is_valid():
-            entry = form.save(commit=False)
-            entry.adventure = adventure
-            entry.save()
+            with transaction.atomic():
+                location = form.resolve_location(request.user)
+                entry = form.save(commit=False)
+                entry.adventure = adventure
+                entry.location = location
+                entry.save()
 
-            saved_count, duplicate_count, statuses = _save_entry_photos(
-                entry,
-                request.FILES.getlist("photos"),
-            )
+                saved_count, duplicate_count, statuses = _save_entry_photos(
+                    entry,
+                    request.FILES.getlist("photos"),
+                )
+                adventure.save(update_fields=["updated_at"])
 
 
             if saved_count:
@@ -842,7 +889,6 @@ def add_journal_entry(request, slug):
                 )
 
 
-            adventure.save(update_fields=["updated_at"])
             if request.POST.get("return_to_contacts") == "1":
                 messages.success(
                     request,
@@ -851,7 +897,23 @@ def add_journal_entry(request, slug):
                 return redirect("adventure_import_contacts", slug=adventure.slug)
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
-        last_entry = adventure.journal_entries.order_by("-entry_at").first()
+        last_entry = adventure.journal_entries.filter(
+            is_adventure_photo_collection=False
+        ).order_by("-entry_at", "-pk").first()
+        previous_location_entries = adventure.journal_entries.select_related("location").filter(
+            is_adventure_photo_collection=False,
+            location__isnull=False,
+            latitude__isnull=False,
+            longitude__isnull=False,
+        ).order_by("-entry_at", "-pk")
+        previous_location_entry = next(
+            (
+                entry
+                for entry in previous_location_entries
+                if can_view_location(request.user, entry.location)
+            ),
+            None,
+        )
         initial = {"operating_callsign": adventure.operating_callsign}
 
         if last_entry:
@@ -875,6 +937,14 @@ def add_journal_entry(request, slug):
                 "mode_am": last_entry.mode_am,
                 "mode_other": last_entry.mode_other,
             }
+        if previous_location_entry:
+            initial.update({
+                "location": previous_location_entry.location_id,
+                "location_name": previous_location_entry.location.name,
+                "latitude": previous_location_entry.latitude,
+                "longitude": previous_location_entry.longitude,
+                "location_source": "existing",
+            })
 
         form = JournalEntryForm(initial=initial, adventure=adventure, user=request.user)
 
@@ -885,6 +955,7 @@ def add_journal_entry(request, slug):
             "adventure": adventure,
             "form": form,
             "journal_location_choices": _journal_location_choices(request.user),
+            "journal_map_defaults": _journal_map_defaults(adventure, request.user),
             "return_to_contacts": (
                 request.GET.get("return_to") == "contacts"
                 or request.POST.get("return_to_contacts") == "1"
@@ -972,17 +1043,26 @@ def edit_journal_entry(request, entry_id):
     if request.method == "POST":
         form_data = request.POST.copy()
         form_data.setdefault("operating_callsign", entry.operating_callsign)
+        if not form_data.get("location_name") and form_data.get("location"):
+            posted_location = visible_locations(request.user).filter(pk=form_data["location"]).first()
+            if posted_location:
+                form_data["location_name"] = posted_location.name
         form = JournalEntryForm(
             form_data, request.FILES, instance=entry, adventure=adventure, user=request.user
         )
 
         if form.is_valid():
-            entry = form.save()
+            with transaction.atomic():
+                location = form.resolve_location(request.user)
+                entry = form.save(commit=False)
+                entry.location = location
+                entry.save()
 
-            saved_count, duplicate_count, statuses = _save_entry_photos(
-                entry,
-                request.FILES.getlist("photos"),
-            )
+                saved_count, duplicate_count, statuses = _save_entry_photos(
+                    entry,
+                    request.FILES.getlist("photos"),
+                )
+                adventure.save(update_fields=["updated_at"])
 
 
             if saved_count:
@@ -998,7 +1078,6 @@ def edit_journal_entry(request, entry_id):
                 )
 
 
-            adventure.save(update_fields=["updated_at"])
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
         form = JournalEntryForm(instance=entry, adventure=adventure, user=request.user)
@@ -1011,6 +1090,7 @@ def edit_journal_entry(request, entry_id):
             "entry": entry,
             "form": form,
             "journal_location_choices": _journal_location_choices(request.user),
+            "journal_map_defaults": _journal_map_defaults(adventure, request.user, entry),
         },
     )
 

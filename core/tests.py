@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -66,6 +67,29 @@ class AdventureDisplayStatusTests(TestCase):
 
 
 class MapExplorerOpenAdventureTests(TestCase):
+    def test_main_map_uses_compact_scoped_heading_and_toolbar(self):
+        response = self.client.get(reverse("map_explorer"))
+
+        self.assertContains(response, "radio-map-heading-row")
+        self.assertContains(response, "radio-map-heading-copy")
+        self.assertContains(response, "radio-map-compact-toolbar")
+        self.assertContains(response, "radio-map-toolbar-actions")
+        self.assertContains(response, "Radio Outdoors Map")
+        self.assertContains(response, "Map Filters")
+        self.assertContains(response, "Map Legend")
+
+    def test_main_map_compaction_is_responsive_and_does_not_target_embedded_maps(self):
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(".map-page-content .radio-map-compact-toolbar", css)
+        self.assertIn("flex-wrap:wrap", css)
+        self.assertIn("@media(max-width:700px)", css)
+        self.assertIn(".map-page-content .radio-map-toolbar-actions{display:grid", css)
+        self.assertIn(".radio-outdoors-map{\n    width:100%;\n    height:720px", css)
+        self.assertNotIn(".embedded-detail-map-layout .radio-map-compact-toolbar", css)
+
     def test_open_adventure_without_operating_position_gets_yellow_location_pin(self):
         operator = get_user_model().objects.create_user(
             username="W5MAP",

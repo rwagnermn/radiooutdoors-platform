@@ -55,7 +55,7 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 </div>
 
 {% if entry.location %}<section class="journal-view-section"><h2>Journal Location — {{ entry.location.name }}</h2>
-{% url 'location_detail' entry.location.pk as journal_location_detail_path %}{% include "partials/single_location_map.html" with map_id="journal-location-map" map_data_id="journal-location-map-data" map_heading="Journal Location" map_kicker="Where this Journal happened" location_detail_url=journal_location_detail_path show_missing_pin=can_edit_journal_pin %}
+{% url 'location_detail' entry.location.pk as journal_location_detail_path %}{% include "partials/single_location_map.html" with map_id="journal-location-map" map_data_id="journal-location-map-data" map_heading="Journal Location" map_kicker="Where this Journal happened" location_detail_url=journal_location_detail_path show_missing_pin=can_edit_journal_pin embedded_map_layout=True %}
 </section>{% endif %}
 
 <section class="journal-notes-view"><h2>Journal Notes</h2>{{ entry.body|linebreaks }}</section>
@@ -72,7 +72,7 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 <section class="journal-view-section"><h2>Contacts — {{ contact_count }}</h2>
 {% if can_manage_contacts %}<p class="ro-page-actions"><a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a> <a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}" class="button-secondary-dark">Import POTA Hunter Log</a></p>{% endif %}
 {% if contact_count %}
-{% include "adventures/_contact_map.html" %}
+{% include "adventures/_contact_map.html" with embedded_map_layout=True %}
 <div class="contact-summary-grid">
 <div><strong>{{ contact_count }}</strong><span>Contacts</span></div>
 <div><strong>{{ state_count }}</strong><span>States / Provinces</span></div>

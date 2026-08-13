@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
@@ -116,3 +117,29 @@ class AdventureCoverTests(TestCase):
         private_photo = self.photo(self.entry("Private", public=False), "private")
         self.assertTrue(private_photo.is_publicly_visible)
         self.assertIsNone(self.adventure.display_cover_photo)
+
+    def test_adventure_content_photos_are_reduced_without_changing_cover(self):
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            ".adventure-story-page .journal-photo-grid.adventure-photo-masonry",
+            css,
+        )
+        self.assertIn("grid-template-columns:repeat(auto-fill,minmax(160px,200px))", css)
+        self.assertIn(
+            ".adventure-story-page .adventure-photo-masonry .journal-photo{max-width:200px}",
+            css,
+        )
+        self.assertIn("height: clamp(210px, 21vw, 255px)", css)
+        self.assertNotIn(".adventure-cover-frame .adventure-photo-masonry", css)
+
+    def test_adventure_gallery_keeps_original_viewer_url_and_trigger(self):
+        photo = self.photo(self.entry("Field notes"), "viewer")
+
+        response = self.client.get(self.adventure.get_absolute_url())
+
+        self.assertContains(response, 'class="journal-photo-viewer-trigger"')
+        self.assertContains(response, f'data-full-src="{photo.public_image_url}')
+        self.assertContains(response, "at original size")

@@ -5,20 +5,19 @@
 {% block content %}
 <section class="content map-page-content">
 
-    <div class="section-heading-row">
-        <div>
+    <div class="section-heading-row radio-map-heading-row">
+        <div class="radio-map-heading-copy">
             <h1>Radio Outdoors Map</h1>
-            <p>
+            <p class="radio-map-description">
                 Explore outdoor operating locations and see who may be out playing radio.
             </p>
-        </div>
-
-        <div class="map-point-count" aria-live="polite">
-            {{ point_count }} Map Pin{{ point_count|pluralize }}
+            <div class="map-point-count" aria-live="polite">
+                {{ point_count }} Map Pin{{ point_count|pluralize }}
+            </div>
         </div>
     </div>
 
-    <div class="radio-map-controls">
+    <div class="radio-map-controls radio-map-compact-toolbar">
         <fieldset class="radio-map-filter-group">
             <legend>Map Filters</legend>
             <label>
@@ -47,18 +46,20 @@
             <p>Red advisory pins take precedence when an Open Adventure is also present.</p>
         </div>
 
-        <button type="button" id="fit-visible-pins">
-            Show All Visible Pins
-        </button>
-        {% if is_verified_member %}
-            <button
-                type="button"
-                id="add-location-pin-mode"
-                class="map-add-pin-button"
-            >
-                Add New Location
+        <div class="radio-map-toolbar-actions">
+            <button type="button" id="fit-visible-pins">
+                Show All Visible Pins
             </button>
-        {% endif %}
+            {% if is_verified_member %}
+                <button
+                    type="button"
+                    id="add-location-pin-mode"
+                    class="map-add-pin-button"
+                >
+                    Add New Location
+                </button>
+            {% endif %}
+        </div>
 
     </div>
 

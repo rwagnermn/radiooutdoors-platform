@@ -1,5 +1,5 @@
 {% load static %}
-<section class="adventure-contact-map-section" aria-labelledby="{{ contact_map_dom_id }}-heading">
+<section class="adventure-contact-map-section{% if embedded_map_layout %} embedded-detail-map-layout embedded-contact-map-layout{% endif %}" aria-labelledby="{{ contact_map_dom_id }}-heading">
   <div class="contact-map-heading-row"><div><p class="section-kicker">Contact geography</p><h2 id="{{ contact_map_dom_id }}-heading">{{ contact_map_heading|default:"Contacts From This Adventure" }}</h2><p>{{ contact_map.mapped }} mapped of {{ contact_map.total }} total contact{{ contact_map.total|pluralize }}</p></div></div>
   {% if contact_map.available and contact_map.contacts %}
   <div class="contact-map-controls" aria-label="Contact map filters">

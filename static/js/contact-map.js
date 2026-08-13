@@ -35,7 +35,7 @@
     activeMaps.add(container);
 
     const origin = { lat: data.origin.latitude, lng: data.origin.longitude };
-    const map = new google.maps.Map(container, { center: origin, zoom: 4, mapTypeControl: true, fullscreenControl: true, streetViewControl: false, mapId: "DEMO_MAP_ID" });
+    const map = new google.maps.Map(container, { center: origin, zoom: 4, minZoom: 2, mapTypeControl: true, fullscreenControl: true, streetViewControl: false, mapId: "DEMO_MAP_ID" });
     const infoWindow = new google.maps.InfoWindow();
     const originPin = new google.maps.marker.PinElement({ background: "#d86a1c", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "A", scale: 1.15 });
     new google.maps.marker.AdvancedMarkerElement({ map, position: origin, title: `Adventure Location: ${data.origin.name}`, content: originPin.element });
