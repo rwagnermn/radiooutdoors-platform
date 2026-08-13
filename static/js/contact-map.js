@@ -79,12 +79,11 @@
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(contact);
       });
-      const bounds = new google.maps.LatLngBounds();
-      bounds.extend(origin);
+      const positions = [origin];
       groups.forEach((group) => {
         const first = group[0];
         const position = { lat: first.latitude, lng: first.longitude };
-        bounds.extend(position);
+        positions.push(position);
         const grouped = group.length > 1;
         const pin = new google.maps.marker.PinElement({
           background: first.approximate ? "#d7a328" : (grouped ? "#5b3f92" : "#1769aa"),
@@ -105,7 +104,7 @@
           lineNote.textContent = `Showing the first ${data.line_limit} contact paths. All ${visible.length} mapped contacts remain visible.`;
         } else lineNote.hidden = true;
       } else lineNote.hidden = true;
-      if (!bounds.isEmpty()) map.fitBounds(bounds, 48);
+      radioOutdoorsFitMap(map, positions, 32, 14);
     }
 
     controls.querySelectorAll("[data-contact-filter]").forEach((control) => control.addEventListener("change", render));

@@ -3,7 +3,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from unittest.mock import PropertyMock, patch
 
-from core.models import Adventure, Location, MemberProfile
+from core.models import Adventure, JournalEntry, Location, MemberProfile
 
 
 @override_settings(
@@ -34,6 +34,12 @@ class DetailLocationMapTests(TestCase):
             location=self.location,
             is_public=True,
         )
+        self.entry = JournalEntry.objects.create(
+            adventure=self.adventure,
+            location=self.location,
+            title="Caribou Falls Journal",
+            body="Mapped journal entry",
+        )
 
     def test_public_location_detail_contains_one_safe_map_point(self):
         response = self.client.get(reverse("location_detail", args=[self.location.pk]))
@@ -43,13 +49,13 @@ class DetailLocationMapTests(TestCase):
         self.assertContains(response, "-91.0321")
         self.assertNotContains(response, "server-geocoding-secret-sentinel")
 
-    def test_adventure_detail_contains_only_associated_location_map(self):
+    def test_adventure_detail_contains_only_associated_journal_location_map(self):
         Location.objects.create(
             name="Unrelated Location", latitude="40.1", longitude="-90.1"
         )
         response = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(response, "Adventure Location")
-        self.assertContains(response, 'data-single-location-map', count=1)
+        self.assertContains(response, "Journal Locations")
+        self.assertContains(response, 'id="adventure-journal-map"', count=1)
         self.assertContains(response, self.location.name)
         self.assertNotContains(response, "Unrelated Location")
 
@@ -90,14 +96,10 @@ class DetailLocationMapTests(TestCase):
         self.assertContains(response, "47.4688")
         self.assertContains(response, "Edit Pin Position")
 
-    def test_adventure_owner_receives_location_and_pin_edit_links(self):
+    def test_adventure_owner_receives_journal_location_link(self):
         self.client.force_login(self.owner)
         response = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(response, reverse("location_detail", args=[self.location.pk]))
-        self.assertContains(
-            response,
-            reverse("edit_owned_pin_position", args=["location", self.location.pk]),
-        )
+        self.assertContains(response, reverse("journal_entry_detail", args=[self.entry.pk]))
 
     def test_view_only_map_script_has_no_coordinate_edit_handlers(self):
         from django.conf import settings
@@ -110,6 +112,26 @@ class DetailLocationMapTests(TestCase):
         self.assertNotIn("GOOGLE_GEOCODING_API_KEY", source)
         self.assertIn('addListenerOnce(map, "idle"', source)
         self.assertIn('removeAttribute("aria-busy")', source)
+
+    def test_embedded_detail_maps_use_compact_sizes_and_shared_bounds(self):
+        from django.conf import settings
+
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
+        shared_maps = (settings.BASE_DIR / "static" / "js" / "radiooutdoors-maps.js").read_text(encoding="utf-8")
+        contact_map = (settings.BASE_DIR / "static" / "js" / "contact-map.js").read_text(encoding="utf-8")
+        adventure_detail = (settings.BASE_DIR / "templates" / "adventures" / "adventure_detail.html").read_text(encoding="utf-8")
+
+        self.assertIn(".adventure-story-page .single-location-map", css)
+        self.assertIn("height:280px", css)
+        self.assertIn("height:230px", css)
+        self.assertIn("height:340px", css)
+        self.assertIn("height:260px", css)
+        self.assertIn(".radio-outdoors-map", css)
+        self.assertIn("height:720px", css)
+        self.assertIn("radioOutdoorsWrappedBounds", shared_maps)
+        self.assertIn("radioOutdoorsFitMap(map, positions, 32, 14)", contact_map)
+        self.assertIn("radioOutdoorsFitMap(map,positions,32,14)", adventure_detail)
+        self.assertIn("fullscreenControl:true", adventure_detail)
 
     def test_assigned_location_photo_uses_adventure_cover_layout(self):
         with patch.object(

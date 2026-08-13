@@ -95,6 +95,20 @@
                         {{ location_form.description }}
                     </div>
 
+                    <div class="field-span-two amenities-editor-heading">
+                        <h3>Amenities</h3>
+                        <p class="section-help">Choose what is known. Leave anything else as Unknown.</p>
+                        <div class="amenity-bulk-actions"><button type="button" onclick="document.querySelectorAll('[id^=id_location-]').forEach(function(field){if(['parking','restrooms','picnic_tables','shelter','shade','power','drinking_water'].some(function(name){return field.id.endsWith(name)}))field.value='yes'})">Set All Yes</button><button type="button" onclick="document.querySelectorAll('[id^=id_location-]').forEach(function(field){if(['parking','restrooms','picnic_tables','shelter','shade','power','drinking_water'].some(function(name){return field.id.endsWith(name)}))field.value='no'})">Set All No</button></div>
+                    </div>
+                    <div><label for="{{ location_form.parking.id_for_label }}">Parking</label>{{ location_form.parking }}</div>
+                    <div><label for="{{ location_form.restrooms.id_for_label }}">Restrooms</label>{{ location_form.restrooms }}</div>
+                    <div><label for="{{ location_form.picnic_tables.id_for_label }}">Picnic Tables</label>{{ location_form.picnic_tables }}</div>
+                    <div><label for="{{ location_form.shelter.id_for_label }}">Shelter</label>{{ location_form.shelter }}</div>
+                    <div><label for="{{ location_form.shade.id_for_label }}">Shade</label>{{ location_form.shade }}</div>
+                    <div><label for="{{ location_form.power.id_for_label }}">Power</label>{{ location_form.power }}</div>
+                    <div><label for="{{ location_form.drinking_water.id_for_label }}">Drinking Water</label>{{ location_form.drinking_water }}</div>
+                    <div><label for="{{ location_form.cell_coverage_bars.id_for_label }}">Cell Coverage</label>{{ location_form.cell_coverage_bars }}</div>
+                    <div><label for="{{ location_form.ambient_noise_level.id_for_label }}">Ambient Noise</label>{{ location_form.ambient_noise_level }}</div>
                     <fieldset class="field-span-two location-visibility-choice">
                         <legend>Location Visibility</legend>
                         {{ location_form.visibility }}

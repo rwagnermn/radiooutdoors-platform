@@ -116,6 +116,15 @@ class Location(models.Model):
         help_text="Optional POTA, WWFF, park, airport, or other reference.",
     )
     description = models.TextField(blank=True)
+    parking = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    restrooms = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    picnic_tables = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    shelter = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    shade = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    power = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    drinking_water = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    cell_coverage_bars = models.PositiveSmallIntegerField(choices=[(0, "Unknown"), (1, "1 Bar"), (2, "2 Bars"), (3, "3 Bars"), (4, "4 Bars"), (5, "5 Bars")], default=0)
+    ambient_noise_level = models.CharField(max_length=20, choices=[("unknown", "Unknown"), ("very_quiet", "Very Quiet"), ("quiet", "Quiet"), ("moderate", "Moderate"), ("busy", "Busy"), ("very_busy", "Very Busy")], default="unknown")
     photo = models.ImageField(
         upload_to="location_photos/%Y/%m/",
         blank=True,
@@ -283,6 +292,15 @@ class OperatingLocation(models.Model):
     )
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True)
+    parking = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    restrooms = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    picnic_tables = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    shelter = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    shade = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    power = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    drinking_water = models.CharField(max_length=10, choices=[("unknown", "Unknown"), ("yes", "Yes"), ("no", "No")], default="unknown")
+    cell_coverage_bars = models.PositiveSmallIntegerField(choices=[(0, "Unknown"), (1, "1 Bar"), (2, "2 Bars"), (3, "3 Bars"), (4, "4 Bars"), (5, "5 Bars")], default=0)
+    ambient_noise_level = models.CharField(max_length=20, choices=[("unknown", "Unknown"), ("very_quiet", "Very Quiet"), ("quiet", "Quiet"), ("moderate", "Moderate"), ("busy", "Busy"), ("very_busy", "Very Busy")], default="unknown")
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     parking = models.CharField(max_length=10, choices=UnknownYesNo.choices, default=UnknownYesNo.UNKNOWN)
@@ -402,6 +420,21 @@ class Adventure(models.Model):
     def get_absolute_url(self):
         return reverse("adventure_detail", kwargs={"slug": self.slug})
 
+    def refresh_status_from_journals(self):
+        if not self.pk:
+            return
+        statuses = list(self.journal_entries.filter(is_adventure_photo_collection=False).values_list("status", flat=True))
+        new_status = (
+            self.Status.COMPLETED
+            if statuses and all(value == JournalEntry.Status.COMPLETED for value in statuses)
+            else self.Status.ACTIVE
+        )
+        updates = {"status": new_status, "updated_at": timezone.now()}
+        updates["completed_at"] = timezone.now() if new_status == self.Status.COMPLETED else None
+        Adventure.objects.filter(pk=self.pk).update(**updates)
+        self.status = new_status
+        self.completed_at = updates["completed_at"]
+
 
     def eligible_cover_photos(self):
         """Approved, public photos for this Adventure in cover-priority order."""
@@ -496,7 +529,15 @@ class PotaTestResetAudit(models.Model):
 
 
 class JournalEntry(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        COMPLETED = "completed", "Complete"
+
     adventure = models.ForeignKey(Adventure, on_delete=models.CASCADE, related_name="journal_entries")
+    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name="journal_entries")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
     title = models.CharField(max_length=180, blank=True)
     body = models.TextField()
     entry_at = models.DateTimeField(default=timezone.now)
@@ -538,7 +579,23 @@ class JournalEntry(models.Model):
         self.operating_callsign = self.operating_callsign.strip().upper()
         if not self.operating_callsign and self.adventure_id:
             self.operating_callsign = self.adventure.operating_callsign
+        if self.location_id:
+            if self.latitude is None:
+                self.latitude = self.location.latitude
+            if self.longitude is None:
+                self.longitude = self.location.longitude
         super().save(*args, **kwargs)
+        self.adventure.refresh_status_from_journals()
+
+    def delete(self, *args, **kwargs):
+        adventure = self.adventure
+        result = super().delete(*args, **kwargs)
+        adventure.refresh_status_from_journals()
+        return result
+
+    @property
+    def display_status_label(self):
+        return "Complete" if self.status == self.Status.COMPLETED else "Open"
 
     @property
     def contact_count(self):
@@ -946,6 +1003,8 @@ class MemberProfile(models.Model):
         default=False,
         help_text="Show my email address to signed-in Radio Outdoors Members.",
     )
+    mobile_phone = models.CharField(max_length=16, blank=True)
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
     callsign_verified = models.BooleanField(default=False)
     verification_method = models.CharField(
         max_length=12,

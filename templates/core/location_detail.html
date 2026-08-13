@@ -116,6 +116,25 @@
         {% endif %}
 
         {% if location.has_operating_advisory %}<section class="location-advisory"><h2>Operating Advisory</h2>{{ location.operating_advisory|linebreaks }}</section>{% endif %}
+        <section class="location-amenities-section">
+            <div class="location-section-heading">
+                <div>
+                    <p class="section-kicker">What is available here</p>
+                    <h2>Amenities</h2>
+                </div>
+            </div>
+            <div class="amenity-grid">
+                <div><span>Parking</span><strong>{{ location.get_parking_display }}</strong></div>
+                <div><span>Restrooms</span><strong>{{ location.get_restrooms_display }}</strong></div>
+                <div><span>Picnic Tables</span><strong>{{ location.get_picnic_tables_display }}</strong></div>
+                <div><span>Shelter</span><strong>{{ location.get_shelter_display }}</strong></div>
+                <div><span>Shade</span><strong>{{ location.get_shade_display }}</strong></div>
+                <div><span>Power</span><strong>{{ location.get_power_display }}</strong></div>
+                <div><span>Drinking Water</span><strong>{{ location.get_drinking_water_display }}</strong></div>
+                <div><span>Cell Coverage</span><strong>{{ location.get_cell_coverage_bars_display }}</strong></div>
+                <div><span>Ambient Noise</span><strong>{{ location.get_ambient_noise_level_display }}</strong></div>
+            </div>
+        </section>
 {% if location.description %}
             <div class="location-description">
                 {{ location.description|linebreaks }}

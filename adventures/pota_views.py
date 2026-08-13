@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from core.auth import verified_member_or_staff_required, verified_member_required
 from core.location_privacy import visible_locations
-from core.models import (Adventure, Location, LocationType, MemberCallsignAudit, MemberProfile,
+from core.models import (Adventure, JournalEntry, Location, LocationType, MemberCallsignAudit, MemberProfile,
     PotaActivationImport, PotaCallsignAttestation, PotaImportBatch)
 from .pota_import import clean_pota_park_name, parse_pota_history
 from .pota_parks import lookup_pota_park, normalize_pota_reference
@@ -238,7 +238,7 @@ def confirm_pota_history(request, token):
                     location.needs_pin_review = latitude is None or longitude is None
                     location.save(update_fields=["name", "latitude", "longitude", "state", "country", "description", "needs_pin_review"])
                 else:
-                    location = Location.objects.create(name=park["display_name"], created_by=request.user, visibility=Location.Visibility.PRIVATE if request.POST.get(f"park_private_{key}") == "yes" else Location.Visibility.PUBLIC, location_type=Location.LocationType.PARK, location_type_record=park_type, state=entity.split("-", 1)[1] if entity.startswith("US-") else entity, country="USA" if entity.startswith("US-") else "", latitude=latitude, longitude=longitude, reference_code=reference, description=description, needs_pin_review=latitude is None or longitude is None)
+                    location = Location.objects.create(name=park["display_name"], created_by=request.user, visibility=Location.Visibility.PUBLIC, location_type=Location.LocationType.PARK, location_type_record=park_type, state=entity.split("-", 1)[1] if entity.startswith("US-") else entity, country="USA" if entity.startswith("US-") else "", latitude=latitude, longitude=longitude, reference_code=reference, description=description, needs_pin_review=latitude is None or longitude is None)
             resolved_locations[reference] = location
         for row in selected:
             other_source = PotaImportBatch.Source.ACTIVATION_HISTORY if is_hunter else PotaImportBatch.Source.HUNTER_LOG
@@ -247,11 +247,10 @@ def confirm_pota_history(request, token):
                 duplicates += 1; continue
             location = resolved_locations.get(normalize_pota_reference(row["park_reference"]))
             started = timezone.make_aware(datetime.combine(datetime.fromisoformat(row["activation_date"]).date(), time(12)))
-            row_visibility = request.POST.get(f"row_visibility_{row['index']}", "batch")
-            batch_public = request.POST.get("publish_pota_batch") == "yes"
-            is_public = row_visibility == "public" or (row_visibility == "batch" and batch_public)
+            is_public = True
             summary = "Imported from POTA Hunter Log as a grouped activation session." if is_hunter else "Imported from POTA activation history. Add any Journal details or contacts you want."
             adventure = Adventure.objects.create(owner=request.user, title=f"POTA Activation — {row['park_name']}", location=location, operating_callsign=row["callsign"], status=Adventure.Status.COMPLETED, is_public=is_public, summary=summary, started_at=started, completed_at=started)
+            JournalEntry.objects.create(adventure=adventure, location=location, latitude=location.latitude if location else None, longitude=location.longitude if location else None, operating_callsign=row["callsign"], entry_at=started, title=f"{row['park_name']} — Imported", body=summary, status=JournalEntry.Status.COMPLETED, is_public=True)
             source_metadata = ({"qso_count": row["qso_count"], "bands": row["bands"], "modes": row["modes"], "first_qso_time": row["first_qso_time"], "last_qso_time": row["last_qso_time"], "session_number": row["session_number"], "source_row_ids": row["source_row_ids"], "source_line_numbers": row["source_line_numbers"], "worked_callsigns": row["worked_callsigns"]} if is_hunter else {})
             PotaActivationImport.objects.create(adventure=adventure, batch=batch, source=source, source_metadata=source_metadata, activation_date=row["activation_date"], callsign=row["callsign"], park_reference=row["park_reference"], park_name=row["park_name"], entity=row["entity"], cw_contacts=row["cw"], data_contacts=row["data"], phone_contacts=row["phone"], total_contacts=row["total"], fingerprint=row["fingerprint"], location_resolution="unresolved" if location is None or location.needs_pin_review else "existing")
             created += 1; needs_location += int(location is None or location.latitude is None or location.longitude is None); links.append({"title": adventure.title, "url": adventure.get_absolute_url()})

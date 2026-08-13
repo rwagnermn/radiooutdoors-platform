@@ -42,14 +42,6 @@ class AdventureForm(forms.ModelForm):
         required=False,
         help_text="Select or paste one or more images.",
     )
-    location = AdventureLocationChoiceField(
-        queryset=Location.objects.all().order_by("name"),
-        required=True,
-        empty_label="Choose a Location",
-        label="Location",
-        help_text="Choose an existing Location or add a new one.",
-    )
-
     class Meta:
         model = Adventure
         fields = [
@@ -62,7 +54,6 @@ class AdventureForm(forms.ModelForm):
             "operating_callsign_url",
             "operating_start_date",
             "operating_end_date",
-            "location",
         ]
         widgets = {
             "title": forms.TextInput(
@@ -82,7 +73,6 @@ class AdventureForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
-        self.fields["location"].queryset = visible_locations(user).order_by("name")
         self.fields["operating_callsign"].required = True
         self.fields["operating_callsign_type"].required = True
 
@@ -237,6 +227,15 @@ class LocationForm(forms.ModelForm):
             "official_website",
             "reference_code",
             "description",
+            "parking",
+            "restrooms",
+            "picnic_tables",
+            "shelter",
+            "shade",
+            "power",
+            "drinking_water",
+            "cell_coverage_bars",
+            "ambient_noise_level",
             "photo",
             "has_operating_advisory",
             "operating_advisory",
@@ -337,6 +336,15 @@ class OperatingLocationForm(forms.ModelForm):
         fields = [
             "name",
             "description",
+            "parking",
+            "restrooms",
+            "picnic_tables",
+            "shelter",
+            "shade",
+            "power",
+            "drinking_water",
+            "cell_coverage_bars",
+            "ambient_noise_level",
             "latitude",
             "longitude",
             "parking",
@@ -366,6 +374,10 @@ class OperatingLocationForm(forms.ModelForm):
 
 
 class JournalEntryForm(forms.ModelForm):
+    location = AdventureLocationChoiceField(
+        queryset=Location.objects.none(), required=True, empty_label="Choose a Location",
+        help_text="Choose the Location for this day or Journal session."
+    )
     photos = MultipleImageField(
         required=False,
         help_text="Select one or more JPG, PNG, WEBP, or HEIC images.",
@@ -375,7 +387,11 @@ class JournalEntryForm(forms.ModelForm):
         model = JournalEntry
         fields = [
             "entry_at",
+            "status",
             "is_public",
+            "location",
+            "latitude",
+            "longitude",
             "operating_callsign",
             "title",
             "body",
@@ -384,6 +400,8 @@ class JournalEntryForm(forms.ModelForm):
         ]
         labels = {
             "entry_at": "When did this happen?",
+            "status": "Journal Status",
+            "location": "Location",
             "is_public": "Visible to Everyone",
             "operating_callsign": "Operating Callsign",
             "title": "Journal title (optional)",
@@ -402,6 +420,8 @@ class JournalEntryForm(forms.ModelForm):
             "title": forms.TextInput(
                 attrs={"placeholder": "Optional title", "autocomplete": "off"}
             ),
+            "latitude": forms.HiddenInput(),
+            "longitude": forms.HiddenInput(),
             "body": forms.Textarea(
                 attrs={
                     "rows": 10,
@@ -414,10 +434,18 @@ class JournalEntryForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         adventure = kwargs.pop("adventure", None)
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        self.fields["location"].queryset = visible_locations(user).order_by("name")
         self.fields["operating_callsign"].required = True
         if not self.is_bound and not self.instance.pk:
             self.initial.setdefault("is_public", True)
+            self.initial.setdefault("status", JournalEntry.Status.OPEN)
+            if adventure:
+                self.initial.setdefault("location", adventure.location_id)
+                if adventure.location_id:
+                    self.initial.setdefault("latitude", adventure.location.latitude)
+                    self.initial.setdefault("longitude", adventure.location.longitude)
             if adventure:
                 self.initial.setdefault(
                     "operating_callsign", adventure.operating_callsign

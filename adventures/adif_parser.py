@@ -63,6 +63,26 @@ def parse_adif_bytes(
     )
 
 
+def parse_adif_bytes_with_counts(
+    data: bytes,
+    *,
+    origin_latitude: float | None = None,
+    origin_longitude: float | None = None,
+) -> tuple[list[ParsedContact], int]:
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = data.decode("latin-1", errors="replace")
+
+    records = _read_records(text)
+    contacts = parse_adif_text(
+        text,
+        origin_latitude=origin_latitude,
+        origin_longitude=origin_longitude,
+    )
+    return contacts, len(records) - len(contacts)
+
+
 def parse_adif_text(
     text: str,
     *,

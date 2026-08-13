@@ -21,6 +21,14 @@
 {% endif %}
 </section>
 
+{% if profile %}
+<section class="location-card">
+<h2>Mobile Recovery</h2>
+<p>Add and verify a private mobile number to enable password recovery by text message.</p>
+<a href="{% url 'mobile_phone_settings' %}" class="ro-small-action">Manage Mobile Number</a>
+</section>
+{% endif %}
+
 {% if profile and not user.is_staff %}
 <section class="location-card account-deactivation-card">
 <h2>Account Status</h2>

@@ -21,8 +21,9 @@ def _rate_limit_key(prefix, value):
     return f"account-recovery:{prefix}:{digest}"
 
 
-def _within_rate_limit(key):
-    timeout = settings.PASSWORD_RESET_RATE_LIMIT_WINDOW
+def _within_rate_limit(key, *, limit=None, timeout=None):
+    timeout = settings.PASSWORD_RESET_RATE_LIMIT_WINDOW if timeout is None else timeout
+    limit = settings.PASSWORD_RESET_RATE_LIMIT if limit is None else limit
     if cache.add(key, 1, timeout=timeout):
         return True
     try:
@@ -30,7 +31,7 @@ def _within_rate_limit(key):
     except ValueError:
         cache.set(key, 1, timeout=timeout)
         attempts = 1
-    return attempts <= settings.PASSWORD_RESET_RATE_LIMIT
+    return attempts <= limit
 
 
 class RadioOutdoorsPasswordResetView(PasswordResetView):

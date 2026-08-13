@@ -12,6 +12,7 @@ from core.recovery_views import (
 )
 from core.moderated_media import serve_moderated_media
 from core.pin_views import edit_owned_pin_position
+from core.sms_views import sms_recovery_reset, sms_recovery_send, sms_recovery_start, sms_recovery_verify
 
 urlpatterns = [
     path("", include("core.policy_urls")),
@@ -40,6 +41,10 @@ urlpatterns = [
         RadioOutdoorsPasswordResetDoneView.as_view(),
         name="account_recovery_done",
     ),
+    path("accounts/recovery/sms/", sms_recovery_start, name="sms_recovery_start"),
+    path("accounts/recovery/sms/send/", sms_recovery_send, name="sms_recovery_send"),
+    path("accounts/recovery/sms/verify/", sms_recovery_verify, name="sms_recovery_verify"),
+    path("accounts/recovery/sms/reset/", sms_recovery_reset, name="sms_recovery_reset"),
     path(
         "accounts/recovery/<uidb64>/<token>/",
         RadioOutdoorsPasswordResetConfirmView.as_view(),

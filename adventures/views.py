@@ -35,7 +35,7 @@ from core.auth import (
     verified_member_required,
 )
 
-from .adif_parser import parse_adif_bytes
+from .adif_parser import parse_adif_bytes_with_counts
 from .contact_map import build_contact_map
 
 from .forms import (
@@ -49,6 +49,14 @@ from .forms import (
 
 
 logger = logging.getLogger(__name__)
+
+def _journal_location_choices(user):
+    return [
+        {"id": item.pk, "name": item.name,
+         "latitude": float(item.latitude) if item.latitude is not None else None,
+         "longitude": float(item.longitude) if item.longitude is not None else None}
+        for item in visible_locations(user).order_by("name")
+    ]
 
 
 def _can_manage_adventure(user, adventure):
@@ -375,6 +383,15 @@ def adventure_detail(request, slug):
                 else None
             ),
             "display_cover_photo": display_cover_photo,
+            "journal_location_map_data": [
+                {"name": item.location.name, "journal": item.title or "Journal Entry",
+                 "url": reverse("journal_entry_detail", args=[item.pk]),
+                 "latitude": float(item.latitude), "longitude": float(item.longitude),
+                 "status": item.status}
+                for item in journal_entries.select_related("location")
+                if item.location and item.latitude is not None and item.longitude is not None
+                and can_view_location(request.user, item.location)
+            ],
         },
     )
 
@@ -799,7 +816,7 @@ def add_journal_entry(request, slug):
             and "is_public" not in form_data
         ):
             form_data["is_public"] = "on"
-        form = JournalEntryForm(form_data, request.FILES, adventure=adventure)
+        form = JournalEntryForm(form_data, request.FILES, adventure=adventure, user=request.user)
 
         if form.is_valid():
             entry = form.save(commit=False)
@@ -859,7 +876,7 @@ def add_journal_entry(request, slug):
                 "mode_other": last_entry.mode_other,
             }
 
-        form = JournalEntryForm(initial=initial, adventure=adventure)
+        form = JournalEntryForm(initial=initial, adventure=adventure, user=request.user)
 
     return render(
         request,
@@ -867,6 +884,7 @@ def add_journal_entry(request, slug):
         {
             "adventure": adventure,
             "form": form,
+            "journal_location_choices": _journal_location_choices(request.user),
             "return_to_contacts": (
                 request.GET.get("return_to") == "contacts"
                 or request.POST.get("return_to_contacts") == "1"
@@ -883,6 +901,7 @@ def journal_entry_detail(request, entry_id):
             "adventure",
             "adventure__owner",
             "adventure__location",
+            "location",
         ).prefetch_related("photos", "contacts__resolved_location"),
         pk=entry_id,
     )
@@ -926,6 +945,13 @@ def journal_entry_detail(request, entry_id):
             "contact_map_data_id": f"journal-{entry.pk}-contact-map-data",
             "contact_map_heading": "Contacts From This Journal",
             "can_manage_contacts": bool(request.user == entry.adventure.owner or request.user.is_staff),
+            "can_view_journal_location": can_view_location(request.user, entry.location),
+            "single_location_map_data": (
+                {"name": entry.location.name, "latitude": float(entry.latitude), "longitude": float(entry.longitude)}
+                if entry.location and entry.latitude is not None and entry.longitude is not None
+                and can_view_location(request.user, entry.location) else None
+            ),
+            "can_edit_journal_pin": bool(entry.adventure.owner == request.user or request.user.is_staff),
         },
     )
 
@@ -947,7 +973,7 @@ def edit_journal_entry(request, entry_id):
         form_data = request.POST.copy()
         form_data.setdefault("operating_callsign", entry.operating_callsign)
         form = JournalEntryForm(
-            form_data, request.FILES, instance=entry, adventure=adventure
+            form_data, request.FILES, instance=entry, adventure=adventure, user=request.user
         )
 
         if form.is_valid():
@@ -975,7 +1001,7 @@ def edit_journal_entry(request, entry_id):
             adventure.save(update_fields=["updated_at"])
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
-        form = JournalEntryForm(instance=entry, adventure=adventure)
+        form = JournalEntryForm(instance=entry, adventure=adventure, user=request.user)
 
     return render(
         request,
@@ -984,6 +1010,7 @@ def edit_journal_entry(request, entry_id):
             "adventure": adventure,
             "entry": entry,
             "form": form,
+            "journal_location_choices": _journal_location_choices(request.user),
         },
     )
 
@@ -991,8 +1018,8 @@ def edit_journal_entry(request, entry_id):
 
 
 def _entry_origin(entry):
-    operating_location = entry.adventure.operating_location
-    location = entry.adventure.location
+    operating_location = None
+    location = entry.location or entry.adventure.location
 
     if (
         operating_location
@@ -1069,7 +1096,7 @@ def import_adif(request, entry_id):
         if form.is_valid():
             uploaded_file = form.cleaned_data["adif_file"]
             latitude, longitude = _entry_origin(entry)
-            contacts = parse_adif_bytes(
+            contacts, invalid_count = parse_adif_bytes_with_counts(
                 uploaded_file.read(),
                 origin_latitude=latitude,
                 origin_longitude=longitude,
@@ -1091,6 +1118,7 @@ def import_adif(request, entry_id):
                     "entry_id": entry.pk,
                     "filename": uploaded_file.name,
                     "contacts": [contact.as_dict() for contact in contacts],
+                    "invalid_count": invalid_count,
                     "return_to": return_to,
                 }
                 _preview_path(token).write_text(
@@ -1194,6 +1222,7 @@ def confirm_adif_import(request, entry_id, token):
     payload = json.loads(path.read_text(encoding="utf-8"))
     imported_count = 0
     duplicate_count = 0
+    invalid_count = payload.get("invalid_count", 0)
 
     with transaction.atomic():
         existing = set(
@@ -1250,16 +1279,20 @@ def confirm_adif_import(request, entry_id, token):
 
     messages.success(
         request,
-        (
-            f"{imported_count} imported; {duplicate_count} skipped; "
-            f"{duplicate_count} duplicate{'s' if duplicate_count != 1 else ''}. "
-            f"Destination Journal: {entry.title or 'Journal Entry'}."
-        ),
+        f"{imported_count} contacts imported successfully.",
     )
+    if duplicate_count:
+        messages.info(
+            request,
+            f"{duplicate_count} duplicate contact{'s' if duplicate_count != 1 else ''} skipped.",
+        )
+    if invalid_count:
+        messages.info(
+            request,
+            f"{invalid_count} invalid contact{'s' if invalid_count != 1 else ''} skipped.",
+        )
 
-    return redirect(payload.get("return_to") or reverse(
-        "journal_entry_detail", args=[entry.pk]
-    ))
+    return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
 @verified_member_or_staff_required

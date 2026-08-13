@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block title %}Send Recovery Code | Radio Outdoors{% endblock %}
+{% block content %}<section class="content"><div class="location-card auth-card recovery-card"><h1>Send Verification Code</h1><p>Send a one-time code to the verified mobile number {{ masked_phone }}.</p><form method="post">{% csrf_token %}<button type="submit" class="btn-ro-primary">Send verification code by text message</button></form></div></section>{% endblock %}

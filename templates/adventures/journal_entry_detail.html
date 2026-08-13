@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block title %}{{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page journal-story-page{% if contact_count %} contacts-page{% endif %}{% endblock %}
 {% block content %}
@@ -9,6 +9,7 @@
 <p class="journal-adventure-name">{{ adventure.title }}</p>
 <div class="compact-meta-row">
 <span>{{ entry.entry_at|date:"F j, Y — g:i A" }}</span>
+<span class="journal-status-badge journal-status-{{ entry.status }}">{{ entry.display_status_label }}</span>
 <span><strong>Operating as:</strong> {{ entry.operating_callsign }}</span>
 
 {% if user == adventure.owner and is_verified_member %}
@@ -36,6 +37,7 @@
 </div>
 {% if user == adventure.owner and is_verified_member %}
 <div class="journal-heading-actions">
+{% if can_view_journal_location and entry.location %}<a href="{% url 'location_detail' entry.location.pk %}" class="button-primary">View Location &amp; Amenities</a>{% endif %}
 <a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a>
 <a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}" class="button-secondary-dark">Import POTA Hunter Log</a>
 <a href="{% url 'import_adif' entry.pk %}" class="button-secondary-dark">Import Contacts</a>
@@ -47,9 +49,14 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 </form>
 </div></div>
 {% elif user.is_staff %}
-<div class="journal-heading-actions"><a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a></div></div>
+<div class="journal-heading-actions">
+{% if can_view_journal_location and entry.location %}<a href="{% url 'location_detail' entry.location.pk %}" class="button-primary">View Location &amp; Amenities</a>{% endif %}<a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a></div></div>
 {% endif %}
 </div>
+
+{% if entry.location %}<section class="journal-view-section"><h2>Journal Location — {{ entry.location.name }}</h2>
+{% url 'location_detail' entry.location.pk as journal_location_detail_path %}{% include "partials/single_location_map.html" with map_id="journal-location-map" map_data_id="journal-location-map-data" map_heading="Journal Location" map_kicker="Where this Journal happened" location_detail_url=journal_location_detail_path show_missing_pin=can_edit_journal_pin %}
+</section>{% endif %}
 
 <section class="journal-notes-view"><h2>Journal Notes</h2>{{ entry.body|linebreaks }}</section>
 
@@ -134,3 +141,4 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 })();
 </script>
 {% endblock %}
+{% block extra_scripts %}{% if single_location_map_data %}<script src="{% static 'js/single-location-map.js' %}?v=002"></script>{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsSingleLocationMaps"></script>{% endif %}{% endif %}{% endblock %}

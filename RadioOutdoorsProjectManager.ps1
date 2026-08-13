@@ -15,8 +15,18 @@ function Run-Cmd($cmd,[int]$timeout=120) {
     $psi.RedirectStandardOutput=$true; $psi.RedirectStandardError=$true
     $psi.CreateNoWindow=$true
     $p=New-Object System.Diagnostics.Process; $p.StartInfo=$psi; [void]$p.Start()
-    if(-not $p.WaitForExit($timeout*1000)){try{$p.Kill($true)}catch{}; return @{Exit=124;Out="";Err="Timed out"}}
-    return @{Exit=$p.ExitCode;Out=$p.StandardOutput.ReadToEnd().Trim();Err=$p.StandardError.ReadToEnd().Trim()}
+    # Drain both redirected streams while the process runs. Waiting first can
+    # deadlock when Git emits enough warnings to fill a pipe buffer.
+    $outTask=$p.StandardOutput.ReadToEndAsync();$errTask=$p.StandardError.ReadToEndAsync()
+    if(-not $p.WaitForExit($timeout*1000)){
+        $timedOutPid=$p.Id
+        # cmd.exe can leave git.exe descendants alive. Kill and await the whole
+        # process tree so descendants cannot retain .git/index.lock.
+        try{Start-Process taskkill.exe -ArgumentList '/PID',"$timedOutPid",'/T','/F' -Wait -WindowStyle Hidden -ErrorAction Stop|Out-Null}catch{try{$p.Kill()}catch{}}
+        if(!$p.HasExited){[void]$p.WaitForExit(15000)}
+        return @{Exit=124;TimedOut=$true;ProcessId=$timedOutPid;Out=$outTask.GetAwaiter().GetResult().Trim();Err=("Timed out after $timeout seconds; process tree PID $timedOutPid was terminated and awaited.`r`n"+$errTask.GetAwaiter().GetResult()).Trim()}
+    }
+    return @{Exit=$p.ExitCode;Out=$outTask.GetAwaiter().GetResult().Trim();Err=$errTask.GetAwaiter().GetResult().Trim()}
 }
 function Py(){ $p=Join-Path $ProjectRoot ".venv\Scripts\python.exe"; if(Test-Path $p){$p}else{$null} }
 function Django($args,[int]$timeout=120){$p=Py;if(!$p){return @{Exit=9001;Out="";Err=".venv Python missing"}};Run-Cmd "`"$p`" manage.py $args" $timeout}
@@ -155,6 +165,155 @@ function RunTests(){
     $script:TestTimer.Start()
 }
 
+function Get-CheckpointPath($statusLine){
+    if($statusLine.Length -lt 4){return $null}
+    $path=$statusLine.Substring(3).Trim()
+    if($path -match ' -> '){$path=($path -split ' -> ',2)[1]}
+    if($path.StartsWith('"') -and $path.EndsWith('"')){
+        # Quoted porcelain paths can contain Git escape sequences. Treating them as
+        # unapproved is safer than staging a path we did not decode exactly.
+        return $null
+    }
+    $path.Replace('\','/')
+}
+
+function Get-CheckpointExclusionReason($path){
+    $p=$path.Replace('\','/')
+    $leaf=[IO.Path]::GetFileName($p)
+    if($leaf -match '(?i)\.bak$'){return 'backup file (*.bak)'}
+    if($leaf -match '(?i)^RO-.*\.ps1$'){return 'local RO tool script'}
+    if($leaf -match '(?i)^RO-.*\.zip$'){return 'local RO archive'}
+    if($leaf -match '(?i)source[-_ ]collection.*\.zip$'){return 'source-collection archive'}
+    if($leaf -match '(?i)\.zip$'){return 'generated/archive ZIP'}
+    if($p -match '(?i)(^|/)local-backups/'){return 'local backup directory'}
+    if($p -match '(?i)(^|/)project-manager-logs/'){return 'generated Project Manager log'}
+    if($p -match '(?i)(^|/)media(/|$)' -or $p -match '(?i)(^|/)media[-_ ]?backups?(/|$)'){return 'media or media backup'}
+    if($leaf -match '(?i)^(db\.sqlite3|.*\.(sqlite3?|db))$'){return 'database file'}
+    if($p -match '(?i)(^|/)(__pycache__|\.pytest_cache|\.mypy_cache|htmlcov)(/|$)' -or $leaf -match '(?i)\.(pyc|pyo)$'){return 'Python cache/test output'}
+    if($p -match '(?i)(^|/)(tmp|temp)(/|$)' -or $leaf -match '(?i)(\.tmp|\.temp|\.swp|~)$'){return 'temporary/generated file'}
+    if($leaf -match '(?i)^\.env($|\.)' -or $leaf -match '(?i)(api[-_]?key|secret|credential|password).*\.(txt|key|pem|json)$'){return 'secret or API-key file'}
+    return $null
+}
+
+function Test-IntentionalCheckpointPath($path){
+    $p=$path.Replace('\','/')
+    $leaf=[IO.Path]::GetFileName($p)
+    if($p -eq '.gitignore' -or $leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
+    if($p -notmatch '^(adventures|backend|core|static|templates|docs|tools)/'){return $false}
+    return ($leaf -match '(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$')
+}
+
+function Get-CheckpointClassification(){
+    $status=Run-Cmd 'git status --short --untracked-files=all' 30
+    if($status.Exit-ne0){return [pscustomobject]@{Error=($status.Out+"`r`n"+$status.Err).Trim();Intentional=@();Excluded=@()}}
+    $intentional=@();$excluded=@()
+    foreach($line in @($status.Out -split "`r?`n"|Where-Object{$_})){
+        $path=Get-CheckpointPath $line
+        if(!$path){$excluded += [pscustomobject]@{Status=$line.Substring(0,[Math]::Min(2,$line.Length));Path=$line.Substring([Math]::Min(3,$line.Length));Reason='path could not be safely decoded'};continue}
+        $reason=Get-CheckpointExclusionReason $path
+        if(!$reason -and !(Test-IntentionalCheckpointPath $path)){$reason='not an approved source/config/migration/test/template/static path'}
+        $item=[pscustomobject]@{Status=$line.Substring(0,2);Path=$path;Reason=$reason}
+        if($reason){$excluded += $item}else{$intentional += $item}
+    }
+    [pscustomobject]@{Error=$null;Intentional=@($intentional);Excluded=@($excluded)}
+}
+
+function Show-CheckpointConfirmation($files){
+    $dialog=New-Object Windows.Forms.Form
+    $dialog.Text='Confirm Full Checkpoint Push'
+    $work=[Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $dialog.Width=[Math]::Min(960,[int]($work.Width*.88))
+    $dialog.Height=[Math]::Min(760,[int]($work.Height*.88))
+    $dialog.StartPosition='CenterScreen';$dialog.MinimizeBox=$false;$dialog.MaximizeBox=$false;$dialog.ShowInTaskbar=$false;$dialog.KeyPreview=$true
+
+    $layout=New-Object Windows.Forms.TableLayoutPanel
+    $layout.Dock='Fill';$layout.Padding=New-Object Windows.Forms.Padding(12);$layout.ColumnCount=1;$layout.RowCount=3
+    $layout.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::AutoSize)))|Out-Null
+    $layout.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent,100)))|Out-Null
+    $layout.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::AutoSize)))|Out-Null
+    $dialog.Controls.Add($layout)
+
+    $notice=New-Object Windows.Forms.Label
+    $notice.AutoSize=$true;$notice.MaximumSize=New-Object Drawing.Size(($dialog.Width-55),0)
+    $notice.Text="Full Checkpoint Push commits the intentional files listed below and pushes the commit to GitHub (origin/main).`r`nExcluded local, backup, generated, database, media, and secret files will not be staged."
+    $layout.Controls.Add($notice,0,0)
+
+    $split=New-Object Windows.Forms.SplitContainer
+    $split.Dock='Fill';$split.Orientation='Horizontal';$split.SplitterDistance=[int](($dialog.Height-190)*.55)
+    $layout.Controls.Add($split,0,1)
+    $intentGroup=New-Object Windows.Forms.GroupBox;$intentGroup.Text="Intentional files to checkpoint ($($files.Intentional.Count))";$intentGroup.Dock='Fill';$split.Panel1.Controls.Add($intentGroup)
+    $intentBox=New-Object Windows.Forms.TextBox;$intentBox.Multiline=$true;$intentBox.ReadOnly=$true;$intentBox.WordWrap=$false;$intentBox.ScrollBars='Both';$intentBox.Dock='Fill';$intentBox.Font=New-Object Drawing.Font('Consolas',9)
+    $intentBox.Text=(($files.Intentional|ForEach-Object{"$($_.Status)  $($_.Path)"})-join"`r`n");$intentGroup.Controls.Add($intentBox)
+    $excludedGroup=New-Object Windows.Forms.GroupBox;$excludedGroup.Text="Excluded files (not staged) ($($files.Excluded.Count))";$excludedGroup.Dock='Fill';$split.Panel2.Controls.Add($excludedGroup)
+    $excludedBox=New-Object Windows.Forms.TextBox;$excludedBox.Multiline=$true;$excludedBox.ReadOnly=$true;$excludedBox.WordWrap=$false;$excludedBox.ScrollBars='Both';$excludedBox.Dock='Fill';$excludedBox.Font=New-Object Drawing.Font('Consolas',9)
+    $excludedBox.Text=(($files.Excluded|ForEach-Object{"$($_.Status)  $($_.Path)  [$($_.Reason)]"})-join"`r`n");$excludedGroup.Controls.Add($excludedBox)
+
+    $buttons=New-Object Windows.Forms.FlowLayoutPanel;$buttons.Dock='Fill';$buttons.AutoSize=$true;$buttons.FlowDirection='RightToLeft';$buttons.WrapContents=$false
+    $cancel=New-Object Windows.Forms.Button;$cancel.Text='Cancel';$cancel.AutoSize=$true;$cancel.MinimumSize=New-Object Drawing.Size(110,36);$cancel.DialogResult='Cancel'
+    $confirm=New-Object Windows.Forms.Button;$confirm.Text='Checkpoint and Push';$confirm.AutoSize=$true;$confirm.MinimumSize=New-Object Drawing.Size(165,36)
+    $confirm.Add_Click({$dialog.DialogResult='OK';$dialog.Close()})
+    $buttons.Controls.Add($cancel);$buttons.Controls.Add($confirm);$layout.Controls.Add($buttons,0,2)
+    $dialog.CancelButton=$cancel;$dialog.AcceptButton=$null
+    $dialog.Add_Shown({$cancel.Select()})
+    $dialog.Add_KeyDown({
+        param($sender,$e)
+        if($e.KeyCode-eq[Windows.Forms.Keys]::Escape){$cancel.PerformClick();$e.SuppressKeyPress=$true}
+        elseif($e.KeyCode-eq[Windows.Forms.Keys]::Enter){if($confirm.Focused){$confirm.PerformClick()}else{$cancel.PerformClick()};$e.SuppressKeyPress=$true}
+    })
+    try{return ($dialog.ShowDialog()-eq[Windows.Forms.DialogResult]::OK)}finally{$dialog.Dispose()}
+}
+
+function Stage-CheckpointPaths($items){
+    $pathspec=Join-Path ([IO.Path]::GetTempPath()) ("radiooutdoors-stage-"+[guid]::NewGuid().ToString('N')+'.paths')
+    try{
+        $stream=New-Object IO.MemoryStream
+        foreach($item in $items){$bytes=[Text.Encoding]::UTF8.GetBytes($item.Path);$stream.Write($bytes,0,$bytes.Length);$stream.WriteByte(0)}
+        [IO.File]::WriteAllBytes($pathspec,$stream.ToArray());$stream.Dispose()
+        $displayCommand='git add --pathspec-from-file=<temporary-approved-path-list> --pathspec-file-nul'
+        Log "Staging started: $($items.Count) approved paths; command: $displayCommand"
+        foreach($item in $items){Log "Staging approved path: $($item.Path)"}
+        $stagingStarted=Get-Date
+        $result=Run-Cmd "git add --pathspec-from-file=`"$pathspec`" --pathspec-file-nul" 300
+        if($result.Exit-eq124){$result.LockCleanup=Remove-TimedOutStagingLock $stagingStarted;Log "Timed-out staging cleanup: $($result.LockCleanup)"}
+        $result.Command=$displayCommand;$result.Paths=@($items|ForEach-Object{$_.Path})
+        Log "Staging finished: exit=$($result.Exit); approved=$($items.Count)"
+        return $result
+    }finally{if(Test-Path -LiteralPath $pathspec){Remove-Item -LiteralPath $pathspec -Force}}
+}
+
+function Remove-TimedOutStagingLock($stagingStarted){
+    $gitDir=Join-Path $ProjectRoot '.git';$lockPath=Join-Path $gitDir 'index.lock';$indexPath=Join-Path $gitDir 'index'
+    $deadline=(Get-Date).AddSeconds(10)
+    do{$gitProcesses=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue|Where-Object{$_.Name-match'^(git|git-lfs)(\.exe)?$'});if(!$gitProcesses.Count){break};Start-Sleep -Milliseconds 200}while((Get-Date)-lt$deadline)
+    if($gitProcesses.Count){return "Lock not removed: Git process(es) still active: $($gitProcesses.ProcessId-join', ')"}
+    $markers=@(@('rebase-apply','rebase-merge','MERGE_HEAD','CHERRY_PICK_HEAD','REVERT_HEAD','BISECT_LOG','BISECT_START','sequencer')|Where-Object{Test-Path -LiteralPath (Join-Path $gitDir $_)})
+    if($markers.Count){return "Lock not removed: active Git operation marker(s): $($markers-join', ')"}
+    if(!(Test-Path -LiteralPath $lockPath)){return 'No index lock remained after the terminated staging process.'}
+    $lock=Get-Item -LiteralPath $lockPath
+    if($lock.Length-ne0-or$lock.LastWriteTime-lt$stagingStarted.AddSeconds(-2)){return "Lock not removed: it was not identified as the zero-byte lock created by this staging attempt ($($lock.LastWriteTime))."}
+    if(!(Test-Path -LiteralPath $indexPath)){return 'Lock not removed: .git/index could not be confirmed.'}
+    $expected=[IO.Path]::GetFullPath((Join-Path $gitDir 'index.lock'));if($lock.FullName-ne$expected){return 'Lock not removed: resolved lock path did not match .git/index.lock.'}
+    try{Remove-Item -LiteralPath $expected -Force -ErrorAction Stop}catch{return "Stale lock removal failed: $($_.Exception.Message)"}
+    if(Test-Path -LiteralPath $expected){return 'Stale lock removal was attempted but the lock still exists.'}
+    return 'Confirmed no Git process or operation owned the lock; removed the stale .git/index.lock and preserved .git/index.'
+}
+
+function Get-StagedCheckpointPaths(){
+    $result=Run-Cmd 'git diff --cached --name-only' 60
+    if($result.Exit-ne0){return [pscustomobject]@{Error=($result.Out+"`r`n"+$result.Err).Trim();Paths=@()}}
+    [pscustomobject]@{Error=$null;Paths=@($result.Out -split "`r?`n"|Where-Object{$_}|ForEach-Object{$_.Replace('\','/')})}
+}
+
+function Test-StagedCheckpointSet($approvedItems){
+    $approved=@($approvedItems|ForEach-Object{$_.Path.Replace('\','/')}|Sort-Object -Unique)
+    $staged=Get-StagedCheckpointPaths
+    if($staged.Error){return [pscustomobject]@{Matches=$false;Error=$staged.Error;Missing=@();Unexpected=@();Staged=@()}}
+    $actual=@($staged.Paths|Sort-Object -Unique)
+    $missing=@(Compare-Object $approved $actual -PassThru|Where-Object{$_.SideIndicator-eq'<='})
+    $unexpected=@(Compare-Object $approved $actual -PassThru|Where-Object{$_.SideIndicator-eq'=>'})
+    [pscustomobject]@{Matches=(!$missing.Count-and!$unexpected.Count);Error=$null;Missing=$missing;Unexpected=$unexpected;Staged=$actual}
+}
+
 function Checkpoint([bool]$quick=$false){
     $sec=Secrets;if($sec.State-eq"red"){[Windows.Forms.MessageBox]::Show($sec.Detail,"DO NOT PUSH")|Out-Null;return}
     if(!$quick){
@@ -163,9 +322,24 @@ function Checkpoint([bool]$quick=$false){
         $a=Migrations;if($a.State-ne"green"){[Windows.Forms.MessageBox]::Show("Unapplied migrations exist.","Checkpoint Blocked")|Out-Null;return}
         $x=Run-Cmd "git diff --check" 60;if($x.Exit-ne0){[Windows.Forms.MessageBox]::Show(($x.Out+"`r`n"+$x.Err),"Diff Check Failed")|Out-Null;return}
     }
-    $s=Run-Cmd "git status --short" 30;if(!$s.Out){[Windows.Forms.MessageBox]::Show("Working tree is clean.")|Out-Null;return}
-    if([Windows.Forms.MessageBox]::Show("Checkpoint and push these changes?`r`n`r`n"+$s.Out,"Checkpoint","YesNo")-ne"Yes"){return}
-    $a=Run-Cmd "git add -A" 90;if($a.Exit-ne0){[Windows.Forms.MessageBox]::Show($a.Err)|Out-Null;return}
+    $files=Get-CheckpointClassification
+    if($files.Error){[Windows.Forms.MessageBox]::Show($files.Error,"Git Status Failed")|Out-Null;return}
+    if(!$files.Intentional.Count){[Windows.Forms.MessageBox]::Show("No intentional source, configuration, migration, test, template, or static files remain after exclusions. No commit was created.","Nothing to Checkpoint")|Out-Null;return}
+    if(!(Show-CheckpointConfirmation $files)){return}
+    $reset=Run-Cmd "git reset" 30;if($reset.Exit-ne0){[Windows.Forms.MessageBox]::Show(($reset.Out+"`r`n"+$reset.Err),"Could Not Prepare Staging")|Out-Null;return}
+    $a=Stage-CheckpointPaths $files.Intentional
+    if($a.Exit-ne0){
+        $staged=Get-StagedCheckpointPaths;$stagedText=if($staged.Paths.Count){$staged.Paths-join"`r`n"}else{'(none)'}
+        Log "Staging failed: command=$($a.Command); exit=$($a.Exit); affected paths=$($a.Paths-join', '); staged before failure=$($staged.Paths-join', '); error=$($a.Err)"
+        [Windows.Forms.MessageBox]::Show("Command: $($a.Command)`r`nAffected paths: all $($a.Paths.Count) approved paths (listed in the Project Manager log).`r`n`r`nStaged before failure:`r`n$stagedText`r`n`r`nLock cleanup: $($a.LockCleanup)`r`n`r`n$($a.Out)`r`n$($a.Err)`r`n`r`nCommit and push were blocked.","Staging Failed")|Out-Null;return
+    }
+    $verified=Test-StagedCheckpointSet $files.Intentional
+    if(!$verified.Matches){
+        Log "Staged-set mismatch; commit blocked. Missing=$($verified.Missing-join', '); unexpected=$($verified.Unexpected-join', '); error=$($verified.Error)"
+        $reconcile=Run-Cmd 'git reset' 60;Log "Index reconciled after staged-set mismatch: git reset exit=$($reconcile.Exit); working-tree content preserved"
+        [Windows.Forms.MessageBox]::Show("The staged files do not exactly match the approved list. Commit and push were blocked, and the index was cleared without changing working-tree files.`r`n`r`nMissing:`r`n$($verified.Missing-join"`r`n")`r`n`r`nUnexpected:`r`n$($verified.Unexpected-join"`r`n")`r`n`r`n$($verified.Error)","Staging Verification Failed")|Out-Null;return
+    }
+    Log "Staged-set verification passed: $($verified.Staged.Count) paths exactly match the approved list"
     $sec=Secrets;if($sec.State-eq"red"){Run-Cmd "git reset" 30|Out-Null;[Windows.Forms.MessageBox]::Show($sec.Detail+"`r`n`r`nStaging reset.","DO NOT PUSH")|Out-Null;return}
     $x=Run-Cmd "git diff --cached --check" 60;if($x.Exit-ne0){Run-Cmd "git reset" 30|Out-Null;[Windows.Forms.MessageBox]::Show("Staged diff check failed; staging reset.")|Out-Null;return}
     $msg="Radio Outdoors checkpoint - "+(Get-Date -Format "yyyy-MM-dd HH:mm")

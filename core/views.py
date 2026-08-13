@@ -212,7 +212,9 @@ def map_explorer(request):
     map_points = []
 
     for location in locations:
-        visible_adventures = location.adventures.filter(_visible_adventure_q(request))
+        visible_adventures = Adventure.objects.filter(
+            Q(location=location) | Q(journal_entries__location=location)
+        ).filter(_visible_adventure_q(request)).distinct()
 
         latest_adventure = (
             visible_adventures.select_related(

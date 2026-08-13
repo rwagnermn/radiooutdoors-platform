@@ -150,13 +150,16 @@ class AdventureContactHubTests(TestCase):
         self.client.force_login(self.staff)
         self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_successful_existing_import_returns_to_hub_with_totals(self):
+    def test_successful_existing_import_returns_to_journal_with_totals(self):
         entry = self.add_entry("Import Destination")
         self.client.force_login(self.owner)
         return_to = reverse("adventure_contacts", args=[self.adventure.slug])
         upload = SimpleUploadedFile(
             "contacts.adi",
-            b"<CALL:5>K1ABC<QSO_DATE:8>20260809<MODE:3>SSB<EOR>",
+            (
+                b"<CALL:5>K1ABC<QSO_DATE:8>20260809<MODE:3>SSB<EOR>"
+                b"<CALL:5>K2BAD<EOR>"
+            ),
             "text/plain",
         )
         preview = self.client.post(
@@ -169,9 +172,11 @@ class AdventureContactHubTests(TestCase):
             reverse("confirm_adif_import", args=[entry.pk, token]),
             follow=True,
         )
-        self.assertEqual(confirmation.resolver_match.url_name, "adventure_contacts")
-        self.assertContains(confirmation, "1 imported; 0 skipped; 0 duplicates")
-        self.assertContains(confirmation, "Destination Journal: Import Destination")
+        self.assertEqual(confirmation.resolver_match.url_name, "journal_entry_detail")
+        self.assertContains(confirmation, "1 contacts imported successfully.")
+        self.assertNotContains(confirmation, "duplicate contact")
+        self.assertContains(confirmation, "1 invalid contact skipped.")
+        self.assertContains(confirmation, "Contacts — 1")
         self.assertContains(confirmation, "K1ABC")
 
         duplicate_upload = SimpleUploadedFile(
@@ -188,7 +193,11 @@ class AdventureContactHubTests(TestCase):
             reverse("confirm_adif_import", args=[entry.pk, duplicate_token]),
             follow=True,
         )
-        self.assertContains(duplicate_result, "0 imported; 1 skipped; 1 duplicate")
+        self.assertEqual(duplicate_result.resolver_match.url_name, "journal_entry_detail")
+        self.assertContains(duplicate_result, "0 contacts imported successfully.")
+        self.assertContains(duplicate_result, "1 duplicate contact skipped.")
+        self.assertNotContains(duplicate_result, "invalid contact")
+        self.assertContains(duplicate_result, "Contacts — 1")
         self.assertEqual(entry.contacts.count(), 1)
 
     def test_invalid_import_stays_in_existing_workflow_with_error(self):
@@ -204,6 +213,7 @@ class AdventureContactHubTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.resolver_match.url_name, "import_adif")
         self.assertContains(response, "No valid contacts with callsign and QSO date were found.")
         self.assertEqual(entry.contacts.count(), 0)
 

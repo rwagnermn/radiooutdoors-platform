@@ -15,7 +15,7 @@
 <span class="member-attribution">{% if adventure.owner.member_profile.profile_is_public and adventure.owner.member_profile.public_profile_photo_url %}<img src="{{ adventure.owner.member_profile.public_profile_photo_url }}" alt="" class="member-profile-photo member-profile-photo-inline">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-inline member-profile-photo-placeholder">{% endif %}{{ adventure.owner.member_profile.callsign|default:adventure.owner }}</span>
 {% if can_manage_adventure %}<form method="post" action="{% url 'toggle_adventure_visibility' adventure.slug %}" class="inline-visibility-form">{% csrf_token %}<button type="submit" class="inline-visibility-control" title="Click to make this Adventure {% if adventure.is_public %}private{% else %}public{% endif %}">{% if adventure.is_public %}Public{% else %}Private{% endif %}</button></form>{% else %}<span class="visibility-label">{% if adventure.is_public %}Public{% else %}Private{% endif %}</span>{% endif %}
 </div>
-<p><strong>Location:</strong> {% if adventure.location %}{% if can_view_adventure_location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}Private Location{% endif %}{% else %}Location not entered{% endif %}</p>
+<p><strong>Locations:</strong> Set by each Journal and shown on the Adventure map below.</p>
 <p><strong>Operating as:</strong> {{ adventure.operating_callsign }}{% if adventure.operating_identity_name %} — {{ adventure.operating_identity_name }}{% endif %}</p>
 <p><strong>Adventure managed by:</strong> {{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</p>
 {% if adventure.operating_callsign_type != 'personal' %}<p><strong>Operating Callsign Type:</strong> {{ adventure.get_operating_callsign_type_display }}{% if adventure.operating_start_date %} · {{ adventure.operating_start_date|date:"M j, Y" }}{% if adventure.operating_end_date %}–{{ adventure.operating_end_date|date:"M j, Y" }}{% endif %}{% endif %}{% if adventure.operating_callsign_url %} · <a href="{{ adventure.operating_callsign_url }}" rel="noopener noreferrer">Event reference</a>{% endif %}</p>{% endif %}
@@ -35,10 +35,9 @@
 </div>
 {% if adventure.summary %}<section class="adventure-overview-card"><h2>Adventure Summary</h2><div>{{ adventure.summary|linebreaks }}</div></section>{% endif %}
 {% if adventure.pota_import %}<section class="adventure-overview-card"><h2>POTA activation import{% if user.is_staff %}<small class="staff-record-id">Activation ID {{ adventure.pota_import.pk }}</small><small class="staff-record-id">Batch ID {{ adventure.pota_import.batch_id }}</small>{% endif %}</h2><dl><dt>Park</dt><dd>{{ adventure.pota_import.park_reference }} — {{ adventure.pota_import.park_name }}</dd><dt>Activation date</dt><dd>{{ adventure.pota_import.activation_date }}</dd><dt>Operating callsign</dt><dd>{{ adventure.pota_import.callsign }}</dd><dt>Contacts</dt><dd>{{ adventure.pota_import.total_contacts }} total (CW {{ adventure.pota_import.cw_contacts }}, data {{ adventure.pota_import.data_contacts }}, phone {{ adventure.pota_import.phone_contacts }})</dd><dt>Location review</dt><dd>{{ adventure.pota_import.get_location_resolution_display }}</dd></dl></section>{% endif %}
-{% if can_view_adventure_location and adventure.location %}
-  {% url 'location_detail' adventure.location.pk as location_detail_path %}
-  {% if can_edit_adventure_location_pin %}{% url 'edit_owned_pin_position' 'location' adventure.location.pk as pin_edit_path %}{% endif %}
-  {% include "partials/single_location_map.html" with map_id="adventure-location-map" map_data_id="adventure-location-map-data" map_heading="Adventure Location" map_kicker="Where this Adventure happened" location_detail_url=location_detail_path pin_edit_url=pin_edit_path show_missing_pin=can_edit_adventure_location_pin %}
+{% if journal_location_map_data %}
+  <section class="single-location-map-card"><p class="single-location-map-kicker">Journal Locations</p><h2>Adventure Map</h2><div id="adventure-journal-map" class="single-location-map"></div>{{ journal_location_map_data|json_script:"adventure-journal-map-data" }}</section>
+  <script>window.initAdventureJournalMap=function(){const el=document.getElementById("adventure-journal-map"),data=document.getElementById("adventure-journal-map-data");if(!el||!data||!window.google)return;const points=JSON.parse(data.textContent),positions=points.map(p=>({lat:p.latitude,lng:p.longitude})),map=new google.maps.Map(el,{mapTypeControl:true,streetViewControl:false,fullscreenControl:true});points.forEach((p,index)=>{const marker=new google.maps.Marker({position:positions[index],map:map,title:p.name});const info=new google.maps.InfoWindow({content:"<strong>"+p.name+"</strong><br><a href='"+p.url+"'>"+p.journal+"</a><br>"+(p.status==="completed"?"Complete":"Open")});marker.addListener("click",()=>info.open({anchor:marker,map:map}));});radioOutdoorsFitMap(map,positions,32,14);};</script>
 {% endif %}
 {% include "adventures/_contact_map.html" %}
 <section id="journal-entries" class="adventure-journal-section"><div class="adventure-journal-heading"><div><p class="adventure-journal-kicker">The pages of this Adventure</p><h2>Adventure Journal</h2></div>{% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">Add Journal Entry</a>{% endif %}</div>
@@ -50,8 +49,8 @@
 </section>
 {% endblock %}
 {% block extra_scripts %}
-{% if single_location_map_data %}
+{% if single_location_map_data or journal_location_map_data %}
 <script src="{% static 'js/single-location-map.js' %}?v=002"></script>
-{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsSingleLocationMaps"></script>{% endif %}
+{% if google_maps_api_key %}<script>window.initAdventureMaps=function(){if(window.initRadioOutdoorsSingleLocationMaps)window.initRadioOutdoorsSingleLocationMaps();if(window.initAdventureJournalMap)window.initAdventureJournalMap();};</script><script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventureMaps"></script>{% endif %}
 {% endif %}
 {% endblock %}

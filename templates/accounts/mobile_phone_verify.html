@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block title %}Verify Mobile | Radio Outdoors{% endblock %}
+{% block content %}<section class="content"><div class="location-card auth-card"><h1>Verify Mobile Number</h1><p>Enter the code sent to {{ masked_phone }}.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit" class="btn-ro-primary">Verify Code</button></form></div></section>{% endblock %}

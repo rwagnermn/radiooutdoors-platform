@@ -9,16 +9,17 @@
 {% if development_verification_available %}<details class="development-verification-notice"><summary>Local test-account verification</summary><p>This DEBUG-only option is for intentional fake local accounts. Use Admin Verify for legitimate operators who cannot use QRZ.</p></details>{% endif %}
 <div class="member-table-scroll ro-scroll-table-region" role="region" aria-label="Member administration results" tabindex="0">
 <table class="member-directory-table member-admin-table ro-data-table ro-record-table">
-<thead><tr><th class="staff-id-column">ID</th><th><span class="visually-hidden">Photo</span></th><th>Callsign</th><th>Name</th><th>Verification</th><th>Account</th><th>Data</th><th class="ro-actions-column">Actions</th></tr></thead>
+<thead><tr><th class="staff-id-column">ID</th><th><span class="visually-hidden">Photo</span></th><th>Login Name</th><th>Callsign</th><th>Name</th><th>Verification</th><th>Account</th><th>Data</th><th class="ro-actions-column">Actions</th></tr></thead>
 <tbody>
 {% for profile in members %}
 <tr{% if profile.callsign %} tabindex="0" role="link" onclick="window.location='{% url 'member_detail' profile.callsign %}';" onkeydown="if(event.key==='Enter'){window.location='{% url 'member_detail' profile.callsign %}';}"{% endif %}>
 <td class="staff-id-column"><strong>{{ profile.pk }}</strong><br><small>User {{ profile.user_id }}</small></td>
 <td>{% if profile.public_profile_photo_url %}<img src="{{ profile.public_profile_photo_url }}?v={{ profile.updated_at|date:'U' }}" alt="" class="member-profile-photo member-profile-photo-thumbnail">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-thumbnail member-profile-photo-placeholder">{% endif %}</td>
+<td>{{ profile.user.username }}</td>
 <td><strong>{{ profile.callsign|default:"Incomplete" }}</strong></td>
 <td>{{ profile.public_name }}</td>
 <td>{% if profile.verification_method == 'qrz' and profile.callsign_verified %}<span class="member-verification-status verified">QRZ Verified</span>{% elif profile.verification_method == 'manual' and profile.callsign_verified %}<span class="member-verification-status verified">Manual Verification</span>{% elif profile.verification_method == 'admin' and profile.callsign_verified %}<span class="member-verification-status verified">Admin Verified</span>{% else %}<span class="member-verification-status not-verified">Not Verified</span>{% endif %}{% if profile.verification_at and profile.callsign_verified %}<small>{{ profile.verification_at|date:"M j, Y" }}</small>{% endif %}</td>
-<td>{% if profile.user.is_active %}Active{% else %}Inactive{% endif %}</td>
+<td>{% if profile.user.is_active %}Active{% else %}Inactive{% endif %}{% if profile.mobile_phone %}<small>Mobile {{ profile.mobile_phone|slice:"-4:" }} · {% if profile.phone_verified_at %}Verified{% else %}Unverified{% endif %}</small>{% endif %}</td>
 <td>{{ profile.total_adventures }} A · {{ profile.total_journals }} J · {{ profile.total_photos }} P</td>
 <td class="ro-actions-column" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
 <details class="ro-action-menu member-admin-menu">
@@ -35,7 +36,7 @@
 </details>
 </td>
 </tr>
-{% empty %}<tr><td colspan="8">No member profiles.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="9">No member profiles.</td></tr>{% endfor %}
 </tbody>
 </table>
 </div>

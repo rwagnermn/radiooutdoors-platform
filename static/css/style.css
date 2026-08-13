@@ -5974,3 +5974,28 @@ body.interior-page .content,
     padding-right:0;
     padding-left:0;
 }
+
+/* RO-20260813 Journal-owned location workflow */
+.journal-status-badge{display:inline-block;padding:.3rem .65rem;border-radius:999px;font-weight:800}
+.journal-status-open{background:#ffd86b;color:#332400}
+.journal-status-completed{background:#d7ead9;color:#163d20}
+.journal-form-map{min-height:360px;border-radius:14px;margin:1rem 0}
+.single-location-map{min-height:380px}
+
+/* Compact read-only maps on Adventure and Journal detail pages. */
+.adventure-story-page .single-location-map,
+.journal-story-page .single-location-map{
+    height:280px;
+    min-height:0;
+}
+.adventure-story-page .adventure-contact-map,
+.journal-story-page .adventure-contact-map{
+    height:340px;
+    min-height:0;
+}
+@media(max-width:700px){
+    .adventure-story-page .single-location-map,
+    .journal-story-page .single-location-map{height:230px;}
+    .adventure-story-page .adventure-contact-map,
+    .journal-story-page .adventure-contact-map{height:260px;}
+}

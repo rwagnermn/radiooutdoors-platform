@@ -107,6 +107,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTHENTICATION_BACKENDS = [
+    "core.auth_backends.UsernameOrCallsignBackend",
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -226,6 +230,11 @@ PASSWORD_RESET_RATE_LIMIT = int(
 )
 PASSWORD_RESET_RATE_LIMIT_WINDOW = int(
     os.environ.get("PASSWORD_RESET_RATE_LIMIT_WINDOW", "900")
+)
+SMS_RECOVERY_RATE_LIMIT = int(os.environ.get("SMS_RECOVERY_RATE_LIMIT", "5"))
+SMS_RECOVERY_VERIFY_LIMIT = int(os.environ.get("SMS_RECOVERY_VERIFY_LIMIT", "8"))
+SMS_RECOVERY_RATE_LIMIT_WINDOW = int(
+    os.environ.get("SMS_RECOVERY_RATE_LIMIT_WINDOW", "900")
 )
 
 # Image moderation is deliberately fail-closed. Configure a real provider class

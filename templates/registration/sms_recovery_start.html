@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block title %}SMS Account Recovery | Radio Outdoors{% endblock %}
+{% block content %}<section class="content"><div class="location-card auth-card recovery-card"><h1>Recover by Text Message</h1><p>Enter your callsign or email. If the account is eligible for SMS recovery, a verification option will be available.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit" class="btn-ro-primary">Continue</button></form><p><a href="{% url 'account_recovery' %}">Recover by email</a></p></div></section>{% endblock %}

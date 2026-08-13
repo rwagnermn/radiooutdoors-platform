@@ -1,56 +1,27 @@
 <div class="journal-form-section story-first-section">
-<label for="{{ form.entry_at.id_for_label }}">When did this happen?</label>
-{{ form.entry_at }}
+<label for="{{ form.entry_at.id_for_label }}">When did this happen?</label>{{ form.entry_at }}
 {% for error in form.entry_at.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
 </div>
-
 <div class="journal-form-section story-first-section">
-<label for="{{ form.operating_callsign.id_for_label }}">Operating Callsign <span class="required-field-label">Required Field</span></label>
-{{ form.operating_callsign }}
-<p class="field-help">Defaults to this Adventure's operating callsign. Change it only when this Journal entry used another authorized callsign.</p>
-{% for error in form.operating_callsign.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<label for="{{ form.status.id_for_label }}">Journal Status</label>{{ form.status }}
+<p class="field-help">Leave Open while the day or operating session is underway. Mark Complete when finished.</p>
+{% for error in form.status.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
 </div>
-
 <div class="journal-form-section story-first-section">
-<label for="{{ form.title.id_for_label }}">Journal title <span class="optional-label">(optional)</span></label>
-{{ form.title }}
-{% for error in form.title.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<label for="{{ form.location.id_for_label }}">Location <span class="required-field-label">Required Field</span></label>{{ form.location }}
+{% for error in form.location.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+{{ form.latitude }}{{ form.longitude }}
+{% for error in form.latitude.errors %}<p class="form-error">{{ error }}</p>{% endfor %}{% for error in form.longitude.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<div id="journal-pin-map" class="journal-form-map" aria-label="Editable Journal location pin"></div>
+<p class="field-help">Drag the pin to the exact operating position for this Journal. The shared Location record is not moved.</p>
+{{ journal_location_choices|json_script:"journal-location-choice-data" }}
 </div>
-
 <div class="journal-form-section story-first-section">
-<label for="{{ form.body.id_for_label }}">Tell the story</label>
-{{ form.body }}
-<p class="field-help">One sentence is enough. Add as much detail as you want.</p>
-{% for error in form.body.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<label for="{{ form.operating_callsign.id_for_label }}">Operating Callsign <span class="required-field-label">Required Field</span></label>{{ form.operating_callsign }}
+<p class="field-help">Defaults to this Adventure's operating callsign.</p>{% for error in form.operating_callsign.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
 </div>
-
-<div class="journal-form-section story-first-section">
-<input type="hidden" name="journal_visibility_present" value="1">
-<label for="{{ form.is_public.id_for_label }}">{{ form.is_public }} Visible to Everyone</label>
-{% for error in form.is_public.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
-</div>
-
-<details class="optional-story-section">
-<summary>Station details (optional)</summary>
-<div class="two-column-fields">
-<div><label for="{{ form.radio.id_for_label }}">Radio</label>{{ form.radio }}</div>
-<div><label for="{{ form.antenna.id_for_label }}">Antenna</label>{{ form.antenna }}</div>
-</div>
-</details>
-
-<details class="optional-story-section">
-<summary>{% if entry %}Add more photos (optional){% else %}Photos (optional){% endif %}</summary>
-<div id="journal-photo-upload" class="photo-upload-box photo-preview-control" data-photo-preview data-photo-preview-mode="multiple">
-<p class="field-help">No photos? No problem. The story is what matters.</p>
-<div class="photo-paste-zone" data-photo-paste-zone tabindex="0">Paste photo here or use the file picker</div>
-{{ form.photos }}
-<div class="photo-preview-actions">
-<button type="button" class="ro-small-action" data-photo-preview-load>Load Photos</button>
-<button type="button" class="ro-small-action" data-photo-preview-change>Change Photos</button>
-<button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button>
-</div>
-<div class="journal-photo-preview-grid" data-photo-preview-stage aria-live="polite"></div>
-<p id="photo-selection-note" class="photo-selection-note" data-photo-preview-status aria-live="polite">Choose one or more files, then select Load Photos. Nothing is uploaded until the Journal Entry is saved.</p>
-{% for error in form.photos.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
-</div>
-</details>
+<div class="journal-form-section story-first-section"><label for="{{ form.title.id_for_label }}">Journal title <span class="optional-label">(optional)</span></label>{{ form.title }}{% for error in form.title.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+<div class="journal-form-section story-first-section"><label for="{{ form.body.id_for_label }}">Tell the story</label>{{ form.body }}<p class="field-help">One sentence is enough. Add as much detail as you want.</p>{% for error in form.body.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+<div class="journal-form-section story-first-section"><input type="hidden" name="journal_visibility_present" value="1"><label for="{{ form.is_public.id_for_label }}">{{ form.is_public }} Visible to Everyone</label>{% for error in form.is_public.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
+<details class="optional-story-section"><summary>Station details (optional)</summary><div class="two-column-fields"><div><label for="{{ form.radio.id_for_label }}">Radio</label>{{ form.radio }}</div><div><label for="{{ form.antenna.id_for_label }}">Antenna</label>{{ form.antenna }}</div></div></details>
+<details class="optional-story-section"><summary>{% if entry %}Add more photos (optional){% else %}Photos (optional){% endif %}</summary><div id="journal-photo-upload" class="photo-upload-box photo-preview-control" data-photo-preview data-photo-preview-mode="multiple"><p class="field-help">No photos? No problem. The story is what matters.</p><div class="photo-paste-zone" data-photo-paste-zone tabindex="0">Paste photo here or use the file picker</div>{{ form.photos }}<div class="photo-preview-actions"><button type="button" class="ro-small-action" data-photo-preview-load>Load Photos</button><button type="button" class="ro-small-action" data-photo-preview-change>Change Photos</button><button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button></div><div class="journal-photo-preview-grid" data-photo-preview-stage aria-live="polite"></div><p class="photo-selection-note" data-photo-preview-status aria-live="polite">Choose files, then Load Photos. Nothing uploads until saved.</p>{% for error in form.photos.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div></details>

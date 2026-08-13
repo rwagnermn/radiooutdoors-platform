@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block title %}Choose a New Password | Radio Outdoors{% endblock %}
+{% block content %}<section class="content"><div class="location-card auth-card recovery-card"><h1>Choose a New Password</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit" class="btn-ro-primary">Save New Password</button></form></div></section>{% endblock %}
