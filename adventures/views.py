@@ -199,12 +199,34 @@ def my_adventures(request):
     )
     if request.GET.get("source") == "pota":
         adventures = adventures.filter(pota_import__isnull=False)
+    search = request.GET.get("q", "").strip()
+    activity = request.GET.get("activity", "").strip()
+    place = request.GET.get("place", "").strip()
+    if search:
+        adventures = adventures.filter(
+            Q(title__icontains=search)
+            | Q(location__name__icontains=search)
+            | Q(location__city__icontains=search)
+            | Q(location__state__icontains=search)
+        )
+    if activity == "open":
+        adventures = adventures.filter(status=Adventure.Status.ACTIVE)
+    elif activity == "complete":
+        adventures = adventures.filter(status=Adventure.Status.COMPLETED)
+    if place:
+        adventures = adventures.filter(location_id=place)
     adventures = mark_adventure_location_visibility(adventures, request.user)
 
     return render(
         request,
         "adventures/my_adventures.html",
-        {"adventures": adventures},
+        {
+            "adventures": adventures,
+            "locations": visible_locations(request.user).order_by("name"),
+            "search": search,
+            "selected_activity": activity,
+            "selected_place": place,
+        },
     )
 
 
@@ -332,6 +354,19 @@ def adventure_detail(request, slug):
     if not can_manage_adventure:
         journal_entries = journal_entries.filter(is_public=True)
 
+    can_view_unapproved_photos = bool(
+        request.user.is_staff or request.user == adventure.owner
+    )
+    visible_photo_filter = Q()
+    if not can_view_unapproved_photos:
+        visible_photo_filter = Q(photos__moderation_status=Photo.ModerationStatus.APPROVED)
+    journal_entries = journal_entries.annotate(
+        dashboard_contact_count=Count("contacts", distinct=True),
+        dashboard_photo_count=Count(
+            "photos", filter=visible_photo_filter, distinct=True
+        ),
+    ).select_related("location")
+
     adventure_photos = Photo.objects.filter(
         journal_entry__in=journal_entries,
     ).select_related("journal_entry")
@@ -339,10 +374,29 @@ def adventure_detail(request, slug):
         adventure_photos = adventure_photos.filter(
             moderation_status=Photo.ModerationStatus.APPROVED
         )
-    contacts = list(JournalContact.objects.filter(
+    contact_candidates = JournalContact.objects.filter(
         Q(journal_entry__in=journal_entries)
         | Q(adventure=adventure, journal_entry__isnull=True),
-    ).distinct().select_related("journal_entry", "resolved_location"))
+    ).distinct().select_related("journal_entry", "resolved_location").order_by(
+        "-qso_date", "-time_on", "callsign", "pk"
+    )
+    contacts = []
+    seen_contacts = set()
+    for contact in contact_candidates:
+        # Imports prevent duplicates inside one Journal. The dashboard also
+        # de-duplicates the same QSO when it appears in more than one Journal.
+        identity = contact.fingerprint or (
+            contact.qso_date,
+            contact.time_on,
+            contact.callsign.upper(),
+            contact.station_callsign.upper(),
+            contact.band.upper(),
+            contact.mode.upper(),
+        )
+        if identity in seen_contacts:
+            continue
+        seen_contacts.add(identity)
+        contacts.append(contact)
     contact_count = len(contacts)
     contact_map = build_contact_map(adventure, contacts, request.user)
     can_manage_journals = bool(
@@ -386,12 +440,15 @@ def adventure_detail(request, slug):
             "adventure": adventure,
             "journal_entries": journal_entries,
             "adventure_photos": adventure_photos,
+            "contacts": contacts,
             "contact_count": contact_count,
             "contact_map": contact_map,
             "contact_map_dom_id": "adventure-contact-map",
             "contact_map_data_id": "adventure-contact-map-data",
             "can_manage_adventure": can_manage_adventure,
             "can_manage_journals": can_manage_journals,
+            "can_view_unapproved_photos": can_view_unapproved_photos,
+            "journal_entry_count": journal_entries.count(),
             "photo_add_url": photo_add_url,
             "can_view_adventure_location": can_view_adventure_location,
             "can_edit_adventure_location_pin": bool(
@@ -981,6 +1038,23 @@ def journal_entry_detail(request, entry_id):
         raise Http404("Journal Entry not found.")
 
     contacts = entry.contacts.select_related("journal_entry", "resolved_location").order_by("-qso_date", "-time_on", "callsign")
+    can_edit_journal = bool(
+        request.user == entry.adventure.owner and is_verified_member(request.user)
+    )
+    can_review_photos = bool(request.user.is_staff)
+    journal_photos_query = entry.photos.all()
+    if not (can_edit_journal or can_review_photos):
+        journal_photos_query = journal_photos_query.filter(
+            moderation_status=Photo.ModerationStatus.APPROVED
+        )
+    journal_photos = list(journal_photos_query)
+    primary_journal_photo = next(
+        (photo for photo in journal_photos if photo.pk == entry.primary_photo_id),
+        next(
+            (photo for photo in journal_photos if photo.is_publicly_visible),
+            journal_photos[0] if journal_photos else None,
+        ),
+    )
     contact_map = build_contact_map(entry.adventure, contacts, request.user)
     longest_contact = (
         contacts.exclude(distance_miles__isnull=True)
@@ -1015,6 +1089,15 @@ def journal_entry_detail(request, entry_id):
             "contact_map_dom_id": f"journal-{entry.pk}-contact-map",
             "contact_map_data_id": f"journal-{entry.pk}-contact-map-data",
             "contact_map_heading": "Contacts From This Journal",
+            "can_edit_journal": can_edit_journal,
+            "can_review_photos": can_review_photos,
+            "journal_photos": journal_photos,
+            "journal_photo_count": len(journal_photos),
+            "primary_journal_photo": primary_journal_photo,
+            "can_manage_adventure": _can_manage_adventure(request.user, entry.adventure),
+            "can_view_adventure": bool(
+                entry.adventure.is_public or entry.adventure.owner == request.user
+            ),
             "can_manage_contacts": bool(request.user == entry.adventure.owner or request.user.is_staff),
             "can_view_journal_location": can_view_location(request.user, entry.location),
             "single_location_map_data": (
@@ -1025,6 +1108,59 @@ def journal_entry_detail(request, entry_id):
             "can_edit_journal_pin": bool(entry.adventure.owner == request.user or request.user.is_staff),
         },
     )
+
+
+def journal_photo_gallery(request, entry_id):
+    entry = get_object_or_404(
+        JournalEntry.objects.select_related("adventure", "adventure__owner"),
+        pk=entry_id,
+    )
+    if entry.adventure.owner != request.user and (
+        not entry.adventure.is_public or not entry.is_public
+    ):
+        raise Http404("Journal Entry not found.")
+
+    can_edit_journal = bool(
+        request.user == entry.adventure.owner and is_verified_member(request.user)
+    )
+    can_review_photos = bool(request.user.is_staff)
+    photos_query = entry.photos.all()
+    if not (can_edit_journal or can_review_photos):
+        photos_query = photos_query.filter(
+            moderation_status=Photo.ModerationStatus.APPROVED
+        )
+    return render(
+        request,
+        "adventures/journal_photo_gallery.html",
+        {
+            "adventure": entry.adventure,
+            "entry": entry,
+            "journal_photos": list(photos_query),
+            "can_edit_journal": can_edit_journal,
+            "can_review_photos": can_review_photos,
+        },
+    )
+
+
+@verified_member_required
+@require_POST
+def make_journal_photo(request, entry_id, photo_id):
+    entry = get_object_or_404(
+        JournalEntry.objects.select_related("adventure"), pk=entry_id
+    )
+    if entry.adventure.owner != request.user:
+        return HttpResponseForbidden(
+            "Only the operator who owns this Journal can change its primary photo."
+        )
+    photo = get_object_or_404(Photo, pk=photo_id, journal_entry=entry)
+    if not photo.is_publicly_visible:
+        return HttpResponseForbidden(
+            "Only an approved photo can be used as the Journal photo."
+        )
+    entry.primary_photo = photo
+    entry.save(update_fields=["primary_photo", "updated_at"])
+    messages.success(request, "Journal photo updated.")
+    return redirect(_safe_next_url(request, reverse("journal_entry_detail", args=[entry.pk])))
 
 
 @verified_member_required

@@ -429,7 +429,7 @@ class PotaHunterImportWorkflowTests(TestCase):
         self.assertEqual(Adventure.objects.count(), before_adventures)
         self.assertEqual(JournalEntry.objects.count(), before_journals)
 
-    def test_journal_contact_table_renders_full_hunter_fields_and_owner_action(self):
+    def test_journal_contact_table_renders_compact_fields_and_owner_action(self):
         token = self._preview([hunter_row(
             "2026-08-01", "10:17", station="W2C", operator="K2EAG",
             worked="W5RIK", band="20M", mode="DATA (FT8)",
@@ -438,9 +438,11 @@ class PotaHunterImportWorkflowTests(TestCase):
         self.client.post(reverse("confirm_pota_hunter_log", args=[token]), {"selected": ["0"]})
         contact = JournalContact.objects.get()
         response = self.client.get(reverse("journal_entry_detail", args=[self.journal.pk]))
-        for heading in ("Station", "Operator", "Worked", "Band", "Mode", "Location", "Park", "Source", "Actions"):
+        for heading in ("Date", "Callsign", "Band", "Mode", "Location"):
             self.assertContains(response, f">{heading}<")
-        for value in ("W2C", "K2EAG", "W5RIK", "20M", "DATA (FT8)", "US-MN", "US-1234", "Pike Lake", "POTA Hunter Log"):
+        for heading in ("Station", "Operator", "Worked", "Park", "Source", "Actions"):
+            self.assertNotContains(response, f">{heading}<")
+        for value in ("W5RIK", "20M", "DATA (FT8)", "US-MN"):
             self.assertContains(response, value)
         self.assertContains(response, f'aria-label="Actions for Contact {contact.callsign}"')
         self.assertContains(response, reverse("delete_journal_contact", args=[self.journal.pk, contact.pk]))
@@ -472,7 +474,7 @@ class PotaHunterImportWorkflowTests(TestCase):
         )
         response = self.client.get(reverse("journal_entry_detail", args=[self.journal.pk]))
         self.assertContains(response, "K1MANUAL")
-        self.assertContains(response, "Manual")
+        self.assertContains(response, "—")
 
     def test_existing_reference_location_is_reused_without_duplicate(self):
         existing = Location.objects.create(
@@ -593,9 +595,8 @@ class PotaHunterImportWorkflowTests(TestCase):
         self.assertIsNone(unresolved.latitude)
         self.assertIsNone(unresolved.longitude)
         journal_detail = self.client.get(reverse("journal_entry_detail", args=[self.journal.pk]))
-        self.assertContains(journal_detail, "US-9908")
-        self.assertContains(journal_detail, "Hunter Park 8")
-        self.assertContains(journal_detail, "No Pin")
+        self.assertContains(journal_detail, "QSO’s and Contacts")
+        self.assertContains(journal_detail, "9 total")
         adventure_contacts = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
         self.assertContains(adventure_contacts, "US-9908")
         self.assertContains(adventure_contacts, "Hunter Park 8")

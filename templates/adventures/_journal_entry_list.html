@@ -1,27 +1,31 @@
 {% if journal_entries %}
-<div class="contact-table-scroll journal-list-wrap ro-scroll-table-region" role="region" aria-label="Journal entries" tabindex="0">
-    <table class="compact-contact-table ro-data-table journal-list-table">
-        <thead><tr>{% if user.is_staff %}<th scope="col" class="staff-id-column">ID</th>{% endif %}
-            <th scope="col">Date / Time</th><th scope="col">Status</th><th scope="col">Location</th><th scope="col">Journal Entry</th><th scope="col">Summary</th>
-            <th scope="col" class="center-column">Photos</th><th scope="col">Action</th>
-        </tr></thead>
-        <tbody>
-        {% for entry in journal_entries %}
-            <tr>{% if user.is_staff %}<td class="staff-id-column">{{ entry.pk }}</td>{% endif %}
-                <td class="journal-list-date"><time datetime="{{ entry.entry_at|date:'c' }}"><span>{{ entry.entry_at|date:"M j" }}</span><span>{{ entry.entry_at|date:"g:i A" }}</span></time></td>
-                <td><span class="journal-status-badge journal-status-{{ entry.status }}">{{ entry.display_status_label }}</span></td>
-                <td>{% if entry.location %}<a href="{% url 'location_detail' entry.location.pk %}">{{ entry.location.name }}</a>{% else %}—{% endif %}</td>
-                <td class="journal-list-entry"><a class="journal-list-title" href="{% url 'journal_entry_detail' entry.pk %}" title="{{ entry.title|default:'Journal Entry' }}">{{ entry.title|default:"Journal Entry" }}</a>{% if manage_journals and not entry.is_public %}<span class="visibility-badge">Private</span>{% endif %}</td>
-                <td class="journal-list-summary" title="{{ entry.body|striptags|truncatechars:300 }}">{{ entry.body|striptags|truncatechars:150 }}</td>
-                <td class="journal-list-photo-count center-column">{{ entry.photos.count }}</td>
-                <td class="journal-list-actions">
-                    <a class="primary-feature-button" href="{% url 'journal_entry_detail' entry.pk %}">View Journal</a>
-                    {% if manage_journals %}<a class="ro-small-action" href="{% url 'edit_journal_entry' entry.pk %}">Edit</a>
-                    <form method="post" action="{% url 'delete_journal_entry' entry.pk %}" onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">{% csrf_token %}<button type="submit" class="ro-small-action ro-danger-action">Delete</button></form>{% endif %}
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% if dashboard_layout %}
+<div class="adventure-journal-card-list">
+{% for entry in journal_entries %}
+  <article class="adventure-journal-row">
+    <div class="adventure-journal-row-main">
+      <a class="adventure-journal-row-title" href="{% url 'journal_entry_detail' entry.pk %}">{{ entry.title|default:"Journal Entry" }}</a>
+      <div class="adventure-journal-row-meta">
+        <time datetime="{{ entry.entry_at|date:'Y-m-d' }}">{{ entry.entry_at|date:"M j, Y" }}</time>
+        <span>{% if entry.location %}{{ entry.location.name }}{% else %}Location not specified{% endif %}</span>
+        <span class="journal-status-badge journal-status-{{ entry.status }}">{{ entry.display_status_label }}</span>
+        {% if manage_journals and not entry.is_public %}<span class="visibility-badge">Private</span>{% endif %}
+      </div>
+    </div>
+    <dl class="adventure-journal-row-counts">
+      <div><dt>Contacts</dt><dd>{{ entry.dashboard_contact_count }}</dd></div>
+      <div><dt>Photos</dt><dd>{{ entry.dashboard_photo_count }}</dd></div>
+    </dl>
+    {% if manage_journals %}<details class="ro-action-menu adventure-journal-row-menu"><summary aria-label="Actions for {{ entry.title|default:'Journal Entry' }}" aria-expanded="false">•••</summary><div class="ro-action-menu-panel"><a href="{% url 'edit_journal_entry' entry.pk %}">Edit Journal</a><form method="post" action="{% url 'delete_journal_entry' entry.pk %}" onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">{% csrf_token %}<button type="submit" class="danger-menu-item">Delete Journal</button></form></div></details>{% endif %}
+  </article>
+{% endfor %}
 </div>
+{% else %}
+<div class="contact-table-scroll journal-list-wrap ro-scroll-table-region" role="region" aria-label="Journal entries" tabindex="0">
+  <table class="compact-contact-table ro-data-table journal-list-table">
+    <thead><tr>{% if user.is_staff %}<th scope="col" class="staff-id-column">ID</th>{% endif %}<th scope="col">Date</th><th scope="col">Status</th><th scope="col">Location</th><th scope="col">Journal Entry</th><th scope="col">Summary</th><th scope="col" class="center-column">Photos</th><th scope="col">Action</th></tr></thead>
+    <tbody>{% for entry in journal_entries %}<tr>{% if user.is_staff %}<td class="staff-id-column">{{ entry.pk }}</td>{% endif %}<td class="journal-list-date"><time datetime="{{ entry.entry_at|date:'Y-m-d' }}">{{ entry.entry_at|date:"M j, Y" }}</time></td><td><span class="journal-status-badge journal-status-{{ entry.status }}">{{ entry.display_status_label }}</span></td><td>{% if entry.location %}<a href="{% url 'location_detail' entry.location.pk %}">{{ entry.location.name }}</a>{% else %}—{% endif %}</td><td class="journal-list-entry"><a class="journal-list-title" href="{% url 'journal_entry_detail' entry.pk %}">{{ entry.title|default:"Journal Entry" }}</a></td><td class="journal-list-summary">{{ entry.body|striptags|truncatechars:150 }}</td><td class="journal-list-photo-count center-column">{{ entry.photos.count }}</td><td class="journal-list-actions"><a class="primary-feature-button" href="{% url 'journal_entry_detail' entry.pk %}">View Journal</a>{% if manage_journals %}<a class="ro-small-action" href="{% url 'edit_journal_entry' entry.pk %}">Edit</a>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
 {% else %}<div class="location-card journal-list-empty">No journal entries yet.</div>{% endif %}

@@ -1,56 +1,64 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{{ adventure.title }} | Radio Outdoors{% endblock %}
-{% block body_class %}interior-page adventure-story-page{% endblock %}
+{% block body_class %}interior-page adventure-story-page adventure-dashboard-page{% endblock %}
 {% block content %}
-<section class="content">
-{% if can_manage_adventure %}<div class="view-page-toolbar"><a href="{% url 'my_adventures' %}" class="back-link-button">← Back to My Adventures</a></div>{% endif %}
+<section class="content adventure-dashboard">
+  <div class="adventure-dashboard-toolbar">
+    {% if can_manage_adventure %}<a href="{% url 'my_adventures' %}" class="back-link-button">← Back to My Adventures</a>{% endif %}
+    <div class="adventure-dashboard-actions">
+      {% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">+ Add Journal Entry</a>{% endif %}
+      {% if can_manage_adventure %}<details class="ro-action-menu"><summary aria-label="Adventure actions" aria-expanded="false">•••</summary><div class="ro-action-menu-panel"><a href="{% url 'edit_adventure' adventure.slug %}">Edit Adventure</a>{% if contact_count %}<a href="{% url 'adventure_import_contacts' adventure.slug %}">Import Contacts</a>{% endif %}<form method="post" action="{% url 'delete_adventure' adventure.slug %}" onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');">{% csrf_token %}<button type="submit" class="danger-menu-item">Delete Adventure</button></form></div></details>{% endif %}
+    </div>
+  </div>
 
-<div class="adventure-detail-heading">
-<div class="adventure-detail-copy">
-<p>{% include "adventures/_status_control.html" %} <span class="adventure-status-updated">Updated {{ adventure.updated_at|timesince }} ago</span></p>
-<h1>{{ adventure.title }}{% include "partials/_staff_record_id.html" with object=adventure label="Adventure ID" %}</h1>
-<div class="compact-meta-row">
-<span>{{ adventure.started_at|date:"F j, Y" }}</span>
-<span class="member-attribution">{% if adventure.owner.member_profile.profile_is_public and adventure.owner.member_profile.public_profile_photo_url %}<img src="{{ adventure.owner.member_profile.public_profile_photo_url }}" alt="" class="member-profile-photo member-profile-photo-inline">{% else %}<img src="{% static 'images/radiooutdoors-logo-white.png' %}" alt="" class="member-profile-photo member-profile-photo-inline member-profile-photo-placeholder">{% endif %}{{ adventure.owner.member_profile.callsign|default:adventure.owner }}</span>
-{% if can_manage_adventure %}<form method="post" action="{% url 'toggle_adventure_visibility' adventure.slug %}" class="inline-visibility-form">{% csrf_token %}<button type="submit" class="inline-visibility-control" title="Click to make this Adventure {% if adventure.is_public %}private{% else %}public{% endif %}">{% if adventure.is_public %}Public{% else %}Private{% endif %}</button></form>{% else %}<span class="visibility-label">{% if adventure.is_public %}Public{% else %}Private{% endif %}</span>{% endif %}
-</div>
-<p><strong>Locations:</strong> Set by each Journal and shown on the Adventure map below.</p>
-<p><strong>Operating as:</strong> {{ adventure.operating_callsign }}{% if adventure.operating_identity_name %} — {{ adventure.operating_identity_name }}{% endif %}</p>
-<p><strong>Adventure managed by:</strong> {{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</p>
-{% if adventure.operating_callsign_type != 'personal' %}<p><strong>Operating Callsign Type:</strong> {{ adventure.get_operating_callsign_type_display }}{% if adventure.operating_start_date %} · {{ adventure.operating_start_date|date:"M j, Y" }}{% if adventure.operating_end_date %}–{{ adventure.operating_end_date|date:"M j, Y" }}{% endif %}{% endif %}{% if adventure.operating_callsign_url %} · <a href="{{ adventure.operating_callsign_url }}" rel="noopener noreferrer">Event reference</a>{% endif %}</p>{% endif %}
-<div class="ro-page-actions">
-{% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">Add Journal Entry</a>{% if contact_count %}<a href="{% url 'adventure_import_contacts' adventure.slug %}" class="button-secondary-dark">Import Contacts</a>{% endif %}<a href="{% url 'edit_adventure' adventure.slug %}" class="ro-small-action">Edit Adventure</a><form method="post" action="{% url 'delete_adventure' adventure.slug %}" onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');">{% csrf_token %}<button type="submit" class="ro-small-action ro-danger-action">Delete Adventure</button></form>{% endif %}
-</div>
-</div>
-<figure class="adventure-cover-frame">
-{% if display_cover_photo %}<img src="{{ display_cover_photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="Cover for {{ adventure.title }}" class="adventure-cover-image">{% else %}<img src="{% static 'images/hero.jpg' %}" alt="Radio Outdoors landscape" class="adventure-cover-image adventure-cover-image-generic">{% endif %}
-</figure>
-</div>
+  <section class="adventure-dashboard-card adventure-dashboard-hero">
+    <div class="adventure-dashboard-intro">
+      <div class="adventure-dashboard-title-row">
+        <h1>{{ adventure.title }}{% include "partials/_staff_record_id.html" with object=adventure label="Adventure ID" %}</h1>
+        <span class="adventure-dashboard-state">{{ adventure.display_status_label }} / {% if adventure.is_public %}Public{% else %}Private{% endif %}</span>
+      </div>
+      <div class="adventure-dashboard-meta">
+        <span><strong>Operator:</strong> {{ adventure.operating_callsign|default:adventure.owner.member_profile.callsign|default:adventure.owner.username }}</span>
+        <span><strong>Date:</strong> {{ adventure.started_at|date:"F j, Y" }}</span>
+        <span><strong>Managed by:</strong> {{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</span>
+      </div>
+      {% if adventure.location and not can_view_adventure_location %}<p class="private-location-badge">Private Location</p><p>Contact paths are hidden because this Adventure uses a Private Location.</p>{% endif %}
+      {% if adventure.summary %}<div class="adventure-summary-clamp" data-summary-clamp><div class="adventure-summary-text" data-summary-text>{{ adventure.summary|linebreaksbr }}</div><button type="button" class="adventure-summary-toggle" data-summary-toggle aria-expanded="false" hidden>More</button></div>{% endif %}
+      {% if can_manage_adventure %}<div class="adventure-dashboard-quick-controls">{% include "adventures/_status_control.html" %}<form method="post" action="{% url 'toggle_adventure_visibility' adventure.slug %}" class="inline-visibility-form">{% csrf_token %}<button type="submit" class="inline-visibility-control">Make {% if adventure.is_public %}Private{% else %}Public{% endif %}</button></form></div>{% endif %}
+    </div>
+    <figure class="adventure-dashboard-cover adventure-cover-frame{% if adventure.location and adventure.location.photo and not display_cover_photo %} location-cover-frame{% endif %}">
+      {% if display_cover_photo %}<img src="{{ display_cover_photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="Cover for {{ adventure.title }}" class="adventure-cover-image">{% else %}<img src="{% static 'images/hero.jpg' %}" alt="Radio Outdoors landscape" class="adventure-cover-image adventure-cover-image-generic">{% endif %}
+    </figure>
+  </section>
 
-<div class="adventure-story-stats" aria-label="Adventure activity summary">
-{% if journal_entries %}<a class="adventure-summary-card" href="#journal-entries"><strong>{{ journal_entries|length }}</strong><span>Journals</span><small>View Journals</small></a>{% elif can_manage_journals %}<a class="adventure-summary-card" href="{% url 'add_journal_entry' adventure.slug %}"><strong>0</strong><span>Journals</span><small>Add First Journal</small></a>{% else %}<div class="adventure-summary-card adventure-summary-card-static"><strong>0</strong><span>Journals</span></div>{% endif %}
-{% if contact_count %}<a class="adventure-summary-card" href="{% url 'adventure_contacts' adventure.slug %}"><strong>{{ contact_count }}</strong><span>Contacts</span><small>View Contacts</small></a>{% elif can_manage_adventure %}<a class="adventure-summary-card" href="{% url 'adventure_import_contacts' adventure.slug %}"><strong>0</strong><span>Contacts</span><small>Import Contacts</small></a>{% else %}<div class="adventure-summary-card adventure-summary-card-static"><strong>0</strong><span>Contacts</span></div>{% endif %}
-{% if adventure_photos %}<a class="adventure-summary-card" href="#adventure-photos"><strong>{{ adventure_photos|length }}</strong><span>Photos</span><small>View Photos</small></a>{% elif can_manage_journals %}<a class="adventure-summary-card" href="{{ photo_add_url }}"><strong>0</strong><span>Photos</span><small>Add Photos</small></a>{% else %}<div class="adventure-summary-card adventure-summary-card-static"><strong>0</strong><span>Photos</span></div>{% endif %}
-</div>
-{% if adventure.summary %}<section class="adventure-overview-card"><h2>Adventure Summary</h2><div>{{ adventure.summary|linebreaks }}</div></section>{% endif %}
-{% if adventure.pota_import %}<section class="adventure-overview-card"><h2>POTA activation import{% if user.is_staff %}<small class="staff-record-id">Activation ID {{ adventure.pota_import.pk }}</small><small class="staff-record-id">Batch ID {{ adventure.pota_import.batch_id }}</small>{% endif %}</h2><dl><dt>Park</dt><dd>{{ adventure.pota_import.park_reference }} — {{ adventure.pota_import.park_name }}</dd><dt>Activation date</dt><dd>{{ adventure.pota_import.activation_date }}</dd><dt>Operating callsign</dt><dd>{{ adventure.pota_import.callsign }}</dd><dt>Contacts</dt><dd>{{ adventure.pota_import.total_contacts }} total (CW {{ adventure.pota_import.cw_contacts }}, data {{ adventure.pota_import.data_contacts }}, phone {{ adventure.pota_import.phone_contacts }})</dd><dt>Location review</dt><dd>{{ adventure.pota_import.get_location_resolution_display }}</dd></dl></section>{% endif %}
-{% if journal_location_map_data %}
-  <section class="single-location-map-card embedded-detail-map-layout adventure-journal-map-layout"><div class="embedded-map-information"><p class="single-location-map-kicker">Journal Locations</p><h2>Adventure Map</h2><p>Each pin is the exact operating position saved with that Journal. Select a pin to open its Journal.</p><p><strong>{{ journal_location_map_data|length }}</strong> Journal Location pin{{ journal_location_map_data|length|pluralize }} shown.</p></div><div id="adventure-journal-map" class="single-location-map"></div>{{ journal_location_map_data|json_script:"adventure-journal-map-data" }}</section>
-  <script>window.initAdventureJournalMap=function(){const el=document.getElementById("adventure-journal-map"),data=document.getElementById("adventure-journal-map-data");if(!el||!data||!window.google)return;const points=JSON.parse(data.textContent),positions=points.map(p=>({lat:p.latitude,lng:p.longitude})),map=new google.maps.Map(el,{minZoom:2,mapTypeControl:true,streetViewControl:false,fullscreenControl:true});points.forEach((p,index)=>{const marker=new google.maps.Marker({position:positions[index],map:map,title:p.name});const info=new google.maps.InfoWindow({content:"<strong>"+p.name+"</strong><br><a href='"+p.url+"'>"+p.journal+"</a><br>"+(p.status==="completed"?"Complete":"Open")});marker.addListener("click",()=>info.open({anchor:marker,map:map}));});radioOutdoorsFitMap(map,positions,32,14);};</script>
-{% endif %}
-{% include "adventures/_contact_map.html" with embedded_map_layout=True %}
-<section id="journal-entries" class="adventure-journal-section"><div class="adventure-journal-heading"><div><p class="adventure-journal-kicker">The pages of this Adventure</p><h2>Adventure Journal</h2></div>{% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">Add Journal Entry</a>{% endif %}</div>
-{% include "adventures/_journal_entry_list.html" with manage_journals=can_manage_adventure %}</section>
-{% if adventure.lessons_learned %}<section class="adventure-lessons-card"><h2>Lessons Learned</h2><div>{{ adventure.lessons_learned|linebreaks }}</div></section>{% endif %}
-{% if adventure_photos %}<section id="adventure-photos" class="adventure-photo-story-section"><div class="story-section-heading"><p class="section-kicker">Scenes from the Adventure</p><h2>Photos</h2></div><div class="journal-photo-grid adventure-photo-masonry">
-{% for photo in adventure_photos %}{% if photo.is_publicly_visible %}<figure class="journal-photo journal-photo-manage"><button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'Adventure photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}<p class="photo-source-journal">Journal: {{ photo.journal_entry.title|default:"Journal Entry" }}</p>{% if can_manage_adventure %}<div class="photo-actions">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span class="cover-photo-control-current">Adventure Cover</span>{% else %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Cover</button></form>{% endif %}</div>{% endif %}</figure>{% endif %}{% endfor %}
-</div></section>{% endif %}
+  <div class="adventure-dashboard-grid">
+    <section class="adventure-dashboard-card adventure-dashboard-map-card embedded-detail-map-layout adventure-journal-map-layout">
+      <h2>Adventure Map</h2>
+      {% if journal_location_map_data %}<div id="adventure-journal-map" class="adventure-dashboard-map" aria-label="Map of Journal Locations"></div><a class="adventure-map-full-link" href="{% url 'map_explorer' %}">View Full Map <span aria-hidden="true">↗</span></a>{{ journal_location_map_data|json_script:"adventure-journal-map-data" }}
+      <script>window.initAdventureJournalMap=function(){const el=document.getElementById("adventure-journal-map"),data=document.getElementById("adventure-journal-map-data");if(!el||!data||!window.google)return;const points=JSON.parse(data.textContent),positions=points.map(p=>({lat:p.latitude,lng:p.longitude})),styles=[{featureType:"poi",stylers:[{visibility:"off"}]},{featureType:"transit",stylers:[{visibility:"off"}]},{featureType:"road",elementType:"labels.icon",stylers:[{visibility:"off"}]},{featureType:"administrative",elementType:"labels",stylers:[{visibility:"simplified"}]},{featureType:"landscape",stylers:[{saturation:-55},{lightness:18}]},{featureType:"water",stylers:[{saturation:-45},{lightness:20}]}],map=new google.maps.Map(el,{minZoom:2,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,gestureHandling:"cooperative",styles:styles});points.forEach((p,index)=>{const marker=new google.maps.Marker({position:positions[index],map:map,title:p.name});const info=new google.maps.InfoWindow({content:"<strong>"+p.name+"</strong><br><a href='"+p.url+"'>"+p.journal+"</a>"});marker.addListener("click",()=>info.open({anchor:marker,map:map}));});if(positions.length===1){map.setCenter(positions[0]);map.setZoom(14);}else{radioOutdoorsFitMap(map,positions,32,14);}};</script>
+      {% else %}<p class="adventure-dashboard-empty">Journal Locations will appear here when coordinates are saved.</p>{% endif %}
+    </section>
+
+    <section class="adventure-dashboard-card adventure-dashboard-contacts">
+      <div class="adventure-dashboard-section-heading"><h2>QSO’s and Contacts</h2>{% if contact_count %}<a href="{% url 'adventure_contacts' adventure.slug %}">View Contacts</a>{% elif can_manage_adventure %}<a href="{% url 'adventure_import_contacts' adventure.slug %}">Import Contacts</a>{% endif %}</div>
+      {% if contacts %}<div class="adventure-dashboard-scroll" role="region" aria-label="QSO’s and Contacts" tabindex="0"><table><thead><tr><th>Date</th><th>Callsign</th><th>Band</th><th>Mode</th><th>State</th><th>Country</th></tr></thead><tbody>{% for contact in contacts %}<tr><td>{{ contact.qso_date|date:"M j, Y" }}</td><td>{{ contact.callsign }}</td><td>{{ contact.band|default:"—" }}</td><td>{{ contact.mode|default:"—" }}</td><td>{{ contact.state|default:"—" }}</td><td>{{ contact.country|default:"—" }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="adventure-dashboard-empty">No contacts have been recorded for this Adventure.</p>{% endif %}
+    </section>
+
+    <section id="journal-entries" class="adventure-dashboard-card adventure-dashboard-journals">
+      <div class="adventure-dashboard-section-heading"><h2>Adventure Journals</h2><span>{{ journal_entry_count }} total</span></div>
+      <div class="adventure-dashboard-scroll adventure-dashboard-journal-scroll" role="region" aria-label="Adventure Journals" tabindex="0">{% include "adventures/_journal_entry_list.html" with manage_journals=can_manage_adventure dashboard_layout=True %}</div>
+    </section>
+
+    <section id="adventure-photos" class="adventure-dashboard-card adventure-dashboard-photos">
+      <div class="adventure-dashboard-section-heading"><h2>Photos</h2>{% if adventure_photos %}<span>{{ adventure_photos|length }} photo{{ adventure_photos|length|pluralize }}</span>{% elif can_manage_journals %}<a href="{{ photo_add_url }}">Add Photos</a>{% endif %}</div>
+      {% if adventure_photos %}<div class="adventure-photo-strip" role="region" aria-label="Adventure photos" tabindex="0">{% for photo in adventure_photos %}<figure class="journal-photo journal-photo-manage{% if not photo.is_publicly_visible and not user.is_staff %} adventure-photo-unapproved{% endif %}">{% if photo.is_publicly_visible or user.is_staff %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'Adventure photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% else %}<img src="{{ photo.public_thumbnail_url }}?v={{ adventure.updated_at|date:'U' }}" alt="Photo awaiting approval" class="adventure-photo-moderation-preview"><span class="adventure-photo-review-label">{{ photo.moderation_display_status }}</span>{% endif %}{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}<p class="photo-source-journal">Journal: {{ photo.journal_entry.title|default:"Journal Entry" }}</p>{% if can_manage_adventure and photo.is_publicly_visible %}<div class="photo-actions">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span class="cover-photo-control-current">Adventure Cover</span>{% else %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Cover</button></form>{% endif %}</div>{% endif %}</figure>{% endfor %}</div>{% else %}<p class="adventure-dashboard-empty">No photos have been added yet.</p>{% endif %}
+    </section>
+  </div>
+  {% if adventure.lessons_learned %}<section class="adventure-dashboard-card adventure-dashboard-lessons"><h2>Lessons Learned</h2><div>{{ adventure.lessons_learned|linebreaks }}</div></section>{% endif %}
 </section>
 {% endblock %}
 {% block extra_scripts %}
-{% if single_location_map_data or journal_location_map_data %}
-<script src="{% static 'js/single-location-map.js' %}?v=002"></script>
-{% if google_maps_api_key %}<script>window.initAdventureMaps=function(){if(window.initRadioOutdoorsSingleLocationMaps)window.initRadioOutdoorsSingleLocationMaps();if(window.initAdventureJournalMap)window.initAdventureJournalMap();};</script><script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventureMaps"></script>{% endif %}
-{% endif %}
+<script src="{% static 'js/adventure-dashboard.js' %}?v=001"></script>
+{% if journal_location_map_data %}<script src="{% static 'js/single-location-map.js' %}?v=002"></script>{% if google_maps_api_key %}<script>window.initAdventureMaps=function(){if(window.initAdventureJournalMap)window.initAdventureJournalMap();};</script><script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventureMaps"></script>{% endif %}{% endif %}
 {% endblock %}

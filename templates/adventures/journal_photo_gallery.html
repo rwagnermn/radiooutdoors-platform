@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Photos — {{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page journal-story-page{% endblock %}
+{% block content %}
+<section class="content journal-photo-gallery-page">
+  <p><a href="{% url 'journal_entry_detail' entry.pk %}" class="back-link-button">← Back to Journal Detail</a></p>
+  <header><h1>{{ entry.title|default:"Journal Entry" }} Photos</h1><p>Adventure: <a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></p></header>
+  {% if journal_photos %}<div class="journal-photo-gallery-grid">{% for photo in journal_photos %}<figure class="journal-photo-gallery-item">{% if photo.is_publicly_visible or can_review_photos %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Journal photo' }}" aria-label="View {{ photo.caption|default:'Journal photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Journal photo' }}"></button>{% else %}<img src="{{ photo.public_thumbnail_url }}?v={{ entry.updated_at|date:'U' }}" alt="Photo awaiting approval" class="journal-photo-blurred"><span class="journal-photo-review-label">{{ photo.moderation_display_status }}</span>{% endif %}{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}</figure>{% endfor %}</div>{% else %}<p class="journal-panel-empty">No photos are available for this Journal.</p>{% endif %}
+</section>
+{% endblock %}

@@ -380,14 +380,16 @@ class PotaImportEntryPointTests(TestCase):
         self.assertEqual(str(location.latitude), "46.123456")
         self.assertEqual(str(location.longitude), "-92.654321")
 
-        for response in (
-            self.client.get(adventure.get_absolute_url()),
-            self.client.get(reverse("location_detail", args=[location.pk])),
-        ):
-            self.assertContains(response, "data-single-location-map", count=1)
-            self.assertContains(response, '"latitude": 46.123456')
-            self.assertContains(response, '"longitude": -92.654321')
-            self.assertContains(response, 'aria-busy="true"')
+        adventure_response = self.client.get(adventure.get_absolute_url())
+        self.assertContains(adventure_response, 'id="adventure-journal-map"', count=1)
+        self.assertContains(adventure_response, '"latitude": 46.123456')
+        self.assertContains(adventure_response, '"longitude": -92.654321')
+
+        location_response = self.client.get(reverse("location_detail", args=[location.pk]))
+        self.assertContains(location_response, "data-single-location-map", count=1)
+        self.assertContains(location_response, '"latitude": 46.123456')
+        self.assertContains(location_response, '"longitude": -92.654321')
+        self.assertContains(location_response, 'aria-busy="true"')
 
     def test_no_selection_returns_to_preview_with_meaningful_error(self):
         self.client.force_login(self.user)

@@ -1,0 +1,18 @@
+<div class="adventure-book-filter-shell">
+  <nav class="adventure-book-mode-tabs" aria-label="Adventure views">
+    {% if user.is_authenticated %}<a href="{% url 'my_adventures' %}"{% if book_mode == 'mine' %} aria-current="page"{% endif %}>My Adventures</a>{% endif %}
+    <a href="{% url 'all_adventures' %}"{% if book_mode == 'public' %} aria-current="page"{% endif %}>Public Adventures</a>
+  </nav>
+  <form method="get" class="adventure-book-panel-filters">
+    <fieldset class="adventure-book-status-tabs"><legend class="visually-hidden">Adventure status</legend>
+      <label><input type="radio" name="activity" value=""{% if not selected_activity %} checked{% endif %}><span>All Status</span></label>
+      <label><input type="radio" name="activity" value="open"{% if selected_activity == 'open' %} checked{% endif %}><span>Open</span></label>
+      <label><input type="radio" name="activity" value="complete"{% if selected_activity == 'complete' %} checked{% endif %}><span>Complete</span></label>
+    </fieldset>
+    <label class="adventure-book-location-filter"><span class="visually-hidden">Location</span><select name="place"><option value="">All Locations</option>{% for location in locations %}<option value="{{ location.pk }}"{% if selected_place == location.pk|stringformat:'s' %} selected{% endif %}>{{ location.name }}</option>{% endfor %}</select></label>
+    <label class="adventure-book-search-filter"><span class="visually-hidden">Search Adventures</span><input type="search" name="q" value="{{ search }}" placeholder="Search Adventures"></label>
+    {% if selected_state %}<input type="hidden" name="state" value="{{ selected_state }}">{% endif %}
+    {% if selected_sort %}<input type="hidden" name="sort" value="{{ selected_sort }}">{% endif %}
+    <button type="submit" class="ro-small-action adventure-book-apply">Apply Filters</button>
+  </form>
+</div>

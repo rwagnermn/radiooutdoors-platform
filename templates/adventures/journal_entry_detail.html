@@ -1,144 +1,52 @@
 {% extends "base.html" %}{% load static %}
 {% block title %}{{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
-{% block body_class %}interior-page journal-story-page{% if contact_count %} contacts-page{% endif %}{% endblock %}
+{% block body_class %}interior-page journal-story-page journal-dashboard-page{% endblock %}
 {% block content %}
-<section class="content"><article class="journal-entry-view">
-<div class="journal-view-heading">
-<div class="journal-heading-main">
-<p><a href="{{ adventure.get_absolute_url }}#journal-entries" class="back-to-journal-link">← Back to Adventure</a></p>
-<p class="journal-adventure-name">{{ adventure.title }}</p>
-<div class="compact-meta-row">
-<span>{{ entry.entry_at|date:"F j, Y — g:i A" }}</span>
-<span class="journal-status-badge journal-status-{{ entry.status }}">{{ entry.display_status_label }}</span>
-<span><strong>Operating as:</strong> {{ entry.operating_callsign }}</span>
+<section class="content journal-dashboard">
+  <div class="journal-dashboard-toolbar">
+    <a href="{{ adventure.get_absolute_url }}#journal-entries" class="back-link-button">← Back to Adventure</a>
+    <div class="journal-dashboard-actions">
+      {% if can_edit_journal %}<a href="{% url 'edit_journal_entry' entry.pk %}" class="button-primary">Edit Journal</a>{% endif %}
+      {% if can_edit_journal %}<details class="ro-action-menu"><summary aria-label="Journal actions" aria-expanded="false">•••</summary><div class="ro-action-menu-panel"><form method="post" action="{% url 'toggle_journal_visibility' entry.pk %}">{% csrf_token %}<button type="submit">Make {% if entry.is_public %}Private{% else %}Public{% endif %}</button></form><form method="post" action="{% url 'delete_journal_entry' entry.pk %}" onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">{% csrf_token %}<button type="submit" class="danger-menu-item">Delete Journal</button></form></div></details>{% endif %}
+    </div>
+  </div>
 
-{% if user == adventure.owner and is_verified_member %}
-<form
-    method="post"
-    action="{% url 'toggle_journal_visibility' entry.pk %}"
-    class="inline-visibility-form"
->
-    {% csrf_token %}
-    <button
-        type="submit"
-        class="inline-visibility-control"
-        title="Click to make this Journal {% if entry.is_public %}private{% else %}public{% endif %}"
-    >
-        {% if entry.is_public %}Public{% else %}Private{% endif %}
-    </button>
-</form>
-{% else %}
-<span class="visibility-label">
-    {% if entry.is_public %}Public{% else %}Private{% endif %}
-</span>
-{% endif %}
-</div>
-<h1>{{ entry.title|default:"Journal Entry" }}{% include "partials/_staff_record_id.html" with object=entry label="Journal ID" %}</h1>
-</div>
-{% if user == adventure.owner and is_verified_member %}
-<div class="journal-heading-actions">
-{% if can_view_journal_location and entry.location %}<a href="{% url 'location_detail' entry.location.pk %}" class="button-primary">View Location &amp; Amenities</a>{% endif %}
-<a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a>
-<a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}" class="button-secondary-dark">Import POTA Hunter Log</a>
-<a href="{% url 'import_adif' entry.pk %}" class="button-secondary-dark">Import Contacts</a>
-<a href="{% url 'edit_journal_entry' entry.pk %}" class="ro-small-action">Edit Journal</a>
-<form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
-onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">
-{% csrf_token %}
-<button type="submit" class="ro-small-action ro-danger-action">Delete Journal</button>
-</form>
-</div></div>
-{% elif user.is_staff %}
-<div class="journal-heading-actions">
-{% if can_view_journal_location and entry.location %}<a href="{% url 'location_detail' entry.location.pk %}" class="button-primary">View Location &amp; Amenities</a>{% endif %}<a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a></div></div>
-{% endif %}
-</div>
+  <section class="journal-dashboard-panel journal-summary-panel">
+    <div class="journal-summary-copy">
+      <div class="journal-summary-title-row"><h1>{{ entry.title|default:"Journal Entry" }}{% include "partials/_staff_record_id.html" with object=entry label="Journal ID" %}</h1><span class="journal-dashboard-state">{{ entry.display_status_label }} / {% if entry.is_public %}Public{% else %}Private{% endif %}</span></div>
+      <div class="journal-summary-meta">
+        <span><strong>Location:</strong> {% if can_view_journal_location and entry.location %}{{ entry.location.name }}{% elif entry.location %}Private Location{% else %}Not specified{% endif %}</span>
+        <span><strong>Operator:</strong> {{ entry.operating_callsign|default:adventure.operating_callsign }}</span>
+        <span><strong>Date:</strong> {{ entry.entry_at|date:"F j, Y" }}</span>
+      </div>
+      <p class="journal-adventure-reference"><strong>Adventure:</strong> {% if adventure %}{% if can_view_adventure %}<a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a>{% else %}{{ adventure.title }}{% endif %}{% else %}Not assigned{% endif %}</p>
+    </div>
+    <figure class="journal-primary-photo">
+      {% if primary_journal_photo %}{% if primary_journal_photo.is_publicly_visible or can_review_photos %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ primary_journal_photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" data-full-alt="{{ primary_journal_photo.caption|default:'Primary Journal photo' }}" aria-label="View primary Journal photo at original size"><img src="{{ primary_journal_photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" alt="{{ primary_journal_photo.caption|default:'Primary Journal photo' }}"></button>{% else %}<img src="{{ primary_journal_photo.public_thumbnail_url }}?v={{ entry.updated_at|date:'U' }}" alt="Photo awaiting approval" class="journal-photo-blurred"><span class="journal-photo-review-label">{{ primary_journal_photo.moderation_display_status }}</span>{% endif %}{% else %}<img src="{% static 'images/hero.jpg' %}" alt="Radio Outdoors landscape">{% endif %}
+    </figure>
+  </section>
 
-{% if entry.location %}<section class="journal-view-section"><h2>Journal Location — {{ entry.location.name }}</h2>
-{% url 'location_detail' entry.location.pk as journal_location_detail_path %}{% include "partials/single_location_map.html" with map_id="journal-location-map" map_data_id="journal-location-map-data" map_heading="Journal Location" map_kicker="Where this Journal happened" location_detail_url=journal_location_detail_path show_missing_pin=can_edit_journal_pin embedded_map_layout=True %}
-</section>{% endif %}
+  <div class="journal-dashboard-grid">
+    <section class="journal-dashboard-panel journal-location-panel">
+      <div class="journal-panel-heading"><h2>Journal Location</h2>{% if can_view_journal_location and entry.location %}<a href="{% url 'location_detail' entry.location.pk %}">View Location &amp; Amenities</a>{% endif %}</div>
+      {% if single_location_map_data %}<div id="journal-detail-map" class="journal-detail-map" aria-label="Journal Location map"></div>{{ single_location_map_data|json_script:"journal-detail-map-data" }}<script>window.initJournalDetailMap=function(){const el=document.getElementById("journal-detail-map"),data=document.getElementById("journal-detail-map-data");if(!el||!data||!window.google)return;const point=JSON.parse(data.textContent),position={lat:point.latitude,lng:point.longitude},styles=[{featureType:"poi",stylers:[{visibility:"off"}]},{featureType:"transit",stylers:[{visibility:"off"}]},{featureType:"road",elementType:"labels.icon",stylers:[{visibility:"off"}]},{featureType:"administrative",elementType:"labels",stylers:[{visibility:"simplified"}]},{featureType:"landscape",stylers:[{saturation:-55},{lightness:18}]},{featureType:"water",stylers:[{saturation:-45},{lightness:20}]}],map=new google.maps.Map(el,{center:position,zoom:14,minZoom:2,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,gestureHandling:"cooperative",styles:styles}),marker=new google.maps.Marker({position:position,map:map,title:point.name});const info=new google.maps.InfoWindow({content:"<strong>"+point.name+"</strong>"});marker.addListener("click",()=>info.open({anchor:marker,map:map}));};</script>{% elif entry.location %}<p class="journal-panel-empty">{% if can_view_journal_location %}No map pin has been saved for this Journal.{% else %}This Journal uses a Private Location.{% endif %}</p>{% else %}<p class="journal-panel-empty">No Location has been saved for this Journal.</p>{% endif %}
+    </section>
 
-<section class="journal-notes-view"><h2>Journal Notes</h2>{{ entry.body|linebreaks }}</section>
+    <section class="journal-dashboard-panel journal-contacts-panel">
+      <div class="journal-panel-heading"><h2>QSO’s and Contacts</h2><span>{{ contact_count }} total</span></div>
+      {% if can_manage_contacts %}<div class="journal-contact-actions-top"><a href="{% url 'add_journal_contact' entry.pk %}">Add Contact</a><a href="{% url 'import_adif' entry.pk %}">Import Contacts</a><a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}">Import POTA Hunter Log</a></div>{% endif %}
+      {% if contacts %}<div class="journal-dashboard-scroll" role="region" aria-label="Journal contacts" tabindex="0"><table class="journal-dashboard-contact-table"><thead><tr><th>Date</th><th>Callsign</th><th>Band</th><th>Mode</th><th>Location</th></tr></thead><tbody>{% for contact in contacts %}<tr><td>{{ contact.qso_date|date:"M j, Y" }}</td><td><strong>{{ contact.callsign }}</strong>{% if contact.is_p2p %} <span class="pota-p2p-badge">P2P</span>{% endif %}{% if can_edit_journal %}<details class="ro-action-menu journal-contact-row-menu"><summary aria-label="Actions for Contact {{ contact.callsign }}" aria-expanded="false">•••</summary><div class="ro-action-menu-panel"><form method="post" action="{% url 'delete_journal_contact' entry.pk contact.pk %}" onsubmit="return confirm('Delete this Contact?');">{% csrf_token %}<button type="submit" class="danger-menu-item">Delete</button></form></div></details>{% endif %}</td><td>{{ contact.band|default:"—" }}</td><td>{{ contact.mode|default:"—" }}{% if contact.submode %} ({{ contact.submode }}){% endif %}</td><td>{{ contact.location_label|default:"—" }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="journal-panel-empty">No Contacts have been added to this Journal yet.</p>{% endif %}
+    </section>
 
-{% if entry.photos.all %}
-<section class="journal-view-section"><h2>Photos</h2><div class="journal-photo-grid journal-view-photos">
-{% for photo in entry.photos.all %}<figure class="journal-photo">
-{% if photo.is_publicly_visible %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'journal photo' }} at original size">
-<img src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% elif adventure.owner == user %}<p><strong>{{ photo.moderation_display_status }}</strong>{% if photo.automated_decision == "scan_failed" %}: Automatic moderation could not be completed. The photo remains private.{% elif photo.moderation_reason %}: {{ photo.moderation_reason }}{% endif %}</p>{% endif %}
-{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}{% if photo.is_publicly_visible and user == adventure.owner and is_verified_member %}<div class="photo-actions">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span class="cover-photo-control-current">Adventure Cover</span>{% else %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Cover</button></form>{% endif %}</div>{% endif %}</figure>{% endfor %}
-</div></section>
-{% endif %}
+    <section class="journal-dashboard-panel journal-notes-panel">
+      <h2>Journal Notes</h2><div class="journal-dashboard-scroll journal-notes-scroll" role="region" aria-label="Journal Notes" tabindex="0">{{ entry.body|linebreaks }}</div>
+    </section>
 
-<section class="journal-view-section"><h2>Contacts — {{ contact_count }}</h2>
-{% if can_manage_contacts %}<p class="ro-page-actions"><a href="{% url 'add_journal_contact' entry.pk %}" class="button-primary">Add Contact</a> <a href="{% url 'import_pota_hunter_log' %}?journal_entry={{ entry.pk }}" class="button-secondary-dark">Import POTA Hunter Log</a></p>{% endif %}
-{% if contact_count %}
-{% include "adventures/_contact_map.html" with embedded_map_layout=True %}
-<div class="contact-summary-grid">
-<div><strong>{{ contact_count }}</strong><span>Contacts</span></div>
-<div><strong>{{ state_count }}</strong><span>States / Provinces</span></div>
-<div><strong>{{ country_count }}</strong><span>Countries</span></div>
-<div><strong>{% if longest_contact %}{{ longest_contact.callsign }} · {{ longest_contact.distance_miles }} mi{% else %}—{% endif %}</strong><span>Longest Contact</span></div>
-</div>
-<details class="contact-details"><summary>Show {{ contact_count }} Contact{{ contact_count|pluralize }}</summary>
-<form method="post" action="{% url 'delete_selected_contacts' entry.pk %}" id="contact-delete-form" onsubmit="return confirmContactDelete();">
-{% csrf_token %}
-<div class="contact-toolbar">
-<input id="contact-search" class="contact-search" type="search" placeholder="Find callsign or place">
-{% if user == adventure.owner and is_verified_member %}
-<button type="button" id="select-visible-contacts">Select Visible</button>
-<button type="button" id="clear-contact-selection">Clear</button>
-<button type="submit" id="delete-selected-contacts" class="contact-delete-button" disabled>Delete Selected</button>
-{% endif %}
-</div>
-<div class="contact-table-scroll journal-contact-table-scroll ro-scroll-table-region" role="region" aria-label="Journal contacts" tabindex="0"><table id="journal-contact-table" class="compact-contact-table journal-contact-table ro-data-table">
-<thead><tr>{% if user.is_staff %}<th class="staff-id-column">ID</th>{% endif %}{% if user == adventure.owner and is_verified_member %}<th class="contact-select-column"><input type="checkbox" id="select-all-contacts"></th>{% endif %}
-<th>Date/Time</th><th>Station</th><th>Operator</th><th>Worked</th><th>Band</th><th>Mode</th><th>Location</th><th>Park</th><th>Source</th><th>Actions</th></tr></thead>
-<tbody>{% for contact in contacts %}<tr>{% if user.is_staff %}<td class="staff-id-column">{{ contact.pk }}</td>{% endif %}
-{% if user == adventure.owner and is_verified_member %}<td class="contact-select-column"><input type="checkbox" name="contact_ids" value="{{ contact.pk }}" class="contact-row-checkbox"></td>{% endif %}
-<td class="journal-contact-nowrap">{{ contact.qso_date|date:"M j, Y" }} {% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% endif %}</td>
-<td class="contact-call journal-contact-nowrap">{{ contact.station_callsign|default:"—" }}</td>
-<td class="contact-call journal-contact-nowrap">{{ contact.operator_callsign|default:"—" }}</td>
-<td class="contact-call journal-contact-nowrap">{{ contact.callsign }}{% if contact.is_p2p %}<small class="pota-p2p-secondary"><span class="pota-p2p-badge">P2P</span></small>{% endif %}</td>
-<td class="journal-contact-nowrap">{{ contact.band|default:"—" }}</td>
-<td class="journal-contact-nowrap">{{ contact.mode|default:"—" }}{% if contact.submode %} ({{ contact.submode }}){% endif %}</td>
-<td class="journal-contact-nowrap">{{ contact.location_label|default:"—" }}</td>
-<td class="journal-contact-park">{% if contact.pota_park_reference %}<span class="journal-contact-nowrap">{{ contact.pota_park_reference }}</span>{% if contact.pota_park_name %} — {{ contact.pota_park_name }}{% endif %}{% if contact.has_no_pin %} — No Pin{% endif %}{% else %}—{% endif %}</td>
-<td class="journal-contact-nowrap">{{ contact.get_source_display }}</td>
-<td class="journal-contact-actions">{% if user == adventure.owner and is_verified_member %}<details class="ro-action-menu adventure-row-menu"><summary aria-label="Actions for Contact {{ contact.callsign }}" aria-expanded="false">☰</summary><div class="ro-action-menu-panel"><button type="submit" class="danger-menu-item" formaction="{% url 'delete_journal_contact' entry.pk contact.pk %}" formmethod="post" onclick="return confirm('Delete this Contact?');">Delete</button></div></details>{% else %}—{% endif %}</td>
-</tr>{% endfor %}</tbody></table></div></form></div>
-{% else %}<p>No Contacts have been added to this Journal yet.</p>{% endif %}</section>
-</article></section>
-
-<script>
-(function(){
- const table=document.getElementById("journal-contact-table");
- const search=document.getElementById("contact-search");
- if(!table||!search)return;
- const all=()=>Array.from(table.querySelectorAll(".contact-row-checkbox"));
- const visible=()=>all().filter(b=>!b.closest("tr").hidden);
- const del=document.getElementById("delete-selected-contacts");
- const update=()=>{
-  const n=all().filter(b=>b.checked).length;
-  if(del){del.disabled=n===0;del.textContent=n?"Delete Selected ("+n+")":"Delete Selected";}
- };
- search.addEventListener("input",function(){
-  const q=search.value.trim().toLowerCase();
-  table.querySelectorAll("tbody tr").forEach(r=>r.hidden=!!(q&&!r.textContent.toLowerCase().includes(q)));
-  update();
- });
- table.addEventListener("change",update);
- const sa=document.getElementById("select-all-contacts");
- if(sa)sa.addEventListener("change",()=>{visible().forEach(b=>b.checked=sa.checked);update();});
- const sv=document.getElementById("select-visible-contacts");
- if(sv)sv.addEventListener("click",()=>{visible().forEach(b=>b.checked=true);update();});
- const cl=document.getElementById("clear-contact-selection");
- if(cl)cl.addEventListener("click",()=>{all().forEach(b=>b.checked=false);update();});
- window.confirmContactDelete=function(){
-  const n=all().filter(b=>b.checked).length;
-  return n>0&&confirm("Delete "+n+" selected contact"+(n===1?"?":"s?")+"\n\nThis cannot be undone.");
- };
- update();
-})();
-</script>
+    <section class="journal-dashboard-panel journal-photos-panel">
+      <div class="journal-panel-heading"><h2>Photos</h2><div>{% if can_edit_journal %}<a href="{% url 'edit_journal_entry' entry.pk %}#journal-photo-upload">Add Photo</a>{% endif %} <span>{{ journal_photo_count }} total</span></div></div>
+      {% if journal_photos %}<div class="journal-carousel-shell"><button type="button" class="journal-carousel-arrow journal-carousel-prev" data-journal-carousel-prev aria-label="Previous Journal photos">‹</button><div class="journal-photo-carousel" data-journal-photo-carousel role="region" aria-label="Journal photos" tabindex="0">{% for photo in journal_photos %}<figure class="journal-carousel-photo{% if not photo.is_publicly_visible and not can_review_photos %} journal-photo-unapproved{% endif %}">{% if photo.is_publicly_visible or can_review_photos %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Journal photo' }}" aria-label="View {{ photo.caption|default:'Journal photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Journal photo' }}"></button>{% else %}<img src="{{ photo.public_thumbnail_url }}?v={{ entry.updated_at|date:'U' }}" alt="Photo awaiting approval" class="journal-photo-blurred"><span class="journal-photo-review-label">{{ photo.moderation_display_status }}</span>{% endif %}<div class="journal-photo-role-indicators">{% if entry.primary_photo_id == photo.pk %}<span>Journal Photo</span>{% endif %}{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span>Adventure Photo</span>{% endif %}</div>{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}{% if photo.is_publicly_visible %}<div class="journal-photo-role-actions">{% if can_edit_journal and entry.primary_photo_id != photo.pk %}<form method="post" action="{% url 'make_journal_photo' entry.pk photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Make Journal Photo</button></form>{% endif %}{% if can_manage_adventure and adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Make Adventure Photo</button></form>{% endif %}</div>{% endif %}</figure>{% endfor %}</div><button type="button" class="journal-carousel-arrow journal-carousel-next" data-journal-carousel-next aria-label="Next Journal photos">›</button></div>{% else %}<p class="journal-panel-empty">No photos have been added to this Journal.</p>{% endif %}<a class="journal-view-all-photos" href="{% url 'journal_photo_gallery' entry.pk %}">View all photos</a>
+    </section>
+  </div>
+</section>
 {% endblock %}
-{% block extra_scripts %}{% if single_location_map_data %}<script src="{% static 'js/single-location-map.js' %}?v=002"></script>{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initRadioOutdoorsSingleLocationMaps"></script>{% endif %}{% endif %}{% endblock %}
+{% block extra_scripts %}<script src="{% static 'js/journal-dashboard.js' %}?v=002"></script>{% if single_location_map_data and google_maps_api_key %}<script>window.initJournalDashboard=function(){if(window.initJournalDetailMap)window.initJournalDetailMap();};</script><script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&callback=initJournalDashboard"></script>{% endif %}{% endblock %}

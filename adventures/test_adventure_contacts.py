@@ -71,6 +71,132 @@ class AdventureContactHubTests(TestCase):
         self.assertContains(hub, "Morning Journal")
         self.assertContains(hub, "Evening Journal")
 
+    def test_dashboard_deduplicates_same_contact_across_visible_journals(self):
+        first = self.add_entry("Morning Journal")
+        second = self.add_entry("Backup Journal")
+        self.add_contact(first, "K1SAME", "same-qso")
+        self.add_contact(second, "K1SAME", "same-qso")
+
+        detail = self.client.get(self.adventure.get_absolute_url())
+
+        self.assertEqual(detail.context["contact_count"], 1)
+        self.assertContains(detail, "K1SAME", count=1)
+
+    def test_dashboard_omits_contacts_from_private_journals_for_visitors(self):
+        public_entry = self.add_entry("Public Journal", public=True)
+        private_entry = self.add_entry("Private Journal", public=False)
+        self.add_contact(public_entry, "K1VISIBLE", "visible-qso")
+        self.add_contact(private_entry, "K1HIDDEN", "hidden-qso")
+
+        detail = self.client.get(self.adventure.get_absolute_url())
+
+        self.assertContains(detail, "K1VISIBLE")
+        self.assertNotContains(detail, "K1HIDDEN")
+
+    def test_dashboard_qso_columns_use_contact_geography_without_journal_column(self):
+        entry = self.add_entry("Geography Journal")
+        contact = self.add_contact(entry, "K1GEO", "geo-qso")
+        contact.band = "20m"
+        contact.state = "Minnesota"
+        contact.country = "USA"
+        contact.save(update_fields=["band", "state", "country"])
+
+        detail = self.client.get(self.adventure.get_absolute_url())
+
+        self.assertContains(detail, "<th>State</th>", html=True)
+        self.assertContains(detail, "<th>Country</th>", html=True)
+        self.assertNotContains(detail, "<th>Journal</th>", html=True)
+        self.assertContains(detail, "Minnesota")
+        self.assertContains(detail, "USA")
+
+    def test_dashboard_journal_cards_render_details_and_viewer_counts(self):
+        location = Location.objects.create(name="Eleven Lake", created_by=self.owner)
+        entry = JournalEntry.objects.create(
+            adventure=self.adventure,
+            location=location,
+            title="Morning at Eleven Lake",
+            body="Notes",
+            status=JournalEntry.Status.COMPLETED,
+            is_public=True,
+        )
+        self.add_contact(entry, "K1COUNT", "count-qso")
+        Photo.objects.create(
+            journal_entry=entry,
+            image="adventure_photos/approved-count.jpg",
+            moderation_status=Photo.ModerationStatus.APPROVED,
+        )
+        Photo.objects.create(
+            journal_entry=entry,
+            image="adventure_photos/pending-count.jpg",
+            moderation_status=Photo.ModerationStatus.PENDING,
+        )
+
+        visitor = self.client.get(self.adventure.get_absolute_url())
+
+        self.assertContains(visitor, "Morning at Eleven Lake")
+        self.assertContains(visitor, "Eleven Lake")
+        self.assertContains(visitor, "Complete")
+        entry_row = next(item for item in visitor.context["journal_entries"] if item.pk == entry.pk)
+        self.assertEqual(entry_row.dashboard_contact_count, 1)
+        self.assertEqual(entry_row.dashboard_photo_count, 1)
+
+        self.client.force_login(self.owner)
+        owner = self.client.get(self.adventure.get_absolute_url())
+        owner_row = next(item for item in owner.context["journal_entries"] if item.pk == entry.pk)
+        self.assertEqual(owner_row.dashboard_photo_count, 2)
+
+    def test_dashboard_summary_and_map_include_accessible_compact_controls(self):
+        self.adventure.summary = "A long field report. " * 40
+        self.adventure.save(update_fields=["summary"])
+        location = Location.objects.create(
+            name="Mapped Camp", created_by=self.owner,
+            latitude="44.100000", longitude="-93.200000",
+        )
+        JournalEntry.objects.create(
+            adventure=self.adventure, location=location,
+            latitude=location.latitude, longitude=location.longitude,
+            title="Mapped Journal", body="Notes",
+        )
+        source = self.client.get(self.adventure.get_absolute_url()).content.decode()
+
+        self.assertIn("data-summary-clamp", source)
+        self.assertIn('data-summary-toggle aria-expanded="false" hidden', source)
+        self.assertIn("View Full Map", source)
+
+    def test_dashboard_uses_centered_pencil_side_panel_wrapper(self):
+        from django.conf import settings
+
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'background-image: url("../images/adventure-detail-pencil-background.png")',
+            css,
+        )
+        self.assertIn(
+            "body.adventure-dashboard-page .content.adventure-dashboard", css
+        )
+        self.assertIn("width: min(1240px, calc(100% - 560px))", css)
+        self.assertIn("max-width: 1240px", css)
+
+    def test_unapproved_dashboard_photo_is_blurred_for_owner_and_clear_for_staff(self):
+        entry = self.add_entry("Moderation Journal")
+        Photo.objects.create(
+            journal_entry=entry,
+            image="adventure_photos/pending-dashboard.jpg",
+            moderation_status=Photo.ModerationStatus.PENDING,
+        )
+
+        self.client.force_login(self.owner)
+        owner = self.client.get(self.adventure.get_absolute_url())
+        self.assertContains(owner, "adventure-photo-unapproved")
+        self.assertContains(owner, "Photo awaiting approval")
+
+        self.client.force_login(self.staff)
+        staff = self.client.get(self.adventure.get_absolute_url())
+        self.assertNotContains(staff, "adventure-photo-unapproved")
+        self.assertContains(staff, "journal-photo-viewer-trigger")
+
     def test_public_hub_preserves_existing_journal_visibility(self):
         public_entry = self.add_entry("Public Journal", public=True)
         private_entry = self.add_entry("Private Journal", public=False)
@@ -350,8 +476,8 @@ class AdventureContactHubTests(TestCase):
         self.assertNotContains(visitor, "41.123456")
         self.client.force_login(self.owner)
         owner = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(owner, "47.123456")
-        self.assertContains(owner, "41.123456")
+        self.assertNotContains(owner, "41.123456")
+        self.assertContains(owner, "K1SECRET")
 
     def test_contact_map_is_on_detail_and_hub_with_filters(self):
         location = Location.objects.create(
@@ -365,12 +491,16 @@ class AdventureContactHubTests(TestCase):
         contact.grid_square = "EN34"
         contact.band = "20m"
         contact.save()
-        for url in [self.adventure.get_absolute_url(), reverse("adventure_contacts", args=[self.adventure.slug])]:
-            response = self.client.get(url)
-            self.assertContains(response, "Contacts From This Adventure")
-            self.assertContains(response, 'data-contact-filter="journal"')
-            self.assertContains(response, 'data-contact-filter="lines"')
-            self.assertContains(response, "Grid-square center")
+        dashboard = self.client.get(self.adventure.get_absolute_url())
+        self.assertContains(dashboard, "QSO’s and Contacts")
+        self.assertContains(dashboard, "K1MAP")
+        self.assertNotContains(dashboard, 'data-contact-filter="lines"')
+
+        hub = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
+        self.assertContains(hub, "Contacts From This Adventure")
+        self.assertContains(hub, 'data-contact-filter="journal"')
+        self.assertContains(hub, 'data-contact-filter="lines"')
+        self.assertContains(hub, "Grid-square center")
 
     def test_parser_preserves_radio_and_direct_coordinate_fields(self):
         parsed = parse_adif_text(
@@ -388,12 +518,9 @@ class AdventureContactHubTests(TestCase):
 
         response = self.client.get(self.adventure.get_absolute_url())
 
-        self.assertContains(response, 'class="adventure-summary-card" href="#journal-entries"')
-        self.assertContains(response, "View Journals")
-        self.assertContains(
-            response,
-            f'class="adventure-summary-card" href="{reverse("adventure_contacts", args=[self.adventure.slug])}"',
-        )
+        self.assertNotContains(response, "adventure-story-stats")
+        self.assertContains(response, 'id="journal-entries"')
+        self.assertContains(response, f'href="{reverse("adventure_contacts", args=[self.adventure.slug])}"')
         self.assertContains(response, "View Contacts", count=1)
         self.assertNotContains(response, "View Contacts (1)")
 
@@ -402,13 +529,13 @@ class AdventureContactHubTests(TestCase):
         self.assertNotContains(visitor, "Add First Journal")
         self.assertNotContains(visitor, "Import Contacts")
         self.assertNotContains(visitor, "Add Photos")
-        self.assertContains(visitor, "0</strong><span>Journals")
-        self.assertContains(visitor, "0</strong><span>Contacts")
-        self.assertContains(visitor, "0</strong><span>Photos")
+        self.assertContains(visitor, "No journal entries yet.")
+        self.assertContains(visitor, "No contacts have been recorded")
+        self.assertContains(visitor, "No photos have been added yet.")
 
         self.client.force_login(self.owner)
         owner = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(owner, "Add First Journal")
+        self.assertNotContains(owner, "Add First Journal")
         self.assertContains(owner, "Import Contacts", count=1)
         self.assertContains(owner, "Add Photos")
         self.assertContains(owner, reverse("add_journal_entry", args=[self.adventure.slug]))
@@ -427,14 +554,14 @@ class AdventureContactHubTests(TestCase):
         )
 
         visitor = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(visitor, 'href="#adventure-photos"')
-        self.assertContains(visitor, "1</strong><span>Photos")
-        self.assertNotContains(visitor, "2</strong><span>Photos")
+        self.assertContains(visitor, 'id="adventure-photos"')
+        self.assertContains(visitor, "1 photo")
+        self.assertNotContains(visitor, "2 photos")
 
         self.client.force_login(self.owner)
         owner = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(owner, "2</strong><span>Photos")
-        self.assertContains(owner, "View Photos")
+        self.assertContains(owner, "2 photos")
+        self.assertContains(owner, "adventure-photo-strip")
 
     def test_zero_photo_owner_uses_existing_journal_edit_upload_workflow(self):
         entry = self.add_entry("Photo Destination")
@@ -443,3 +570,31 @@ class AdventureContactHubTests(TestCase):
         expected = reverse("edit_journal_entry", args=[entry.pk]) + "#journal-photo-upload"
         self.assertContains(response, f'href="{expected}"')
         self.assertContains(response, "Add Photos")
+
+    def test_adventure_dashboard_preserves_document_scroll_and_scopes_overflow(self):
+        from django.conf import settings
+
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("html{min-height:100%;scroll-behavior:smooth;}", css)
+        self.assertIn("overflow-x:hidden;overflow-y:auto;", css)
+        self.assertIn(".adventure-dashboard-page main {\n    min-height:", css)
+        self.assertNotIn(".adventure-dashboard-page main {\n    height: 100vh", css)
+        self.assertIn(
+            ".adventure-dashboard-grid > section { min-width: 0; min-height: 264px; height: auto; padding: 12px 14px; overflow: visible; }",
+            css,
+        )
+        self.assertIn(
+            ".adventure-dashboard-scroll { max-height: 214px; overflow: auto;",
+            css,
+        )
+        self.assertIn(".adventure-photo-strip", css)
+        self.assertIn("overflow-x: auto; overflow-y: hidden;", css)
+
+        viewer_js = (
+            settings.BASE_DIR / "static" / "js" / "journal-photo-viewer.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('dialog.addEventListener("close"', viewer_js)
+        self.assertNotIn("document.body.style.overflow", viewer_js)
+        self.assertNotIn('classList.add("modal-open")', viewer_js)

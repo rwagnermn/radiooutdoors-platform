@@ -44,7 +44,8 @@ class ManualJournalContactTests(TestCase):
     def test_empty_journal_always_shows_contact_section_and_actions(self):
         self.client.force_login(self.owner)
         detail = self.client.get(reverse("journal_entry_detail", args=[self.journal.pk]))
-        self.assertContains(detail, "Contacts — 0")
+        self.assertContains(detail, "QSO’s and Contacts")
+        self.assertContains(detail, "0 total")
         self.assertContains(detail, "No Contacts have been added to this Journal yet.")
         self.assertContains(detail, "Add Contact")
         self.assertContains(detail, "Import POTA Hunter Log")

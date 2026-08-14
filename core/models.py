@@ -569,6 +569,13 @@ class JournalEntry(models.Model):
     mode_other = models.BooleanField(default=False)
     # Retained for compatibility with earlier builds; new details belong in Journal Notes.
     other_operating_method = models.CharField(max_length=100, blank=True)
+    primary_photo = models.ForeignKey(
+        "Photo",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="primary_for_journals",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

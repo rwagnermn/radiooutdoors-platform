@@ -604,9 +604,11 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertContains(owner_response, ">View</a>", count=2)
         self.assertContains(owner_response, ">Edit</a>", count=1)
         self.assertContains(owner_response, ">Delete</button>", count=1)
-        self.assertContains(owner_response, ">All statuses</option>")
-        self.assertContains(owner_response, ">\n                    Open\n                </option>")
-        self.assertContains(owner_response, ">\n                    Complete\n                </option>")
+        self.assertContains(owner_response, "<span>All Status</span>", html=True)
+        self.assertContains(owner_response, "<span>Open</span>", html=True)
+        self.assertContains(owner_response, "<span>Complete</span>", html=True)
+        self.assertContains(owner_response, 'class="adventure-panel-list"')
+        self.assertNotContains(owner_response, "<table")
 
         self.client.force_login(other)
         other_response = self.client.get(reverse("all_adventures"))
@@ -723,28 +725,27 @@ class AddAdventureWorkflowTests(TestCase):
         detail_response = self.client.get(adventure.get_absolute_url())
         self.assertContains(
             detail_response,
-            'class="contact-table-scroll journal-list-wrap ro-scroll-table-region"',
+            'class="adventure-dashboard-scroll adventure-dashboard-journal-scroll"',
         )
-        self.assertContains(detail_response, 'aria-label="Journal entries"')
+        self.assertContains(detail_response, 'aria-label="Adventure Journals"')
         self.assertContains(detail_response, 'tabindex="0"')
         self.assertContains(
             detail_response,
-            'class="compact-contact-table ro-data-table journal-list-table"',
+            'class="adventure-journal-card-list"',
         )
-        self.assertContains(detail_response, ">View Journal</a>", count=11)
         self.assertContains(
             detail_response,
-            'class="primary-feature-button"',
+            'class="adventure-journal-row-title"',
             count=11,
         )
         self.assertContains(detail_response, "Journal title 10")
         self.assertNotContains(detail_response, long_body)
         self.assertContains(detail_response, "Keep Lessons Learned separate.")
-        self.assertContains(detail_response, 'class="adventure-story-stats"')
-        self.assertContains(detail_response, "11</strong><span>Journals")
-        self.assertContains(detail_response, "1</strong><span>Photos")
-        self.assertContains(detail_response, 'class="journal-photo-grid adventure-photo-masonry"')
-        self.assertContains(detail_response, '<td class="journal-list-photo-count center-column">1</td>')
+        self.assertNotContains(detail_response, 'class="adventure-story-stats"')
+        self.assertContains(detail_response, "11 total")
+        self.assertContains(detail_response, "1 photo")
+        self.assertContains(detail_response, 'class="adventure-photo-strip"')
+        self.assertContains(detail_response, "<dt>Photos</dt><dd>1</dd>", html=True)
 
         edit_response = self.client.get(
             reverse("edit_adventure", kwargs={"slug": adventure.slug})

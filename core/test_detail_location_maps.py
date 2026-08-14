@@ -134,6 +134,9 @@ class DetailLocationMapTests(TestCase):
         self.assertIn("radioOutdoorsFitMap(map, positions, 32, 14)", contact_map)
         self.assertIn("minZoom: 2", contact_map)
         self.assertIn("radioOutdoorsFitMap(map,positions,32,14)", adventure_detail)
+        self.assertIn("if(positions.length===1)", adventure_detail)
+        self.assertIn("map.setZoom(14)", adventure_detail)
+        self.assertIn("View Full Map", adventure_detail)
         self.assertIn("minZoom:2", adventure_detail)
         self.assertIn("fullscreenControl:true", adventure_detail)
 

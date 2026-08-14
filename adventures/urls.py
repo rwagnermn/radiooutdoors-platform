@@ -34,6 +34,8 @@ from .views import (
     edit_operating_position,
     import_adif,
     journal_entry_detail,
+    journal_photo_gallery,
+    make_journal_photo,
     make_cover_photo,
     mark_adventure_done,
     mark_adventure_in_progress,
@@ -132,6 +134,8 @@ urlpatterns = [
     ),
     path("comments/<int:comment_id>/delete/", delete_comment, name="delete_comment"),
     path("journal/<int:entry_id>/", journal_entry_detail, name="journal_entry_detail"),
+    path("journal/<int:entry_id>/photos/", journal_photo_gallery, name="journal_photo_gallery"),
+    path("journal/<int:entry_id>/photos/<int:photo_id>/primary/", make_journal_photo, name="make_journal_photo"),
     path("journal/<int:entry_id>/edit/", edit_journal_entry, name="edit_journal_entry"),
     path(
         "journal/<int:entry_id>/visibility/",
