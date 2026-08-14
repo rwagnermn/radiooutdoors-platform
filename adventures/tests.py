@@ -8,7 +8,10 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from core.models import Adventure, JournalEntry, Location, MemberProfile, OperatingLocation, Photo
+from core.models import (
+    Adventure, JournalEntry, Location, LocationType, MemberProfile,
+    OperatingLocation, Photo,
+)
 
 
 @override_settings(PHOTO_MODERATION_BACKEND="core.test_photo_moderation.SafeProvider")
@@ -25,6 +28,10 @@ class AddAdventureWorkflowTests(TestCase):
             verification_method=MemberProfile.VerificationMethod.QRZ,
         )
         self.client.force_login(self.user)
+        LocationType.objects.get_or_create(
+            key=Location.LocationType.PARK,
+            defaults={"name": "Park", "is_active": True},
+        )
         self.location = Location.objects.create(name="Workflow Park", created_by=self.user)
         self.mapped_position = OperatingLocation.objects.create(
             location=self.location,
@@ -63,7 +70,7 @@ class AddAdventureWorkflowTests(TestCase):
             response,
             reverse("my_adventures"),
         )
-        self.assertEqual(adventure.location_id, self.location.pk)
+        self.assertIsNone(adventure.location_id)
         self.assertIsNone(adventure.operating_location_id)
         self.assertTrue(
             Adventure.objects.filter(
@@ -131,7 +138,11 @@ class AddAdventureWorkflowTests(TestCase):
     def test_validation_failure_stays_on_form_and_creates_nothing(self):
         response = self.client.post(
             reverse("add_adventure"),
-            {"title": "Preserve This Title"},
+            {
+                "title": "Preserve This Title",
+                "operating_start_date": "2026-08-15",
+                "operating_end_date": "2026-08-14",
+            },
         )
 
         self.assertEqual(response.status_code, 200)
@@ -282,12 +293,22 @@ class AddAdventureWorkflowTests(TestCase):
                 "location-country": "USA",
                 "location-latitude": "44.123456",
                 "location-longitude": "-93.654321",
+                "location-parking": "unknown",
+                "location-restrooms": "unknown",
+                "location-picnic_tables": "unknown",
+                "location-shelter": "unknown",
+                "location-shade": "unknown",
+                "location-power": "unknown",
+                "location-drinking_water": "unknown",
+                "location-cell_coverage_bars": "0",
+                "location-ambient_noise_level": "unknown",
                 "operating-name": "First Position",
                 "operating-latitude": "44.123456",
                 "operating-longitude": "-93.654321",
             },
         )
 
+        self.assertEqual(response.status_code, 302)
         location = Location.objects.get(name="New Workflow Location")
         expected = (
             f"{reverse('add_adventure')}?location={location.pk}"
@@ -312,7 +333,7 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertEqual(saved.resolver_match.url_name, "my_adventures")
         self.assertContains(saved, "Adventure With Newly Created Place")
         created = Adventure.objects.get(title="Adventure With Newly Created Place")
-        self.assertEqual(created.location_id, location.pk)
+        self.assertIsNone(created.location_id)
         self.assertIsNone(created.operating_location_id)
 
     def test_inline_position_creation_saves_under_selected_location(self):
@@ -506,13 +527,13 @@ class AddAdventureWorkflowTests(TestCase):
         )
 
         response = self.client.get(reverse("my_adventures"))
-        self.assertContains(
+        self.assertNotContains(
             response,
             reverse("mark_adventure_done", kwargs={"slug": adventure.slug}),
         )
-        self.assertContains(response, 'data-adventure-status-control')
+        self.assertNotContains(response, 'data-adventure-status-control')
         self.assertContains(response, 'class="ro-action-menu adventure-row-menu"')
-        self.assertContains(response, ">Open</button>")
+        self.assertNotContains(response, ">Open</button>")
         self.assertContains(response, ">View</a>")
         self.assertContains(response, ">Edit</a>")
         self.assertContains(response, ">Delete</button>")
@@ -522,24 +543,24 @@ class AddAdventureWorkflowTests(TestCase):
         edit_response = self.client.get(
             reverse("edit_adventure", kwargs={"slug": adventure.slug})
         )
-        self.assertContains(edit_response, ">Open</button>")
+        self.assertNotContains(edit_response, ">Open</button>")
 
         adventure.status = Adventure.Status.COMPLETED
         adventure.save()
         response = self.client.get(reverse("my_adventures"))
-        self.assertContains(
+        self.assertNotContains(
             response,
             reverse(
                 "mark_adventure_in_progress",
                 kwargs={"slug": adventure.slug},
             ),
         )
-        self.assertContains(response, ">Complete</button>")
+        self.assertNotContains(response, ">Complete</button>")
 
         edit_response = self.client.get(
             reverse("edit_adventure", kwargs={"slug": adventure.slug})
         )
-        self.assertContains(edit_response, ">Complete</button>")
+        self.assertNotContains(edit_response, ">Complete</button>")
 
         self.assertEqual(
             self.client.get(
@@ -716,6 +737,17 @@ class AddAdventureWorkflowTests(TestCase):
             )
             for index in range(11)
         ]
+        long_location = Location.objects.create(
+            name="North Shore State Wildlife Management Area Long Prairie Access",
+            created_by=self.user,
+        )
+        entries[0].title = (
+            "Late Summer Portable Radio Journal from the North Shore Overlook"
+        )
+        entries[0].location = long_location
+        entries[0].save(update_fields=["title", "location"])
+        entries[1].location = self.location
+        entries[1].save(update_fields=["location"])
         Photo.objects.create(
             journal_entry=entries[0],
             image="adventure_photos/compact-list.jpg",
@@ -743,9 +775,32 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertContains(detail_response, "Keep Lessons Learned separate.")
         self.assertNotContains(detail_response, 'class="adventure-story-stats"')
         self.assertContains(detail_response, "11 total")
+        self.assertContains(detail_response, "Show All Journals")
+        self.assertContains(detail_response, reverse("adventure_journals", args=[adventure.slug]))
+        self.assertContains(detail_response, "Photos are stored in Journals")
+        self.assertNotContains(detail_response, "embedded-detail-map-layout adventure-journal-map-layout")
         self.assertContains(detail_response, "1 photo")
         self.assertContains(detail_response, 'class="adventure-photo-strip"')
         self.assertContains(detail_response, "<dt>Photos</dt><dd>1</dd>", html=True)
+
+        all_journals = self.client.get(reverse("adventure_journals", args=[adventure.slug]))
+        self.assertContains(all_journals, "Journal title", count=10)
+        self.assertContains(all_journals, entries[0].title)
+        self.assertContains(all_journals, long_location.name)
+        self.assertContains(all_journals, self.location.name)
+        self.assertContains(
+            all_journals,
+            reverse("journal_entry_detail", kwargs={"entry_id": entries[0].pk}),
+        )
+        rendered_journals = all_journals.content.decode()
+        location_header = rendered_journals.index(">Location</th>")
+        name_header = rendered_journals.index(">Journal Name</th>")
+        date_header = rendered_journals.index(">Date</th>")
+        self.assertLess(location_header, name_header)
+        self.assertLess(name_header, date_header)
+        self.assertIn('class="journal-list-location"', rendered_journals)
+        self.assertIn('class="journal-list-entry"', rendered_journals)
+        self.assertIn('class="journal-list-date"', rendered_journals)
 
         edit_response = self.client.get(
             reverse("edit_adventure", kwargs={"slug": adventure.slug})
@@ -824,8 +879,18 @@ class AddAdventureWorkflowTests(TestCase):
                 "location-photo": self.location_image(),
                 "location-latitude": "44.123456",
                 "location-longitude": "-93.654321",
+                "location-parking": "unknown",
+                "location-restrooms": "unknown",
+                "location-picnic_tables": "unknown",
+                "location-shelter": "unknown",
+                "location-shade": "unknown",
+                "location-power": "unknown",
+                "location-drinking_water": "unknown",
+                "location-cell_coverage_bars": "0",
+                "location-ambient_noise_level": "unknown",
             },
         )
+        self.assertEqual(response.status_code, 302)
         location = Location.objects.get(name="Photo Workflow Location")
         self.assertRedirects(
             response,
@@ -855,6 +920,15 @@ class AddAdventureWorkflowTests(TestCase):
                 "location-location_type": location.location_type,
                 "location-country": location.country,
                 "location-photo": self.location_image("replacement.png", "blue"),
+                "location-parking": "unknown",
+                "location-restrooms": "unknown",
+                "location-picnic_tables": "unknown",
+                "location-shelter": "unknown",
+                "location-shade": "unknown",
+                "location-power": "unknown",
+                "location-drinking_water": "unknown",
+                "location-cell_coverage_bars": "0",
+                "location-ambient_noise_level": "unknown",
             },
         )
         location.refresh_from_db()
@@ -869,6 +943,15 @@ class AddAdventureWorkflowTests(TestCase):
                 "location-location_type": location.location_type,
                 "location-country": location.country,
                 "location-remove_location_photo": "on",
+                "location-parking": "unknown",
+                "location-restrooms": "unknown",
+                "location-picnic_tables": "unknown",
+                "location-shelter": "unknown",
+                "location-shade": "unknown",
+                "location-power": "unknown",
+                "location-drinking_water": "unknown",
+                "location-cell_coverage_bars": "0",
+                "location-ambient_noise_level": "unknown",
             },
         )
         location.refresh_from_db()

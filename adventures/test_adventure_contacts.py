@@ -302,7 +302,8 @@ class AdventureContactHubTests(TestCase):
         self.assertContains(confirmation, "1 contacts imported successfully.")
         self.assertNotContains(confirmation, "duplicate contact")
         self.assertContains(confirmation, "1 invalid contact skipped.")
-        self.assertContains(confirmation, "Contacts — 1")
+        self.assertContains(confirmation, "QSO’s and Contacts")
+        self.assertContains(confirmation, "1 total")
         self.assertContains(confirmation, "K1ABC")
 
         duplicate_upload = SimpleUploadedFile(
@@ -323,7 +324,8 @@ class AdventureContactHubTests(TestCase):
         self.assertContains(duplicate_result, "0 contacts imported successfully.")
         self.assertContains(duplicate_result, "1 duplicate contact skipped.")
         self.assertNotContains(duplicate_result, "invalid contact")
-        self.assertContains(duplicate_result, "Contacts — 1")
+        self.assertContains(duplicate_result, "QSO’s and Contacts")
+        self.assertContains(duplicate_result, "1 total")
         self.assertEqual(entry.contacts.count(), 1)
 
     def test_invalid_import_stays_in_existing_workflow_with_error(self):
@@ -422,11 +424,10 @@ class AdventureContactHubTests(TestCase):
 
         self.client.force_login(self.owner)
         response = self.client.get(reverse("journal_entry_detail", args=[journal_a.pk]))
-        self.assertContains(response, "Contacts From This Journal")
-        self.assertContains(response, "Journal Origin")
+        self.assertContains(response, "QSO’s and Contacts")
+        self.assertContains(response, "2 total")
         self.assertContains(response, "K1JOURNALA")
         self.assertNotContains(response, "K1JOURNALB")
-        self.assertContains(response, "1 mapped of 2 total contacts")
         self.assertContains(response, "K1NOPIN")
 
     def test_contact_only_hunter_location_is_absent_from_global_map(self):
@@ -582,7 +583,7 @@ class AdventureContactHubTests(TestCase):
         self.assertIn(".adventure-dashboard-page main {\n    min-height:", css)
         self.assertNotIn(".adventure-dashboard-page main {\n    height: 100vh", css)
         self.assertIn(
-            ".adventure-dashboard-grid > section { min-width: 0; min-height: 264px; height: auto; padding: 12px 14px; overflow: visible; }",
+            ".adventure-dashboard-grid > section { min-width: 0; height: auto; padding: 12px 14px; overflow: visible; align-self: start; }",
             css,
         )
         self.assertIn(

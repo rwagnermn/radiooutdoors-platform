@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Journals for {{ adventure.title }} | Radio Outdoors{% endblock %}
+{% block content %}<section class="content"><p><a class="back-link-button" href="{{ adventure.get_absolute_url }}">← Back to Adventure</a></p><div class="section-heading-row"><div><h1>Journals for {{ adventure.title }}</h1><p>All Journals you are authorized to view.</p></div>{% if can_manage_adventure %}<a class="button-primary" href="{% url 'add_journal_entry' adventure.slug %}">+ Add Journal Entry</a>{% endif %}</div>{% include "adventures/_journal_entry_list.html" with manage_journals=can_manage_adventure %}</section>{% endblock %}

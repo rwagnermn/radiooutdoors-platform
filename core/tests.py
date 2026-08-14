@@ -239,19 +239,17 @@ class AdventureBookTerminologyTests(TestCase):
             response,
             "Adventures shared publicly by Radio Outdoors members.",
         )
-        self.assertContains(response, '<span class="adventure-mode-badge">PUBLIC ADVENTURES</span>')
-        self.assertContains(response, "adventure-list-page")
-        self.assertContains(response, "adventure-list-table-wrap")
         self.assertContains(
             response,
-            "Search for an Adventure or select one below.",
+            f'<a href="{reverse("all_adventures")}" aria-current="page">Public Adventures</a>',
         )
-        self.assertContains(response, '<label for="q">Adventure Search</label>')
-        self.assertContains(response, 'placeholder="Title, operator or place"')
+        self.assertContains(response, "adventure-list-page")
+        self.assertContains(response, "adventure-panel-list")
+        self.assertContains(response, 'placeholder="Search Adventures"')
         self.assertNotContains(response, "View All Public Adventures")
         self.assertNotContains(response, "View My Adventures")
-        self.assertContains(response, "adventure-book-search-instruction")
-        self.assertContains(response, "adventure-book-filter-actions")
+        self.assertContains(response, "adventure-book-panel-filters")
+        self.assertContains(response, "adventure-book-apply")
 
     def test_public_collection_summarizes_contacts_instead_of_comments(self):
         owner = get_user_model().objects.create_user(
@@ -313,11 +311,11 @@ class AdventureBookTerminologyTests(TestCase):
 
         self.assertContains(
             response,
-            '<th class="adventure-col-count adventure-col-contacts center-column">Contacts</th>',
+            '<div><dt>Contacts</dt><dd>1782</dd></div>',
         )
         self.assertContains(
             response,
-            '<td class="adventure-col-count adventure-col-contacts center-column">1782</td>',
+            '<dl class="adventure-panel-counts">',
         )
         self.assertNotContains(response, '<th class="center-column">Comments</th>')
         self.assertTrue(hasattr(adventures[with_contacts.pk], "contact_count"))
@@ -332,11 +330,11 @@ class AdventureBookTerminologyTests(TestCase):
         adventures = {item.pk: item for item in response.context["adventures"]}
         self.assertContains(
             response,
-            '<th class="adventure-col-count adventure-col-contacts center-column">Contacts</th>',
+            '<div><dt>Contacts</dt><dd>1782</dd></div>',
         )
         self.assertContains(
             response,
-            '<td class="adventure-col-count adventure-col-contacts center-column">1782</td>',
+            '<dl class="adventure-panel-counts">',
         )
         self.assertNotContains(response, '<th class="center-column">Comments</th>')
         self.assertEqual(adventures[with_contacts.pk].contact_count, 1782)
@@ -355,20 +353,22 @@ class AdventureBookTerminologyTests(TestCase):
         )
         self.client.force_login(user)
         response = self.client.get(reverse("all_adventures"))
-        self.assertContains(response, "View My Adventures")
+        self.assertContains(response, ">My Adventures</a>")
         self.assertContains(response, reverse("my_adventures"))
         self.assertNotContains(response, "View All Public Adventures")
-        self.assertContains(response, '<span class="adventure-mode-badge">PUBLIC ADVENTURES</span>')
+        self.assertContains(response, '>Public Adventures</a>')
 
         response = self.client.get(reverse("my_adventures"))
-        self.assertContains(response, "View All Public Adventures")
+        self.assertContains(response, ">Public Adventures</a>")
         self.assertContains(response, reverse("all_adventures"))
-        self.assertNotContains(response, "View My Adventures")
+        self.assertContains(
+            response,
+            f'<a href="{reverse("my_adventures")}" aria-current="page">My Adventures</a>',
+        )
         self.assertContains(response, "<h1>My Adventures</h1>")
         self.assertContains(response, "Adventures created and managed by your signed-in account.")
-        self.assertContains(response, '<span class="adventure-mode-badge">MY ADVENTURES</span>')
         self.assertContains(response, "adventure-list-page")
-        self.assertContains(response, "adventure-list-table-wrap")
+        self.assertContains(response, "adventure-panel-list")
 
 
 class BrandHierarchyTests(TestCase):
@@ -1144,8 +1144,8 @@ class MemberSignupDiscoverabilityTests(TestCase):
         self.assertNotIn(">Adventure Book</a>", account_panel)
         self.assertNotIn(">Locations</a>", account_panel)
         self.assertNotIn(">Map</a>", account_panel)
-        self.assertNotContains(response, "Import POTA History")
-        self.assertNotContains(response, "Import POTA Hunter Log")
+        self.assertContains(response, "Import POTA History", count=1)
+        self.assertContains(response, "Import POTA Contacts", count=1)
         self.assertContains(response, "My Contact Log")
         self.assertNotContains(response, "Admin Tools")
         self.assertContains(response, "About")

@@ -39,7 +39,7 @@ class ManualJournalContactTests(TestCase):
         adventure_contacts = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
         self.assertContains(adventure_contacts, "K1ABC")
         my_adventures = self.client.get(reverse("my_adventures"))
-        self.assertContains(my_adventures, '<td class="adventure-col-count adventure-col-contacts center-column">1</td>')
+        self.assertContains(my_adventures, "<dt>Contacts</dt><dd>1</dd>", html=True)
 
     def test_empty_journal_always_shows_contact_section_and_actions(self):
         self.client.force_login(self.owner)
@@ -48,7 +48,7 @@ class ManualJournalContactTests(TestCase):
         self.assertContains(detail, "0 total")
         self.assertContains(detail, "No Contacts have been added to this Journal yet.")
         self.assertContains(detail, "Add Contact")
-        self.assertContains(detail, "Import POTA Hunter Log")
+        self.assertNotContains(detail, reverse("import_pota_hunter_log") + f"?journal_entry={self.journal.pk}")
 
     def test_unauthorized_member_cannot_add_contact(self):
         other = get_user_model().objects.create_user(username="N0OTHER", password="password")

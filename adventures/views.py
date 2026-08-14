@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -198,7 +198,7 @@ def my_adventures(request):
         .order_by("status", "-updated_at")
     )
     if request.GET.get("source") == "pota":
-        adventures = adventures.filter(pota_import__isnull=False)
+        adventures = adventures.filter(pota_imports__isnull=False)
     search = request.GET.get("q", "").strip()
     activity = request.GET.get("activity", "").strip()
     place = request.GET.get("place", "").strip()
@@ -516,6 +516,35 @@ def adventure_contacts(request, slug):
             "can_manage_adventure": can_manage_adventure,
         },
     )
+
+
+def adventure_journals(request, slug):
+    adventure = get_object_or_404(Adventure.objects.select_related("owner"), slug=slug)
+    can_manage_adventure = _can_manage_adventure(request.user, adventure)
+    if not adventure.is_public and not can_manage_adventure:
+        raise Http404("Adventure not found.")
+    journals = adventure.journal_entries.all()
+    if not can_manage_adventure:
+        journals = journals.filter(is_public=True)
+    journal_count_totals = journals.aggregate(
+        cw=Sum("pota_import__cw_contacts"),
+        data=Sum("pota_import__data_contacts"),
+        phone=Sum("pota_import__phone_contacts"),
+        total=Sum("pota_import__total_contacts"),
+    )
+    journal_count_totals = {
+        key: value or 0 for key, value in journal_count_totals.items()
+    }
+    journals = journals.annotate(
+        dashboard_contact_count=Count("contacts", distinct=True),
+        dashboard_photo_count=Count("photos", distinct=True),
+    ).select_related("location", "pota_import").order_by("-entry_at", "-pk")
+    return render(request, "adventures/adventure_journals.html", {
+        "adventure": adventure,
+        "journal_entries": journals,
+        "journal_count_totals": journal_count_totals,
+        "can_manage_adventure": can_manage_adventure,
+    })
 
 
 @verified_member_or_staff_required
@@ -1138,6 +1167,7 @@ def journal_photo_gallery(request, entry_id):
             "journal_photos": list(photos_query),
             "can_edit_journal": can_edit_journal,
             "can_review_photos": can_review_photos,
+            "can_manage_adventure": _can_manage_adventure(request.user, entry.adventure),
         },
     )
 

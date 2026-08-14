@@ -84,7 +84,7 @@ class StaffRecordIdVisibilityTests(TestCase):
         self.assertContains(deletion, f"Member ID {self.profile.pk}")
         self.assertContains(deletion, f"User ID {self.member.pk}")
 
-    def test_staff_sees_adventure_journal_contact_and_pota_ids(self):
+    def test_staff_sees_adventure_journal_and_contact_ids(self):
         self.client.force_login(self.staff)
 
         adventure = self.client.get(self.adventure.get_absolute_url())
@@ -96,10 +96,7 @@ class StaffRecordIdVisibilityTests(TestCase):
         )
 
         self.assertContains(adventure, f"Adventure ID {self.adventure.pk}")
-        self.assertContains(adventure, f"Activation ID {self.activation.pk}")
-        self.assertContains(adventure, f"Batch ID {self.activation.batch_id}")
         self.assertContains(journal, f"Journal ID {self.journal.pk}")
-        self.assertContains(journal, f">{self.contact.pk}</td>")
         self.assertContains(contacts, f">{self.contact.pk}</td>")
 
     def test_staff_sees_location_ids_on_list_and_detail(self):

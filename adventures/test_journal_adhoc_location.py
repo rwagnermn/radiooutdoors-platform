@@ -212,7 +212,9 @@ class JournalUnifiedLocationTests(TestCase):
         contact_template = (
             settings.BASE_DIR / "templates" / "adventures" / "_contact_map.html"
         ).read_text(encoding="utf-8")
-        self.assertIn("embedded-detail-map-layout adventure-journal-map-layout", adventure_template)
+        self.assertNotIn("embedded-detail-map-layout adventure-journal-map-layout", adventure_template)
+        self.assertIn('class="adventure-dashboard-map"', adventure_template)
+        self.assertIn('google.maps.event.trigger(map,"resize")', adventure_template)
         self.assertIn("embedded-detail-map-layout embedded-contact-map-layout", contact_template)
 
     def test_saved_coordinates_serialize_to_journal_adventure_and_main_maps(self):

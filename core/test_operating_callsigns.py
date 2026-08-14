@@ -110,9 +110,8 @@ class OperatingCallsignTests(TestCase):
             operating_end_date=date(2026, 8, 8),
         )
         response = self.client.get(adventure.get_absolute_url())
-        self.assertContains(response, "Operating as:</strong> W7O — Oregon State")
-        self.assertContains(response, "Adventure managed by:</strong> W5OWNER")
-        self.assertContains(response, "Special Event callsign")
+        self.assertContains(response, "Operator:</strong> W7O")
+        self.assertContains(response, "Managed by:</strong> W5OWNER")
 
     def test_journal_defaults_to_adventure_callsign_and_allows_another(self):
         adventure = Adventure.objects.create(
@@ -131,6 +130,10 @@ class OperatingCallsignTests(TestCase):
                 "title": "Alternate operator",
                 "body": "A contact made under another authorized call.",
                 "operating_callsign": "K7ALT",
+                "location": self.location.pk,
+                "location_name": self.location.name,
+                "latitude": "44.100000",
+                "longitude": "-93.200000",
                 "journal_visibility_present": "1",
                 "is_public": "on",
             },
@@ -139,7 +142,7 @@ class OperatingCallsignTests(TestCase):
         entry = JournalEntry.objects.get(adventure=adventure)
         self.assertEqual(entry.operating_callsign, "K7ALT")
         detail = self.client.get(reverse("journal_entry_detail", args=[entry.pk]))
-        self.assertContains(detail, "Operating as:</strong> K7ALT")
+        self.assertContains(detail, "Operator:</strong> K7ALT")
 
     def test_operating_identity_does_not_change_owner_permissions(self):
         adventure = Adventure.objects.create(

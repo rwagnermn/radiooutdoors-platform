@@ -31,7 +31,7 @@ function Run-Cmd($cmd,[int]$timeout=120) {
     return @{Exit=$p.ExitCode;Out=$outTask.GetAwaiter().GetResult().TrimEnd();Err=$errTask.GetAwaiter().GetResult().Trim()}
 }
 function Py(){ $p=Join-Path $ProjectRoot ".venv\Scripts\python.exe"; if(Test-Path $p){$p}else{$null} }
-function Django($args,[int]$timeout=120){$p=Py;if(!$p){return @{Exit=9001;Out="";Err=".venv Python missing"}};Run-Cmd "`"$p`" manage.py $args" $timeout}
+function Django($djangoArgs,[int]$timeout=120){$p=Py;if(!$p){return @{Exit=9001;Out="";Err=".venv Python missing"}};Run-Cmd "`"$p`" manage.py $djangoArgs" $timeout}
 function Log($m){Add-Content (Join-Path $LogDir ("manager-"+(Get-Date -Format "yyyyMMdd")+".log")) "[$(Get-Date -Format "yyyy-MM-dd HH:mm:ss")] $m"}
 function Status($state,$text,$detail=""){[pscustomobject]@{State=$state;Text=$text;Detail=$detail}}
 

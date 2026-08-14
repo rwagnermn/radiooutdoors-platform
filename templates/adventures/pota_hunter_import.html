@@ -2,7 +2,7 @@
 {% block title %}Import POTA Hunter Log | Radio Outdoors{% endblock %}
 {% block content %}<section class="content narrow-content">
 <h1>Import POTA Hunter Log</h1>
-<p class="ro-page-actions"><a class="button-secondary-dark" href="{% url 'import_pota_history' %}">Import POTA History</a> <a class="ro-small-action" href="{% url 'my_contact_log' %}">Back to My Contact Log</a></p>
+<p class="ro-page-actions"><a class="ro-small-action" href="{% url 'my_contact_log' %}">Back to My Contact Log</a></p>
 <p>Import POTA Hunter Log QSOs as Contacts, optionally associated with an existing Journal and its parent Adventure. No Adventure or Journal is created. A private approximate park Location may be reused or created for geographic context. Nothing is saved until you preview and confirm the Contacts.</p>
 {% if destination_journal %}<p><strong>Destination:</strong> <a href="{% url 'journal_entry_detail' destination_journal.pk %}">{{ destination_journal.adventure.title }} — {{ destination_journal.title|default:"Journal Entry" }}</a>. The destination is fixed for this import.</p>{% endif %}
 {% if error %}<div class="form-error-summary" role="alert"><h2>We couldn’t review the POTA Hunter Log.</h2><p>{{ error }}</p><p>{{ recognized_count|default:0 }} recognized; {{ ignored_count|default:0 }} ignored; {{ invalid_count|default:0 }} invalid.</p>{% if unrecognized_excerpt %}<p><strong>First unrecognized excerpt:</strong> <code>{{ unrecognized_excerpt }}</code></p>{% endif %}{% if invalid_lines %}<ul>{% for invalid in invalid_lines %}<li>Line {{ invalid.line_number }}: {{ invalid.reason }}{% if invalid.excerpt %}<br><code>{{ invalid.excerpt }}</code>{% endif %}</li>{% endfor %}</ul>{% endif %}</div>{% endif %}

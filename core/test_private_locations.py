@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from adventures.forms import AdventureForm, LocationForm
+from adventures.forms import JournalEntryForm, LocationForm
 from core.location_privacy import can_view_location, visible_locations
 from core.models import Adventure, Location, LocationType, MemberProfile
 from core.pin_permissions import can_edit_location_pin
@@ -61,6 +61,15 @@ class PrivateLocationTests(TestCase):
             "official_website": location.official_website,
             "reference_code": location.reference_code,
             "description": location.description,
+            "parking": location.parking,
+            "restrooms": location.restrooms,
+            "picnic_tables": location.picnic_tables,
+            "shelter": location.shelter,
+            "shade": location.shade,
+            "power": location.power,
+            "drinking_water": location.drinking_water,
+            "cell_coverage_bars": location.cell_coverage_bars,
+            "ambient_noise_level": location.ambient_noise_level,
             "has_operating_advisory": location.has_operating_advisory,
             "operating_advisory": location.operating_advisory,
         }
@@ -116,13 +125,13 @@ class PrivateLocationTests(TestCase):
         self.assertFalse(can_edit_location_pin(self.other, self.private))
 
     def test_private_location_selector_is_owner_only_and_labeled(self):
-        owner_form = AdventureForm(user=self.owner)
+        owner_form = JournalEntryForm(user=self.owner)
         owner_choices = dict(owner_form.fields["location"].choices)
         self.assertEqual(
             owner_choices[self.private.pk], f"Private — {self.private.name}"
         )
         other_ids = set(
-            AdventureForm(user=self.other)
+            JournalEntryForm(user=self.other)
             .fields["location"]
             .queryset.values_list("pk", flat=True)
         )
@@ -136,7 +145,11 @@ class PrivateLocationTests(TestCase):
             is_public=True,
         )
         response = self.client.get(adventure.get_absolute_url())
-        self.assertContains(response, "Location:</strong> Private Location")
+        self.assertContains(response, '<p class="private-location-badge">Private Location</p>')
+        self.assertContains(
+            response,
+            "Contact paths are hidden because this Adventure uses a Private Location.",
+        )
         self.assertNotContains(response, self.private.name)
         self.assertNotContains(response, self.private.street_address)
         self.assertNotContains(response, "47.654321")

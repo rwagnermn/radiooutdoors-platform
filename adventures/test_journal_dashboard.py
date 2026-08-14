@@ -1,6 +1,7 @@
 from datetime import datetime, timezone as dt_timezone
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
@@ -140,6 +141,8 @@ class JournalDashboardTests(TestCase):
         self.assertContains(owner, "data-journal-carousel-next")
         self.assertContains(owner, "journal-photo-viewer-trigger")
         self.assertContains(owner, "at original size")
+        self.assertNotContains(owner, "Make Journal Photo")
+        self.assertNotContains(owner, "Make Adventure Photo")
 
         self.client.force_login(self.staff)
         staff = self.client.get(self.url)
@@ -240,6 +243,19 @@ class JournalDashboardTests(TestCase):
         self.assertContains(owner, approved.public_image_url)
         self.assertContains(owner, pending.public_thumbnail_url)
         self.assertContains(owner, "journal-photo-blurred")
+        self.assertContains(owner, "Use as Adventure Photo", count=1)
+        self.assertContains(owner, "Use as Journal Photo", count=1)
+
+        self.entry.primary_photo = approved
+        self.entry.save(update_fields=["primary_photo"])
+        self.adventure.cover_photo = approved
+        self.adventure.cover_photo_is_explicit = True
+        self.adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit"])
+        selected = self.client.get(gallery_url)
+        self.assertContains(selected, "Current Adventure Photo")
+        self.assertContains(selected, "Current Journal Photo")
+        self.assertNotContains(selected, "Use as Adventure Photo")
+        self.assertNotContains(selected, "Use as Journal Photo")
 
     def test_photo_gallery_has_authorized_empty_state(self):
         response = self.client.get(reverse("journal_photo_gallery", args=[self.entry.pk]))
@@ -249,15 +265,25 @@ class JournalDashboardTests(TestCase):
         from django.conf import settings
 
         css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
-        self.assertIn("flex:0 0 150px", css)
+        self.assertIn("flex:0 0 190px", css)
         self.assertIn("height:164px", css)
         self.assertIn("object-fit:contain", css)
-        self.assertIn("white-space:normal", css)
         self.assertIn("overflow-y:hidden", css)
+        self.assertIn("scrollbar-width:none", css)
+        self.assertIn("width:44px", css)
         template = (settings.BASE_DIR / "templates" / "adventures" / "journal_entry_detail.html").read_text(encoding="utf-8")
         self.assertIn("data-journal-carousel-prev", template)
         self.assertIn("data-journal-carousel-next", template)
         self.assertIn("journal-photo-viewer-trigger", template)
+        self.assertNotIn("Make Journal Photo", template)
+        self.assertNotIn("Make Adventure Photo", template)
+
+    def test_journal_view_heading_is_centered_independently_of_toolbar_actions(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, '<h1 class="journal-dashboard-view-heading">Journal View</h1>', html=True)
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)", css)
+        self.assertIn(".journal-dashboard-view-heading { grid-column:2", css)
 
     def test_layout_uses_journal_background_and_nonoverlapping_responsive_grid(self):
         from django.conf import settings

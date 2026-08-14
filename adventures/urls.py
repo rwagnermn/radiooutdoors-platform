@@ -14,6 +14,7 @@ from .views import (
     add_operating_position,
     adventure_detail,
     adventure_contacts,
+    adventure_journals,
     adventure_import_contacts,
     all_adventures,
     cancel_adif_import,
@@ -117,6 +118,7 @@ urlpatterns = [
     ),
     path("<slug:slug>/comments/add/", add_comment, name="add_comment"),
     path("<slug:slug>/contacts/", adventure_contacts, name="adventure_contacts"),
+    path("<slug:slug>/journals/", adventure_journals, name="adventure_journals"),
     path(
         "<slug:slug>/contacts/import/",
         adventure_import_contacts,

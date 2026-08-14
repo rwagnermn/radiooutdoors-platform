@@ -198,7 +198,7 @@ class PotaHunterImportWorkflowTests(TestCase):
         self.assertContains(contact_log, "My Contact Log")
         self.assertContains(contact_log, f'href="{hunter_url}"')
         my_adventures = self.client.get(reverse("my_adventures"))
-        self.assertContains(my_adventures, "Import POTA Hunter Log")
+        self.assertContains(my_adventures, "Import POTA Contacts", count=1)
         self.assertContains(my_adventures, f'href="{hunter_url}"')
         hunter_start = self.client.get(hunter_url)
         self.assertContains(hunter_start, "Destination Adventure")

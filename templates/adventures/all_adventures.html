@@ -2,7 +2,7 @@
 {% block title %}Public Adventures | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page adventure-book-page adventure-list-page public-adventures-page{% endblock %}
 {% block content %}<section class="content adventure-book-content">
-  <div class="adventure-list-heading adventure-book-heading"><div><h1>Public Adventures</h1><p>Adventures shared publicly by Radio Outdoors members.</p></div><div class="adventure-heading-actions">{% if is_verified_member %}<a href="{% url 'import_pota_history' %}" class="ro-small-action">Import POTA History</a><a href="{% url 'import_pota_hunter_log' %}" class="ro-small-action">Import POTA Hunter Log</a><a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a>{% endif %}</div></div>
+  <div class="adventure-list-heading adventure-book-heading"><div><h1>Public Adventures</h1><p>Adventures shared publicly by Radio Outdoors members.</p></div><div class="adventure-heading-actions">{% if is_verified_member %}<a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a>{% endif %}</div></div>
   {% include "adventures/_adventure_book_filters.html" with book_mode="public" %}
   {% include "adventures/_adventure_panel_list.html" with book_mode="public" list_label="Public Adventures results" empty_message="No adventures match these filters." %}
 </section>{% endblock %}

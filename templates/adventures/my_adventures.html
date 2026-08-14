@@ -2,7 +2,7 @@
 {% block title %}My Adventures | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page adventure-book-page adventure-list-page my-adventures-page{% endblock %}
 {% block content %}<section class="content adventure-book-content">
-  <div class="adventure-list-heading my-adventures-heading"><div><h1>My Adventures</h1><p>Adventures created and managed by your signed-in account.</p></div><div class="adventure-heading-actions"><a href="{% url 'import_pota_history' %}" class="ro-small-action">Import POTA History</a><a href="{% url 'import_pota_hunter_log' %}" class="ro-small-action">Import POTA Hunter Log</a><a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a></div></div>
+  <div class="adventure-list-heading my-adventures-heading"><div><h1>My Adventures</h1><p>Adventures created and managed by your signed-in account.</p></div><div class="adventure-heading-actions"><a href="{% url 'add_adventure' %}" class="button-primary">Add Adventure</a></div></div>
   {% include "adventures/_adventure_book_filters.html" with book_mode="mine" %}
   {% include "adventures/_adventure_panel_list.html" with book_mode="mine" list_label="My Adventures results" empty_message="No adventures match these filters." %}
 </section>{% endblock %}

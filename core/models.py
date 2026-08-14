@@ -487,7 +487,11 @@ class PotaCallsignAttestation(models.Model):
 
 
 class PotaActivationImport(models.Model):
-    adventure = models.OneToOneField(Adventure, on_delete=models.CASCADE, related_name="pota_import")
+    adventure = models.ForeignKey(Adventure, on_delete=models.CASCADE, related_name="pota_imports")
+    journal_entry = models.OneToOneField(
+        "JournalEntry", on_delete=models.CASCADE, related_name="pota_import",
+        null=True, blank=True,
+    )
     batch = models.ForeignKey(PotaImportBatch, on_delete=models.PROTECT, related_name="activations")
     activation_date = models.DateField()
     callsign = models.CharField(max_length=30)

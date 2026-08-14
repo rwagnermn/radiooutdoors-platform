@@ -8,7 +8,7 @@ import hashlib
 from io import StringIO
 from django.urls import reverse
 
-from core.models import Adventure, Location, MemberProfile, PotaActivationImport, PotaImportBatch
+from core.models import Adventure, JournalEntry, Location, MemberProfile, PotaActivationImport, PotaImportBatch
 from .pota_import import parse_pota_history
 from .pota_geocoding import geocode_pota_park
 from .pota_views import _park_key
@@ -42,6 +42,13 @@ class PotaParserTests(TestCase):
         rows, _, _ = parse_pota_history(SAMPLE.replace("\t10", "\t11"))
         self.assertFalse(rows[0].errors)
         self.assertTrue(rows[0].warnings)
+
+    def test_negative_contact_count_is_rejected_as_invalid(self):
+        rows, _, invalid = parse_pota_history(
+            "2025-06-04 W5RIK US-12388 Caribou Falls US-MN -1 0 15 14"
+        )
+        self.assertEqual(rows, [])
+        self.assertIn("four contact totals", invalid[0]["reason"])
 
     def test_all_fourteen_supplied_rows_and_long_names(self):
         rows, ignored, invalid = parse_pota_history(SUPPLIED_SAMPLE)
@@ -94,8 +101,8 @@ class PotaImportEntryPointTests(TestCase):
 
         shared_header_response = self.client.get(reverse("home"))
         self.assertEqual(shared_header_response.status_code, 200)
-        self.assertNotContains(shared_header_response, "Import POTA History")
-        self.assertNotContains(shared_header_response, "Import POTA Hunter Log")
+        self.assertContains(shared_header_response, "Import POTA History", count=1)
+        self.assertContains(shared_header_response, "Import POTA Contacts", count=1)
 
         adventures_response = self.client.get(reverse("my_adventures"))
         self.assertEqual(adventures_response.status_code, 200)
@@ -364,6 +371,175 @@ class PotaImportEntryPointTests(TestCase):
         self.assertEqual(Adventure.objects.filter(owner=self.user).count(), 1)
         self.assertEqual(PotaActivationImport.objects.filter(adventure__owner=self.user).count(), 1)
 
+    def test_preview_explains_ineligible_rows_and_bulk_controls_target_only_eligible_rows(self):
+        self.client.force_login(self.user)
+        first = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
+        first_token = first.url.rstrip("/").split("/")[-1]
+        self.client.post(
+            reverse("confirm_pota_history", args=[first_token]),
+            {"selected": ["0"]},
+        )
+        review_rows = (
+            "2024-06-01 W5TEST US-1234 Pike Lake US-MN 4 1 5 10\n"
+            "2024-06-02 W5TEST US-5678 Pine Park US-MN 0 0 11 11"
+        )
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": review_rows})
+        token = start.url.rstrip("/").split("/")[-1]
+        preview = self.client.get(start.url)
+
+        self.assertContains(preview, "Select All Eligible")
+        self.assertContains(preview, "Clear Selection")
+        self.assertContains(preview, "Already imported")
+        self.assertContains(preview, "Ready to import")
+        self.assertContains(preview, "checked data-pota-eligible", count=1)
+        self.assertContains(preview, 'name="selected" value="0" disabled')
+        self.assertContains(preview, 'name="selected" value="1" checked data-pota-eligible')
+
+        imported = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {"selected": ["0", "1"]},
+        )
+        self.assertRedirects(imported, reverse("pota_history_result"))
+        self.assertEqual(PotaActivationImport.objects.filter(batch__owner=self.user).count(), 2)
+
+    def test_existing_adventure_dropdown_is_owner_scoped_even_for_staff(self):
+        staff = get_user_model().objects.create_user(
+            username="N0STAFF", password="password", is_staff=True,
+        )
+        MemberProfile.objects.create(
+            user=staff, callsign="N0STAFF", callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
+        )
+        owned = Adventure.objects.create(owner=staff, title="My Staff Adventure")
+        other = Adventure.objects.create(owner=self.user, title="Another Member Adventure")
+        self.client.force_login(staff)
+        start = self.client.post(reverse("import_pota_history"), {
+            "pota_history": "2024-06-01 N0STAFF US-1234 Pike Lake US-MN 0 0 10 10",
+        })
+        preview = self.client.get(start.url)
+
+        self.assertContains(preview, f'<option value="{owned.pk}">My Staff Adventure</option>', html=True)
+        self.assertNotContains(preview, other.title)
+
+    def test_grouped_import_creates_distinct_journals_in_new_adventure(self):
+        self.client.force_login(self.user)
+        rows = "2024-06-01 W5TEST US-1234 Pike Lake US-MN 0 0 10 10\n2024-06-02 W5TEST US-5678 Pine Park US-MN 0 0 11 11"
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": rows})
+        token = start.url.rstrip("/").split("/")[-1]
+        response = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0", "1"], "import_organization": "grouped",
+            "new_adventure_name": "POTA Activations", "new_adventure_visibility": "public",
+        })
+        adventure = Adventure.objects.get(title="POTA Activations")
+        self.assertRedirects(response, adventure.get_absolute_url())
+        self.assertEqual(adventure.journal_entries.count(), 2)
+        self.assertEqual(PotaActivationImport.objects.filter(adventure=adventure, journal_entry__isnull=False).count(), 2)
+        self.assertTrue(adventure.is_public)
+        self.assertTrue(all(adventure.journal_entries.values_list("is_public", flat=True)))
+        imports = list(
+            PotaActivationImport.objects.filter(adventure=adventure)
+            .order_by("activation_date")
+            .values_list(
+                "cw_contacts", "data_contacts", "phone_contacts", "total_contacts"
+            )
+        )
+        self.assertEqual(imports, [(0, 0, 10, 10), (0, 0, 11, 11)])
+
+    def test_pota_journal_table_displays_counts_and_rolls_up_current_adventure(self):
+        self.client.force_login(self.user)
+        rows = (
+            "2024-06-01 W5TEST US-1234 Pike Lake US-MN 2 5 10 17\n"
+            "2024-06-02 W5TEST US-5678 Pine Park US-MN 1 3 4 8"
+        )
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": rows})
+        token = start.url.rstrip("/").split("/")[-1]
+        response = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0", "1"], "import_organization": "grouped",
+            "destination_choice": "new", "new_adventure_name": "POTA Count Rollup",
+        })
+        adventure = Adventure.objects.get(title="POTA Count Rollup")
+        self.assertRedirects(response, adventure.get_absolute_url())
+
+        page = self.client.get(reverse("adventure_journals", args=[adventure.slug]))
+        for heading in ("CW", "Data", "Phone", "Total"):
+            self.assertContains(page, f">{heading}</th>")
+        self.assertNotContains(page, ">Summary</th>")
+        self.assertContains(page, ">Totals</th>")
+        self.assertContains(page, 'class="journal-list-location"', count=2)
+        self.assertContains(page, 'class="journal-list-entry"', count=2)
+        self.assertEqual(page.context["journal_count_totals"], {
+            "cw": 3, "data": 8, "phone": 14, "total": 25,
+        })
+
+        other = Adventure.objects.create(owner=self.user, title="Other POTA Counts")
+        other_journal = JournalEntry.objects.create(adventure=other, title="Other")
+        batch = PotaImportBatch.objects.filter(owner=self.user).first()
+        PotaActivationImport.objects.create(
+            adventure=other, journal_entry=other_journal, batch=batch,
+            activation_date="2024-06-03", callsign="W5TEST",
+            park_reference="US-9999", park_name="Other", entity="US-MN",
+            cw_contacts=99, data_contacts=99, phone_contacts=99,
+            total_contacts=297, fingerprint="f" * 64,
+            location_resolution="unresolved",
+        )
+        page = self.client.get(reverse("adventure_journals", args=[adventure.slug]))
+        self.assertEqual(page.context["journal_count_totals"]["total"], 25)
+
+        added = JournalEntry.objects.create(adventure=adventure, title="Added Journal")
+        PotaActivationImport.objects.create(
+            adventure=adventure, journal_entry=added, batch=batch,
+            activation_date="2024-06-04", callsign="W5TEST",
+            park_reference="US-7777", park_name="Added", entity="US-MN",
+            cw_contacts=4, data_contacts=0, phone_contacts=6,
+            total_contacts=10, fingerprint="e" * 64,
+            location_resolution="unresolved",
+        )
+        page = self.client.get(reverse("adventure_journals", args=[adventure.slug]))
+        self.assertEqual(page.context["journal_count_totals"], {
+            "cw": 7, "data": 8, "phone": 20, "total": 35,
+        })
+
+        empty = Adventure.objects.create(owner=self.user, title="Empty POTA Activation")
+        empty_page = self.client.get(reverse("adventure_journals", args=[empty.slug]))
+        self.assertContains(empty_page, "No journal entries yet.")
+        self.assertEqual(empty_page.context["journal_count_totals"], {
+            "cw": 0, "data": 0, "phone": 0, "total": 0,
+        })
+
+    def test_grouped_import_uses_owned_destination_and_rejects_conflicts(self):
+        destination = Adventure.objects.create(owner=self.user, title="Existing Destination")
+        self.client.force_login(self.user)
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
+        token = start.url.rstrip("/").split("/")[-1]
+        conflict = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0"], "import_organization": "grouped",
+            "destination_choice": "new", "destination_adventure": destination.pk,
+            "new_adventure_name": "Also New", "new_adventure_visibility": "private",
+        }, follow=True)
+        self.assertContains(conflict, "not both")
+        self.assertContains(conflict, 'value="Also New"')
+        self.assertContains(conflict, '<option value="private" selected>Private</option>', html=True)
+        self.assertEqual(JournalEntry.objects.count(), 0)
+        accepted = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0"], "import_organization": "grouped",
+            "destination_adventure": destination.pk,
+        })
+        self.assertRedirects(accepted, destination.get_absolute_url())
+        self.assertEqual(destination.journal_entries.count(), 1)
+
+    def test_grouped_import_rejects_unauthorized_destination(self):
+        other = get_user_model().objects.create_user(username="OTHER")
+        destination = Adventure.objects.create(owner=other, title="Not Mine")
+        self.client.force_login(self.user)
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
+        token = start.url.rstrip("/").split("/")[-1]
+        response = self.client.post(reverse("confirm_pota_history", args=[token]), {
+            "selected": ["0"], "import_organization": "grouped",
+            "destination_adventure": destination.pk,
+        }, follow=True)
+        self.assertContains(response, "not authorized")
+        self.assertEqual(destination.journal_entries.count(), 0)
+
     @override_settings(POTA_PARK_REFERENCE_DATA={"US-1234": {"name": "Pike Lake", "entity": "US-MN", "latitude": "46.123456", "longitude": "-92.654321"}})
     def test_imported_coordinates_reach_adventure_and_location_detail_maps(self):
         self.client.force_login(self.user)
@@ -401,6 +577,14 @@ class PotaImportEntryPointTests(TestCase):
         self.assertRedirects(result, reverse("preview_pota_history", args=[token]))
         self.assertContains(result, "Select at least one eligible activation to import.")
         self.assertEqual(Adventure.objects.count(), 0)
+
+    def test_preview_displays_source_total_discrepancy_without_changing_values(self):
+        self.client.force_login(self.user)
+        source = "2024-06-01 W5TEST US-1234 Pike Lake US-MN 2 3 4 12"
+        start = self.client.post(reverse("import_pota_history"), {"pota_history": source})
+        preview = self.client.get(start.url)
+        self.assertContains(preview, "The mode counts do not equal the supplied total.")
+        self.assertContains(preview, ">12</td>")
 
     def test_selected_alternate_callsign_requires_attestation_then_imports(self):
         self.client.force_login(self.user)
@@ -546,7 +730,8 @@ class PotaImportEntryPointTests(TestCase):
         token = start.url.rstrip("/").split("/")[-1]
         key = _park_key("US-8888")
         self.client.post(reverse("confirm_pota_history", args=[token]), {
-            "selected": ["0", "1"], "row_visibility_0": "batch", "row_visibility_1": "public",
+            "selected": ["0", "1"], "publish_pota_batch": "no",
+            "row_visibility_0": "batch", "row_visibility_1": "public",
             f"park_resolution_{key}": "create", f"park_latitude_{key}": "46.2", f"park_longitude_{key}": "-92.7",
         })
         self.assertEqual(list(Adventure.objects.order_by("started_at").values_list("is_public", flat=True)), [False, True])
