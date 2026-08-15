@@ -23,7 +23,7 @@
     </div>
 
     <div class="location-card">
-        <form method="post" enctype="multipart/form-data" data-prevent-double-submit>
+        <form method="post" data-prevent-double-submit>
             {% csrf_token %}
             {{ form.non_field_errors }}
 
@@ -62,39 +62,7 @@
                 <div><label for="{{ form.operating_callsign_explanation.id_for_label }}">Explanation <span class="optional-label">(optional)</span></label>{{ form.operating_callsign_explanation }}{% for error in form.operating_callsign_explanation.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>
             </div>
 
-            <div class="adventure-form-section">
-                <h2>Where did you operate?</h2>
-                <p class="story-first-help">Search for an existing Location first. If none fits, create a new Location and place its pin.</p>
-                <div class="location-field-with-help">
-                    <div>
-                        <label for="{{ form.location.id_for_label }}">Location <span class="required-field-label">Required Field</span></label>
-                        {{ form.location }}
-                        {% for error in form.location.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
-                    </div>
-                    <button type="button" class="location-help-button" data-location-help-open aria-haspopup="dialog" aria-controls="location-help-dialog" aria-label="Help choosing or creating a Location">?</button>
-                </div>
-                <a id="create-new-location-link" href="{% url 'create_location' %}?return_to=adventure" class="button-secondary-dark">Create a New Location</a>
-            </div>
-
-            {% include "adventures/_location_help_dialog.html" %}
-
-            {% if not adventure %}
-            <div class="adventure-form-section">
-                <h2>Photos (optional)</h2>
-                <div class="photo-upload-box photo-preview-control" data-photo-preview data-photo-preview-mode="multiple" data-photo-preview-save-label="Adventure">
-                    <div class="photo-paste-zone" data-photo-paste-zone tabindex="0">Paste photo here or use the file picker</div>
-                    {{ form.photos }}
-                    <div class="photo-preview-actions">
-                        <button type="button" class="ro-small-action" data-photo-preview-load>Load Photos</button>
-                        <button type="button" class="ro-small-action" data-photo-preview-change>Change Photos</button>
-                        <button type="button" class="ro-small-action" data-photo-preview-clear>Clear Selection</button>
-                    </div>
-                    <div class="journal-photo-preview-grid" data-photo-preview-stage aria-live="polite"></div>
-                    <p data-photo-preview-status aria-live="polite">No photos selected.</p>
-                    {% for error in form.photos.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
-                </div>
-            </div>
-            {% endif %}
+            <p class="story-first-help">Locations and photos are added through Journal entries after the Adventure is created.</p>
 
 
             <button type="submit" class="button-primary">
@@ -231,29 +199,6 @@
     {% endif %}
 
 </section>
-<script>
-(function () {
-    const locationSelect = document.getElementById(
-        "{{ form.location.id_for_label }}"
-    );
-    const titleInput = document.getElementById(
-        "{{ form.title.id_for_label }}"
-    );
-    const publicInput = document.getElementById(
-        "{{ form.is_public.id_for_label }}"
-    );
-    const createLink = document.getElementById("create-new-location-link");
-    if (!locationSelect || !createLink) {
-        return;
-    }
-    createLink.addEventListener("click", function () {
-        const params = new URLSearchParams(createLink.search);
-        params.set("title", titleInput ? titleInput.value : "");
-        params.set("public", publicInput && !publicInput.checked ? "0" : "1");
-        createLink.search = params.toString();
-    });
-})();
-</script>
 <script>
 document.querySelectorAll("form[data-prevent-double-submit]").forEach(function (form) {
     let submitting = false;

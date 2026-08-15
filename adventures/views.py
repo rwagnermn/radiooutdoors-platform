@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, Q, Sum
-from django.http import Http404, HttpResponseForbidden, JsonResponse
+from django.http import Http404, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -398,6 +398,13 @@ def adventure_detail(request, slug):
         seen_contacts.add(identity)
         contacts.append(contact)
     contact_count = len(contacts)
+    pota_rollup = adventure.journal_entries.aggregate(
+        cw=Sum("pota_import__cw_contacts"),
+        data=Sum("pota_import__data_contacts"),
+        phone=Sum("pota_import__phone_contacts"),
+        total=Sum("pota_import__total_contacts"),
+    )
+    pota_rollup = {key: value or 0 for key, value in pota_rollup.items()}
     contact_map = build_contact_map(adventure, contacts, request.user)
     can_manage_journals = bool(
         request.user == adventure.owner and is_verified_member(request.user)
@@ -442,6 +449,7 @@ def adventure_detail(request, slug):
             "adventure_photos": adventure_photos,
             "contacts": contacts,
             "contact_count": contact_count,
+            "pota_rollup": pota_rollup,
             "contact_map": contact_map,
             "contact_map_dom_id": "adventure-contact-map",
             "contact_map_data_id": "adventure-contact-map-data",
@@ -594,7 +602,6 @@ def start_adventure_here(request, location_id):
 
 @verified_member_required
 def add_adventure(request):
-    selected_location_id = request.GET.get("location")
     draft_title = request.GET.get("title", "")
     draft_public = request.GET.get("public", "1")
 
@@ -613,7 +620,7 @@ def add_adventure(request):
             and "is_public" not in form_data
         ):
             form_data["is_public"] = "on"
-        form = AdventureForm(form_data, request.FILES, user=request.user)
+        form = AdventureForm(form_data, user=request.user)
 
         if form.is_valid():
             try:
@@ -622,19 +629,6 @@ def add_adventure(request):
                     adventure.owner = request.user
                     adventure.status = Adventure.Status.ACTIVE
                     adventure.save()
-                    uploaded_photos = request.FILES.getlist("photos")
-                    if uploaded_photos:
-                        entry = JournalEntry.objects.create(
-                            adventure=adventure,
-                            operating_callsign=adventure.operating_callsign,
-                            entry_at=timezone.now(),
-                            title="Adventure photos",
-                            body="Photos from this Adventure.",
-                            is_public=adventure.is_public,
-                            is_adventure_photo_collection=True,
-                        )
-                        _, _, statuses = _save_entry_photos(entry, uploaded_photos)
-                        add_photo_upload_notice(request, statuses)
             except Exception as exc:
                 logger.exception(
                     "Adventure create transaction failed user_id=%s exception=%s",
@@ -643,8 +637,7 @@ def add_adventure(request):
                 )
                 form.add_error(
                     None,
-                    "The Adventure could not be saved. Correct any related Location "
-                    "or photo errors and try again.",
+                    "The Adventure could not be saved. Correct the errors and try again.",
                 )
             else:
                 messages.success(request, "Adventure saved successfully.")
@@ -654,9 +647,6 @@ def add_adventure(request):
             "title": draft_title,
             "is_public": draft_public != "0",
         }
-
-        if selected_location_id:
-            initial["location"] = selected_location_id
 
         form = AdventureForm(initial=initial, user=request.user)
     return render(
@@ -744,8 +734,7 @@ def edit_adventure(request, slug):
                 )
                 form.add_error(
                     None,
-                    "The Adventure could not be saved. Correct any related Location "
-                    "errors and try again.",
+                    "The Adventure could not be saved. Correct the errors and try again.",
                 )
             else:
                 messages.success(request, "Adventure saved successfully.")
@@ -1139,6 +1128,36 @@ def journal_entry_detail(request, entry_id):
     )
 
 
+@verified_member_or_staff_required
+@require_POST
+def toggle_journal_status(request, entry_id):
+    with transaction.atomic():
+        entry = get_object_or_404(
+            JournalEntry.objects.select_for_update().select_related(
+                "adventure", "adventure__owner"
+            ),
+            pk=entry_id,
+        )
+        if not _can_manage_adventure(request.user, entry.adventure):
+            return HttpResponseForbidden(
+                "Only the Journal owner or authorized staff can change its status."
+            )
+        entry.status = (
+            JournalEntry.Status.COMPLETED
+            if entry.status == JournalEntry.Status.OPEN
+            else JournalEntry.Status.OPEN
+        )
+        entry.save(update_fields=["status", "updated_at"])
+
+    messages.success(request, f"Journal status changed to {entry.display_status_label}.")
+    return redirect(
+        _safe_next_url(
+            request,
+            reverse("journal_entry_detail", kwargs={"entry_id": entry.pk}),
+        )
+    )
+
+
 def journal_photo_gallery(request, entry_id):
     entry = get_object_or_404(
         JournalEntry.objects.select_related("adventure", "adventure__owner"),
@@ -1152,6 +1171,7 @@ def journal_photo_gallery(request, entry_id):
     can_edit_journal = bool(
         request.user == entry.adventure.owner and is_verified_member(request.user)
     )
+    can_delete_photos = _can_manage_adventure(request.user, entry.adventure)
     can_review_photos = bool(request.user.is_staff)
     photos_query = entry.photos.all()
     if not (can_edit_journal or can_review_photos):
@@ -1166,10 +1186,99 @@ def journal_photo_gallery(request, entry_id):
             "entry": entry,
             "journal_photos": list(photos_query),
             "can_edit_journal": can_edit_journal,
+            "can_delete_photos": can_delete_photos,
             "can_review_photos": can_review_photos,
             "can_manage_adventure": _can_manage_adventure(request.user, entry.adventure),
         },
     )
+
+
+def _delete_photo_records(photos):
+    photos = list(photos)
+    if not photos:
+        return 0
+    names = {
+        image.name
+        for photo in photos
+        for image in (
+            photo.image,
+            photo.moderation_image,
+            photo.web_image,
+            photo.thumbnail_image,
+        )
+        if image and image.name
+    }
+    storage = photos[0].image.storage
+    photo_ids = [photo.pk for photo in photos]
+    cover_adventure_ids = list(
+        Adventure.objects.filter(cover_photo_id__in=photo_ids).values_list("pk", flat=True)
+    )
+    Photo.objects.filter(pk__in=photo_ids).delete()
+    if cover_adventure_ids:
+        Adventure.objects.filter(pk__in=cover_adventure_ids).update(
+            cover_photo_is_explicit=False,
+            updated_at=timezone.now(),
+        )
+
+    def remove_unshared_files():
+        for name in names:
+            still_referenced = Photo.objects.filter(
+                Q(image=name)
+                | Q(moderation_image=name)
+                | Q(web_image=name)
+                | Q(thumbnail_image=name)
+            ).exists()
+            if not still_referenced and storage.exists(name):
+                storage.delete(name)
+
+    transaction.on_commit(remove_unshared_files)
+    return len(photo_ids)
+
+
+@verified_member_or_staff_required
+@require_POST
+def delete_journal_photos(request, entry_id):
+    entry = get_object_or_404(
+        JournalEntry.objects.select_related("adventure", "adventure__owner"),
+        pk=entry_id,
+    )
+    if not _can_manage_adventure(request.user, entry.adventure):
+        return HttpResponseForbidden(
+            "Only the Journal owner or authorized staff can delete its photos."
+        )
+
+    mode = request.POST.get("delete_mode")
+    journal_photos = entry.photos.all()
+    if mode == "all":
+        photos = list(journal_photos)
+        action_label = "all"
+    elif mode in {"selected", "individual"}:
+        raw_ids = request.POST.getlist("photo_ids")
+        if not raw_ids or any(not value.isdigit() for value in raw_ids):
+            return HttpResponseBadRequest("Select valid photos to delete.")
+        requested_ids = {int(value) for value in raw_ids}
+        photos = list(journal_photos.filter(pk__in=requested_ids))
+        if {photo.pk for photo in photos} != requested_ids:
+            return HttpResponseBadRequest(
+                "Every selected photo must belong to this Journal. Nothing was deleted."
+            )
+        if mode == "individual" and len(photos) != 1:
+            return HttpResponseBadRequest("Choose exactly one photo to delete.")
+        action_label = "selected"
+    else:
+        return HttpResponseBadRequest("Choose a valid photo deletion action.")
+
+    with transaction.atomic():
+        deleted = _delete_photo_records(photos)
+        entry.adventure.save(update_fields=["updated_at"])
+    if deleted:
+        messages.success(
+            request,
+            f"Deleted {deleted} {action_label} photo{'s' if deleted != 1 else ''} from this Journal.",
+        )
+    else:
+        messages.info(request, "No photos were deleted.")
+    return redirect("journal_photo_gallery", entry_id=entry.pk)
 
 
 @verified_member_required
@@ -1255,6 +1364,7 @@ def edit_journal_entry(request, entry_id):
             "adventure": adventure,
             "entry": entry,
             "form": form,
+            "can_manage_adventure": True,
             "journal_location_choices": _journal_location_choices(request.user),
             "journal_map_defaults": _journal_map_defaults(adventure, request.user, entry),
         },
@@ -1624,7 +1734,7 @@ def make_cover_photo(request, photo_id, slug=None):
     return redirect(_safe_next_url(request, adventure.get_absolute_url()))
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def delete_photo(request, photo_id):
     photo = get_object_or_404(
@@ -1633,22 +1743,17 @@ def delete_photo(request, photo_id):
     )
     adventure = photo.journal_entry.adventure
 
-    if adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, adventure):
         return HttpResponseForbidden(
-            "Only the operator who owns this adventure can delete this photo."
+            "Only the Adventure owner or authorized staff can delete this photo."
         )
 
-    was_cover = adventure.cover_photo_id == photo.pk
-    photo.delete()
-
-    if was_cover:
-        adventure.cover_photo = None
-        adventure.cover_photo_is_explicit = False
-        adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit", "updated_at"])
-    else:
+    entry_id = photo.journal_entry_id
+    with transaction.atomic():
+        _delete_photo_records([photo])
         adventure.save(update_fields=["updated_at"])
-
-    return redirect("edit_adventure", slug=adventure.slug)
+    messages.success(request, "Photo deleted.")
+    return redirect("journal_photo_gallery", entry_id=entry_id)
 
 
 @verified_member_required

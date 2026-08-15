@@ -1,12 +1,17 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .application_data_reset import reset_all_application_data
+from .application_data_reset import (
+    _assert_safe_media_root_for_reset,
+    reset_all_application_data,
+)
 from .models import (
     Adventure, AdventureCoverSelectionAudit, BlockedDomain, Comment,
     CoordinateChangeAudit, DefaultLocationImage, FollowRelationship,
@@ -19,6 +24,15 @@ from .models import (
 
 
 class ApplicationDataResetTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.class_media = TemporaryDirectory(prefix="radiooutdoors-reset-tests-")
+        cls.addClassCleanup(cls.class_media.cleanup)
+        cls.media_override = override_settings(MEDIA_ROOT=cls.class_media.name)
+        cls.media_override.enable()
+        cls.addClassCleanup(cls.media_override.disable)
+
     def setUp(self):
         users = get_user_model().objects
         self.member = users.create_user("member", password="member-pass")
@@ -146,6 +160,20 @@ class ApplicationDataResetTests(TestCase):
                 self.assertTrue(static_like.exists())
                 self.assertTrue(preserved_profile_photo.exists())
                 self.assertGreaterEqual(result.media_files_deleted, 2)
+
+    def test_test_process_guard_rejects_normal_project_media_root(self):
+        project_media_root = (Path(settings.BASE_DIR) / "media").resolve()
+        with patch.dict("os.environ", {"RADIO_OUTDOORS_TEST_PROCESS": "1"}):
+            with override_settings(MEDIA_ROOT=project_media_root):
+                with self.assertRaisesMessage(
+                    RuntimeError,
+                    "MEDIA_ROOT is the project media directory",
+                ):
+                    _assert_safe_media_root_for_reset()
+
+    def test_test_process_guard_allows_isolated_media_root(self):
+        with patch.dict("os.environ", {"RADIO_OUTDOORS_TEST_PROCESS": "1"}):
+            _assert_safe_media_root_for_reset()
 
     def test_superuser_navigation_entry_is_hidden_from_staff(self):
         self.client.force_login(self.staff)

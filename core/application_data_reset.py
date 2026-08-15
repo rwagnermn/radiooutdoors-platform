@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +41,19 @@ UPLOAD_DIRECTORIES = (
     "photo_derivatives",
     "photo_quarantine",
 )
+
+
+def _assert_safe_media_root_for_reset():
+    """Fail closed if a test process can see the normal project media tree."""
+    if os.environ.get("RADIO_OUTDOORS_TEST_PROCESS") != "1":
+        return
+    media_root = Path(settings.MEDIA_ROOT).resolve()
+    project_media_root = (Path(settings.BASE_DIR) / "media").resolve()
+    if media_root == project_media_root or project_media_root in media_root.parents:
+        raise RuntimeError(
+            "Refusing destructive application-data reset in a test process because "
+            f"MEDIA_ROOT is the project media directory: {media_root}"
+        )
 
 
 @dataclass
@@ -96,6 +110,7 @@ def _remove_upload_files(files):
 
 
 def reset_all_application_data():
+    _assert_safe_media_root_for_reset()
     user_model = get_user_model()
     admins = list(
         user_model.objects.filter(Q(is_staff=True) | Q(is_superuser=True)).order_by("username").values(

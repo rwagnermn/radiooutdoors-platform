@@ -27,9 +27,22 @@ def serve_moderated_media(request, path):
         .first()
     )
     if photo:
+        adventure = photo.journal_entry.adventure
+        public_journal_photo = bool(
+            adventure.is_public
+            and photo.journal_entry.is_public
+            and photo.moderation_status == Photo.ModerationStatus.APPROVED
+        )
         allowed = _can_view(
             request, photo.moderation_status, photo.moderation_categories,
-            owner=photo.journal_entry.adventure.owner,
+            owner=adventure.owner,
+        )
+        allowed = bool(
+            allowed
+            and (
+                public_journal_photo
+                or (request.user.is_authenticated and request.user == adventure.owner)
+            )
         )
         if photo.web_image.name == path:
             image = photo.web_image

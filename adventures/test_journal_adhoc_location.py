@@ -193,7 +193,7 @@ class JournalUnifiedLocationTests(TestCase):
             settings.BASE_DIR / "templates" / "adventures" / "journal_entry_detail.html"
         ).read_text(encoding="utf-8")
         self.assertIn('class="journal-photo-viewer-trigger"', template)
-        self.assertIn('data-full-src="{{ photo.public_image_url }}', template)
+        self.assertIn('data-full-src="{{ photo.image.url }}', template)
         self.assertIn("at original size", template)
 
     def test_cover_and_embedded_map_dimensions_are_compact(self):

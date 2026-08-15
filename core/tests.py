@@ -51,9 +51,9 @@ class AdventureDisplayStatusTests(TestCase):
             owner=self.operator,
             title="Open Adventure",
         )
-        self.assertEqual(adventure.display_status_key, "open")
-        self.assertEqual(adventure.display_status_label, "Open")
-        self.assertEqual(adventure.get_status_display(), "Open")
+        self.assertEqual(adventure.display_status_key, "active")
+        self.assertEqual(adventure.display_status_label, "Active")
+        self.assertEqual(adventure.get_status_display(), "Active")
 
     def test_completed_adventure_is_complete(self):
         adventure = Adventure.objects.create(

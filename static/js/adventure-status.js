@@ -23,8 +23,8 @@
         const button = form.querySelector("[data-adventure-status-control]");
         const oldLabel = button.textContent.trim();
         const oldAction = form.action;
-        const oldClass = oldLabel === "Open" ? "open" : "complete";
-        const nextLabel = oldLabel === "Open" ? "Complete" : "Open";
+        const oldClass = oldLabel === "Active" ? "active" : "complete";
+        const nextLabel = oldLabel === "Active" ? "Complete" : "Active";
         const nextClass = nextLabel.toLowerCase();
 
         button.disabled = true;
@@ -47,12 +47,12 @@
 
             const data = await response.json();
             button.textContent = data.label;
-            button.classList.remove("adventure-status-open", "adventure-status-complete");
+            button.classList.remove("adventure-status-active", "adventure-status-complete");
             button.classList.add("adventure-status-" + data.key);
             form.action = data.toggle_url;
         } catch (error) {
             button.textContent = oldLabel;
-            button.classList.remove("adventure-status-open", "adventure-status-complete");
+            button.classList.remove("adventure-status-active", "adventure-status-complete");
             button.classList.add("adventure-status-" + oldClass);
             form.action = oldAction;
             window.alert(error.message || "The status could not be saved. Please try again.");

@@ -1,4 +1,6 @@
 from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -46,13 +48,21 @@ class AddAdventureWorkflowTests(TestCase):
             name="Unmapped Position",
         )
 
-    def test_add_page_uses_location_only_workflow(self):
+    def test_add_page_contains_only_adventure_level_fields(self):
         response = self.client.get(reverse("add_adventure"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertNotIn("location", response.context["form"].fields)
         self.assertNotIn("operating_location", response.context["form"].fields)
-        self.assertContains(response, "Create a New Location")
-        self.assertContains(response, "Choosing or creating a Location")
+        self.assertNotIn("photos", response.context["form"].fields)
+        self.assertNotContains(response, "Where did you operate?")
+        self.assertNotContains(response, "Create a New Location")
+        self.assertNotContains(response, "Paste photo here")
+        self.assertNotContains(response, 'type="file"')
+        self.assertContains(
+            response,
+            "Locations and photos are added through Journal entries",
+        )
 
     def test_dropdown_selection_creates_adventure_with_matching_position(self):
         response = self.client.post(
@@ -79,9 +89,10 @@ class AddAdventureWorkflowTests(TestCase):
             ).exists()
         )
 
-    def test_new_adventure_photos_use_existing_journal_photo_storage(self):
+    def test_new_adventure_ignores_legacy_photo_upload_and_creates_no_journal(self):
         output = BytesIO()
         Image.new("RGB", (32, 24), "orange").save(output, "PNG")
+        photo_count = Photo.objects.count()
         response = self.client.post(
             reverse("add_adventure"),
             {
@@ -93,7 +104,8 @@ class AddAdventureWorkflowTests(TestCase):
         )
         adventure = Adventure.objects.get(title="Photo Adventure")
         self.assertRedirects(response, reverse("my_adventures"))
-        self.assertEqual(Photo.objects.filter(journal_entry__adventure=adventure).count(), 1)
+        self.assertFalse(adventure.journal_entries.exists())
+        self.assertEqual(Photo.objects.count(), photo_count)
 
     def test_create_redirects_to_my_adventures_with_success_message_and_saved_row(self):
         response = self.client.post(
@@ -153,13 +165,10 @@ class AddAdventureWorkflowTests(TestCase):
             Adventure.objects.filter(title="Preserve This Title").exists()
         )
 
-    def test_related_photo_failure_rolls_back_adventure_and_stays_on_form(self):
+    def test_adventure_creation_never_calls_journal_photo_storage(self):
         output = BytesIO()
         Image.new("RGB", (20, 20), "orange").save(output, "PNG")
-        with patch(
-            "adventures.views._save_entry_photos",
-            side_effect=OSError("simulated storage failure"),
-        ):
+        with patch("adventures.views._save_entry_photos") as save_photos:
             response = self.client.post(
                 reverse("add_adventure"),
                 {
@@ -172,11 +181,10 @@ class AddAdventureWorkflowTests(TestCase):
                 },
             )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "The Adventure could not be saved")
-        self.assertFalse(
-            Adventure.objects.filter(title="Rolled Back Adventure").exists()
-        )
+        self.assertRedirects(response, reverse("my_adventures"))
+        save_photos.assert_not_called()
+        adventure = Adventure.objects.get(title="Rolled Back Adventure")
+        self.assertFalse(adventure.journal_entries.exists())
 
     def test_form_prevents_duplicate_browser_submission(self):
         response = self.client.get(reverse("add_adventure"))
@@ -317,10 +325,7 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertRedirects(response, expected, fetch_redirect_response=False)
 
         returned = self.client.get(expected)
-        self.assertEqual(
-            returned.context["form"].initial["location"],
-            str(location.pk),
-        )
+        self.assertNotIn("location", returned.context["form"].fields)
 
         saved = self.client.post(
             reverse("add_adventure"),
@@ -335,6 +340,54 @@ class AddAdventureWorkflowTests(TestCase):
         created = Adventure.objects.get(title="Adventure With Newly Created Place")
         self.assertIsNone(created.location_id)
         self.assertIsNone(created.operating_location_id)
+
+    def test_new_adventure_has_zero_related_records_and_generic_hero(self):
+        location_count = Location.objects.count()
+        photo_count = Photo.objects.count()
+
+        response = self.client.post(
+            reverse("add_adventure"),
+            {"title": "Empty Adventure"},
+        )
+
+        self.assertRedirects(response, reverse("my_adventures"))
+        adventure = Adventure.objects.get(title="Empty Adventure")
+        self.assertIsNone(adventure.location_id)
+        self.assertIsNone(adventure.operating_location_id)
+        self.assertEqual(adventure.journal_entries.count(), 0)
+        self.assertEqual(Location.objects.count(), location_count)
+        self.assertEqual(Photo.objects.count(), photo_count)
+
+        detail = self.client.get(adventure.get_absolute_url())
+        self.assertContains(detail, '/static/images/hero.jpg')
+        self.assertContains(detail, '<span>0 total</span>', html=True)
+        self.assertContains(detail, "No contacts have been recorded")
+        self.assertContains(detail, "No photos have been added")
+        self.assertEqual(
+            detail.context["pota_rollup"],
+            {"cw": 0, "data": 0, "phone": 0, "total": 0},
+        )
+
+    def test_edit_page_does_not_offer_location_or_photo_controls(self):
+        adventure = Adventure.objects.create(
+            owner=self.user,
+            title="Historical Adventure",
+            location=self.location,
+            operating_location=self.mapped_position,
+        )
+
+        response = self.client.get(
+            reverse("edit_adventure", kwargs={"slug": adventure.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("location", response.context["form"].fields)
+        self.assertNotIn("photos", response.context["form"].fields)
+        self.assertNotContains(response, "Where did you operate?")
+        self.assertNotContains(response, "Paste photo here")
+        adventure.refresh_from_db()
+        self.assertEqual(adventure.location_id, self.location.pk)
+        self.assertEqual(adventure.operating_location_id, self.mapped_position.pk)
 
     def test_inline_position_creation_saves_under_selected_location(self):
         empty_location = Location.objects.create(name="Empty Workflow Park")
@@ -591,7 +644,7 @@ class AddAdventureWorkflowTests(TestCase):
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
             HTTP_ACCEPT="application/json",
         )
-        self.assertEqual(response.json()["label"], "Open")
+        self.assertEqual(response.json()["label"], "Active")
         adventure.refresh_from_db()
         self.assertEqual(adventure.status, Adventure.Status.ACTIVE)
 
@@ -626,7 +679,7 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertContains(owner_response, ">Edit</a>", count=1)
         self.assertContains(owner_response, ">Delete</button>", count=1)
         self.assertContains(owner_response, "<span>All Status</span>", html=True)
-        self.assertContains(owner_response, "<span>Open</span>", html=True)
+        self.assertContains(owner_response, "<span>Active</span>", html=True)
         self.assertContains(owner_response, "<span>Complete</span>", html=True)
         self.assertContains(owner_response, 'class="adventure-panel-list"')
         self.assertNotContains(owner_response, "<table")
@@ -701,24 +754,27 @@ class AddAdventureWorkflowTests(TestCase):
             adventure=adventure,
             body="Photo viewer journal.",
         )
-        Photo.objects.create(
-            journal_entry=entry,
-            image="adventure_photos/test-original.jpg",
-            caption="Summit station",
-            moderation_status=Photo.ModerationStatus.APPROVED,
-        )
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            photo = Photo.objects.create(
+                journal_entry=entry,
+                image="adventure_photos/test-original.jpg",
+                caption="Summit station",
+                moderation_status=Photo.ModerationStatus.APPROVED,
+            )
+            target = Path(media_root) / photo.image.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"image-content")
+            response = self.client.get(
+                reverse("journal_entry_detail", kwargs={"entry_id": entry.pk})
+            )
 
-        response = self.client.get(
-            reverse("journal_entry_detail", kwargs={"entry_id": entry.pk})
-        )
-
-        self.assertContains(response, 'class="journal-photo-viewer-trigger"')
-        self.assertContains(
-            response,
-            'data-full-src="/media/adventure_photos/test-original.jpg',
-        )
-        self.assertContains(response, "View Summit station at original size")
-        self.assertContains(response, "journal-photo-viewer.js")
+            self.assertContains(response, 'class="journal-photo-viewer-trigger"')
+            self.assertContains(
+                response,
+                'data-full-src="/media/adventure_photos/test-original.jpg',
+            )
+            self.assertContains(response, "View Summit station at original size")
+            self.assertContains(response, "journal-photo-viewer.js")
 
     def test_journal_browsing_lists_use_compact_shared_rows(self):
         adventure = Adventure.objects.create(

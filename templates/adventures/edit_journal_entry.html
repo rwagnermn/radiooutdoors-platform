@@ -5,6 +5,7 @@
 <div class="journal-edit-heading">
 <div><p><a href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal Entry</a></p><h1>Edit Journal Entry{% include "partials/_staff_record_id.html" with object=entry label="Journal ID" %}</h1></div>
 <div class="ro-page-actions">
+{% include "adventures/_journal_status_control.html" %}
 <a href="{% url 'journal_entry_detail' entry.pk %}" class="primary-feature-button">View Journal</a>
 <form method="post" action="{% url 'delete_journal_entry' entry.pk %}"
 onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">

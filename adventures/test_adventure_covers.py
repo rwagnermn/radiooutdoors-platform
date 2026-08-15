@@ -1,6 +1,9 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import (
@@ -10,6 +13,11 @@ from core.models import (
 
 class AdventureCoverTests(TestCase):
     def setUp(self):
+        self.temp_media = TemporaryDirectory()
+        self.addCleanup(self.temp_media.cleanup)
+        media_override = override_settings(MEDIA_ROOT=self.temp_media.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
         users = get_user_model()
         self.owner = users.objects.create_user("W5COVER", password="test-password")
         MemberProfile.objects.create(
@@ -32,10 +40,14 @@ class AdventureCoverTests(TestCase):
         )
 
     def photo(self, entry, name, status="approved", order=0):
-        return Photo.objects.create(
+        photo = Photo.objects.create(
             journal_entry=entry, image=f"test/{name}.jpg",
             moderation_status=status, display_order=order,
         )
+        target = Path(self.temp_media.name) / photo.image.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"image-content")
+        return photo
 
     def test_generic_is_used_when_no_approved_photo_exists(self):
         pending = self.photo(self.entry("Adventure photos", direct=True), "pending", "pending")
@@ -63,9 +75,9 @@ class AdventureCoverTests(TestCase):
         first = self.photo(entry, "first", order=0)
         selected = self.photo(entry, "selected", order=1)
         self.client.force_login(self.owner)
-        gallery = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(gallery, "Use as Adventure Cover")
-        self.assertContains(gallery, "Journal: Adventure photos")
+        gallery = self.client.get(reverse("journal_photo_gallery", args=[entry.pk]))
+        self.assertContains(gallery, "Use as Adventure Photo")
+        self.assertContains(gallery, "Adventure photos Photos")
         response = self.client.post(reverse(
             "make_adventure_cover", args=[self.adventure.slug, selected.pk]
         ))
@@ -141,5 +153,5 @@ class AdventureCoverTests(TestCase):
         response = self.client.get(self.adventure.get_absolute_url())
 
         self.assertContains(response, 'class="journal-photo-viewer-trigger"')
-        self.assertContains(response, f'data-full-src="{photo.public_image_url}')
+        self.assertContains(response, f'data-full-src="{photo.image.url}')
         self.assertContains(response, "at original size")

@@ -2,9 +2,44 @@
 {% block title %}Photos — {{ entry.title|default:"Journal Entry" }} | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page journal-story-page{% endblock %}
 {% block content %}
-<section class="content journal-photo-gallery-page">
+<section class="content journal-photo-gallery-page" data-photo-gallery data-journal-name="{{ entry.title|default:'Journal Entry' }}">
   <p><a href="{% url 'journal_entry_detail' entry.pk %}" class="back-link-button">← Back to Journal Detail</a></p>
   <header><h1>{{ entry.title|default:"Journal Entry" }} Photos</h1><p>Adventure: <a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></p></header>
-  {% if journal_photos %}<div class="journal-photo-gallery-grid">{% for photo in journal_photos %}<figure class="journal-photo-gallery-item{% if not photo.is_publicly_visible and not can_review_photos %} journal-photo-unapproved{% endif %}">{% if photo.is_publicly_visible or can_review_photos %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Journal photo' }}" aria-label="View {{ photo.caption|default:'Journal photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Journal photo' }}"></button>{% else %}<img src="{{ photo.public_thumbnail_url }}?v={{ entry.updated_at|date:'U' }}" alt="Photo awaiting approval" class="journal-photo-blurred"><span class="journal-photo-review-label">{{ photo.moderation_display_status }}</span>{% endif %}<div class="journal-photo-gallery-roles">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span>Current Adventure Photo</span>{% endif %}{% if entry.primary_photo_id == photo.pk %}<span>Current Journal Photo</span>{% endif %}</div>{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}{% if photo.is_publicly_visible %}<div class="journal-photo-gallery-actions">{% if can_manage_adventure and adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Photo</button></form>{% endif %}{% if can_edit_journal and entry.primary_photo_id != photo.pk %}<form method="post" action="{% url 'make_journal_photo' entry.pk photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Journal Photo</button></form>{% endif %}</div>{% endif %}</figure>{% endfor %}</div>{% else %}<p class="journal-panel-empty">No photos are available for this Journal.</p>{% endif %}
+  {% if can_delete_photos %}
+  <div class="journal-photo-bulk-toolbar" aria-label="Photo selection controls">
+    <button type="button" data-photo-select-all>Select All</button>
+    <button type="button" data-photo-clear>Clear Selection</button>
+    <span aria-live="polite"><strong data-photo-selected-count>0</strong> selected</span>
+    <button type="button" class="danger-button" data-photo-delete-selected disabled>Delete Selected Photos</button>
+    <button type="button" class="danger-button" data-photo-delete-all>Delete All Photos</button>
+  </div>
+  {% endif %}
+  {% if journal_photos %}
+  <div class="journal-photo-gallery-grid">
+    {% for photo in journal_photos %}
+    <figure class="journal-photo-gallery-item{% if not photo.is_publicly_visible and not can_review_photos %} journal-photo-unapproved{% endif %}" data-photo-id="{{ photo.pk }}" data-photo-reference="{{ photo.reference_number|default:'Photo' }}">
+      {% if can_delete_photos %}<label class="journal-photo-select"><input type="checkbox" value="{{ photo.pk }}" data-photo-checkbox> <span>Select {{ photo.reference_number|default:'photo' }}</span></label>{% endif %}
+      {% if photo.display_file_exists %}
+        {% if photo.is_publicly_visible or can_review_photos %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ entry.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Journal photo' }}" aria-label="View {{ photo.caption|default:'Journal photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ entry.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Journal photo' }}"></button>{% else %}<img src="{{ photo.public_thumbnail_url }}?v={{ entry.updated_at|date:'U' }}" alt="Photo awaiting approval" class="journal-photo-blurred"><span class="journal-photo-review-label">{{ photo.moderation_display_status }}</span>{% endif %}
+      {% else %}<div class="journal-photo-missing" role="img" aria-label="Photo file unavailable"><strong>Photo unavailable</strong><span>The stored image file is missing or unreadable.</span></div>{% endif %}
+      <div class="journal-photo-gallery-meta"><span>{{ photo.reference_number|default:"Reference unavailable" }}</span>{% if can_delete_photos or can_review_photos %}<span>{{ photo.moderation_display_status }}</span>{% endif %}</div>
+      <div class="journal-photo-gallery-roles">{% if adventure.cover_photo_is_explicit and adventure.cover_photo_id == photo.pk %}<span>Current Adventure Photo</span>{% endif %}{% if entry.primary_photo_id == photo.pk %}<span>Current Journal Photo</span>{% endif %}</div>
+      {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}
+      {% if can_delete_photos %}<button type="button" class="journal-photo-delete-one danger-button" data-photo-delete-one="{{ photo.pk }}">Delete Photo</button>{% endif %}
+      {% if photo.is_publicly_visible %}<div class="journal-photo-gallery-actions">{% if can_manage_adventure and adventure.cover_photo_id != photo.pk %}<form method="post" action="{% url 'make_adventure_cover' adventure.slug photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Adventure Photo</button></form>{% endif %}{% if can_edit_journal and entry.primary_photo_id != photo.pk %}<form method="post" action="{% url 'make_journal_photo' entry.pk photo.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Use as Journal Photo</button></form>{% endif %}</div>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}<div class="journal-photo-empty"><p>No photos have been added to this Journal.</p>{% if can_edit_journal %}<a class="button-primary" href="{% url 'edit_journal_entry' entry.pk %}#journal-photo-upload">Add Photo</a>{% endif %}</div>{% endif %}
+  {% if can_delete_photos %}
+  <dialog class="photo-delete-dialog" data-photo-delete-dialog aria-labelledby="photo-delete-title">
+    <form method="post" action="{% url 'delete_journal_photos' entry.pk %}" data-photo-delete-form>
+      {% csrf_token %}<input type="hidden" name="delete_mode" data-photo-delete-mode>
+      <div data-photo-delete-ids></div><h2 id="photo-delete-title" data-photo-delete-title>Delete Photos?</h2><p data-photo-delete-message></p>
+      <div class="photo-delete-dialog-actions"><button type="button" data-photo-delete-cancel>Cancel</button><button type="submit" class="danger-button" data-photo-delete-confirm>Delete Photos</button></div>
+    </form>
+  </dialog>
+  {% endif %}
 </section>
 {% endblock %}
+{% block extra_scripts %}{% if can_delete_photos %}<script src="{% static 'js/journal-photo-management.js' %}?v=001"></script>{% endif %}{% endblock %}

@@ -6,7 +6,7 @@
   <form method="get" class="adventure-book-panel-filters">
     <fieldset class="adventure-book-status-tabs"><legend class="visually-hidden">Adventure status</legend>
       <label><input type="radio" name="activity" value=""{% if not selected_activity %} checked{% endif %}><span>All Status</span></label>
-      <label><input type="radio" name="activity" value="open"{% if selected_activity == 'open' %} checked{% endif %}><span>Open</span></label>
+      <label><input type="radio" name="activity" value="open"{% if selected_activity == 'open' %} checked{% endif %}><span>Active</span></label>
       <label><input type="radio" name="activity" value="complete"{% if selected_activity == 'complete' %} checked{% endif %}><span>Complete</span></label>
     </fieldset>
     <label class="adventure-book-location-filter"><span class="visually-hidden">Location</span><select name="place"><option value="">All Locations</option>{% for location in locations %}<option value="{{ location.pk }}"{% if selected_place == location.pk|stringformat:'s' %} selected{% endif %}>{{ location.name }}</option>{% endfor %}</select></label>

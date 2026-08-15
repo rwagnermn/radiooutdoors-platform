@@ -1,8 +1,10 @@
 from datetime import date
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import resolve, reverse
 
 from core.models import Adventure, JournalContact, JournalEntry, Location, MemberProfile, Photo
@@ -103,8 +105,8 @@ class AdventureContactHubTests(TestCase):
 
         detail = self.client.get(self.adventure.get_absolute_url())
 
-        self.assertContains(detail, "<th>State</th>", html=True)
-        self.assertContains(detail, "<th>Country</th>", html=True)
+        self.assertContains(detail, '<th scope="col">State</th>', html=True)
+        self.assertContains(detail, '<th scope="col">Country</th>', html=True)
         self.assertNotContains(detail, "<th>Journal</th>", html=True)
         self.assertContains(detail, "Minnesota")
         self.assertContains(detail, "USA")
@@ -181,21 +183,25 @@ class AdventureContactHubTests(TestCase):
 
     def test_unapproved_dashboard_photo_is_blurred_for_owner_and_clear_for_staff(self):
         entry = self.add_entry("Moderation Journal")
-        Photo.objects.create(
-            journal_entry=entry,
-            image="adventure_photos/pending-dashboard.jpg",
-            moderation_status=Photo.ModerationStatus.PENDING,
-        )
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            photo = Photo.objects.create(
+                journal_entry=entry,
+                image="adventure_photos/pending-dashboard.jpg",
+                moderation_status=Photo.ModerationStatus.PENDING,
+            )
+            target = Path(media_root) / photo.image.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"image-content")
 
-        self.client.force_login(self.owner)
-        owner = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(owner, "adventure-photo-unapproved")
-        self.assertContains(owner, "Photo awaiting approval")
+            self.client.force_login(self.owner)
+            owner = self.client.get(self.adventure.get_absolute_url())
+            self.assertContains(owner, "adventure-photo-unapproved")
+            self.assertContains(owner, "Photo awaiting approval")
 
-        self.client.force_login(self.staff)
-        staff = self.client.get(self.adventure.get_absolute_url())
-        self.assertNotContains(staff, "adventure-photo-unapproved")
-        self.assertContains(staff, "journal-photo-viewer-trigger")
+            self.client.force_login(self.staff)
+            staff = self.client.get(self.adventure.get_absolute_url())
+            self.assertNotContains(staff, "adventure-photo-unapproved")
+            self.assertContains(staff, "journal-photo-viewer-trigger")
 
     def test_public_hub_preserves_existing_journal_visibility(self):
         public_entry = self.add_entry("Public Journal", public=True)

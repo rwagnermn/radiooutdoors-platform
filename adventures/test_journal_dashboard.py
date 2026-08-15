@@ -1,8 +1,10 @@
 from datetime import datetime, timezone as dt_timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import Adventure, JournalContact, JournalEntry, Location, MemberProfile, Photo
@@ -10,6 +12,11 @@ from core.models import Adventure, JournalContact, JournalEntry, Location, Membe
 
 class JournalDashboardTests(TestCase):
     def setUp(self):
+        self.temp_media = TemporaryDirectory()
+        self.addCleanup(self.temp_media.cleanup)
+        media_override = override_settings(MEDIA_ROOT=self.temp_media.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
         users = get_user_model()
         self.owner = users.objects.create_user("journal-dashboard-owner", password="test")
         MemberProfile.objects.create(
@@ -46,10 +53,18 @@ class JournalDashboardTests(TestCase):
         )
         self.url = reverse("journal_entry_detail", args=[self.entry.pk])
 
+    def create_photo(self, **kwargs):
+        photo = Photo.objects.create(**kwargs)
+        target = Path(self.temp_media.name) / photo.image.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"GIF89a")
+        return photo
+
     def test_header_uses_real_values_and_authorized_adventure_link_without_story(self):
         response = self.client.get(self.url)
         self.assertContains(response, "Morning Shoreline Journal")
-        self.assertContains(response, "Complete / Public")
+        self.assertContains(response, "Complete")
+        self.assertContains(response, "Public")
         self.assertContains(response, "Lake Eleven Woods")
         self.assertContains(response, "W0JRN")
         self.assertContains(response, "August 13, 2026")
@@ -116,12 +131,12 @@ class JournalDashboardTests(TestCase):
         self.assertContains(private, "Private Location")
 
     def test_photo_filtering_blur_admin_display_carousel_and_enlargement(self):
-        approved = Photo.objects.create(
+        approved = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/journal-approved.jpg",
             moderation_status=Photo.ModerationStatus.APPROVED,
         )
-        pending = Photo.objects.create(
+        pending = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/journal-pending.jpg",
             moderation_status=Photo.ModerationStatus.PENDING,
@@ -151,12 +166,12 @@ class JournalDashboardTests(TestCase):
         self.assertContains(staff, pending.public_image_url)
 
     def test_photo_roles_can_share_one_photo_and_previous_photos_remain(self):
-        first = Photo.objects.create(
+        first = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/journal-first.jpg",
             moderation_status=Photo.ModerationStatus.APPROVED,
         )
-        selected = Photo.objects.create(
+        selected = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/journal-selected.jpg",
             moderation_status=Photo.ModerationStatus.APPROVED,
@@ -185,12 +200,12 @@ class JournalDashboardTests(TestCase):
         self.assertContains(detail, "Adventure Photo")
 
     def test_photo_role_actions_require_permission_and_approved_photo(self):
-        approved = Photo.objects.create(
+        approved = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/approved-role.jpg",
             moderation_status=Photo.ModerationStatus.APPROVED,
         )
-        pending = Photo.objects.create(
+        pending = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/pending-role.jpg",
             moderation_status=Photo.ModerationStatus.PENDING,
@@ -218,12 +233,12 @@ class JournalDashboardTests(TestCase):
         self.assertEqual(denied.status_code, 403)
 
     def test_view_all_photos_gallery_preserves_context_and_authorization(self):
-        approved = Photo.objects.create(
+        approved = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/gallery-approved.jpg",
             moderation_status=Photo.ModerationStatus.APPROVED,
         )
-        pending = Photo.objects.create(
+        pending = self.create_photo(
             journal_entry=self.entry,
             image="adventure_photos/gallery-pending.jpg",
             moderation_status=Photo.ModerationStatus.PENDING,
@@ -259,7 +274,7 @@ class JournalDashboardTests(TestCase):
 
     def test_photo_gallery_has_authorized_empty_state(self):
         response = self.client.get(reverse("journal_photo_gallery", args=[self.entry.pk]))
-        self.assertContains(response, "No photos are available for this Journal.")
+        self.assertContains(response, "No photos have been added to this Journal.")
 
     def test_photo_controls_fit_tiles_and_carousel_remains_accessible(self):
         from django.conf import settings

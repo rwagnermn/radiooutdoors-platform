@@ -38,10 +38,6 @@ class MultipleImageField(forms.ImageField):
 
 
 class AdventureForm(forms.ModelForm):
-    photos = MultipleImageField(
-        required=False,
-        help_text="Select or paste one or more images.",
-    )
     class Meta:
         model = Adventure
         fields = [
@@ -447,6 +443,10 @@ class JournalEntryForm(forms.ModelForm):
         adventure = kwargs.pop("adventure", None)
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        self.fields["status"].choices = [
+            (JournalEntry.Status.OPEN, "Active"),
+            (JournalEntry.Status.COMPLETED, "Complete"),
+        ]
         self.fields["location"].queryset = visible_locations(user).order_by("name")
         self.fields["operating_callsign"].required = True
         if not self.is_bound and not self.instance.pk:

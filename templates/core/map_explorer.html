@@ -32,7 +32,7 @@
 
             <label>
                 <input type="checkbox" id="show-open-pins" checked>
-                Open Adventures
+                Active Adventures
             </label>
         </fieldset>
 
@@ -41,9 +41,9 @@
             <div class="radio-map-legend-items">
                 <span><i class="map-legend-pin map-legend-pin-green" aria-hidden="true"><b>L</b></i>Location</span>
                 <span><i class="map-legend-pin map-legend-pin-red" aria-hidden="true"><b>!</b></i>Operating advisory</span>
-                <span><i class="map-legend-pin map-legend-pin-yellow" aria-hidden="true"><b>OPEN</b></i>Open Adventure</span>
+                <span><i class="map-legend-pin map-legend-pin-yellow" aria-hidden="true"><b>ACTIVE</b></i>Active Adventure</span>
             </div>
-            <p>Red advisory pins take precedence when an Open Adventure is also present.</p>
+            <p>Red advisory pins take precedence when an Active Adventure is also present.</p>
         </div>
 
         <div class="radio-map-toolbar-actions">
@@ -324,7 +324,7 @@ async function initRadioOutdoorsMap() {
             : "<div class='radio-map-popup-photo-placeholder'>Radio Outdoors</div>";
 
         const currentBadge = point.has_open_adventure
-            ? "<span class='radio-map-live-badge'>Open</span>"
+            ? "<span class='radio-map-live-badge'>Active</span>"
             : "";
 
         const latest = point.latest_title
@@ -446,7 +446,7 @@ async function initRadioOutdoorsMap() {
                 ? "!"
                 : (
                     point.has_open_adventure
-                        ? "OPEN"
+                        ? "ACTIVE"
                         : (point.is_private ? "🔒" : "L")
                 ),
             scale: point.has_open_adventure ? 1.32 : 1.10

@@ -1,0 +1,9 @@
+{% if can_manage_adventure %}
+<form method="post" action="{% url 'toggle_journal_status' entry.pk %}" class="journal-status-form">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button type="submit" class="journal-status-badge journal-status-{{ entry.display_status_key }} journal-status-button" aria-label="Change Journal status to {% if entry.status == 'open' %}Complete{% else %}Active{% endif %}">{{ entry.display_status_label }}</button>
+</form>
+{% else %}
+<span class="journal-status-badge journal-status-{{ entry.display_status_key }}">{{ entry.display_status_label }}</span>
+{% endif %}

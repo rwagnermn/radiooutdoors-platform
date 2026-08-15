@@ -407,11 +407,14 @@ class Adventure(models.Model):
 
     @property
     def display_status_key(self):
-        return "complete" if self.status == self.Status.COMPLETED else "open"
+        return "complete" if self.status == self.Status.COMPLETED else "active"
 
     @property
     def display_status_label(self):
-        return "Complete" if self.status == self.Status.COMPLETED else "Open"
+        return "Complete" if self.status == self.Status.COMPLETED else "Active"
+
+    def get_status_display(self):
+        return self.display_status_label
 
     @property
     def is_currently_operating(self):
@@ -606,7 +609,14 @@ class JournalEntry(models.Model):
 
     @property
     def display_status_label(self):
-        return "Complete" if self.status == self.Status.COMPLETED else "Open"
+        return "Complete" if self.status == self.Status.COMPLETED else "Active"
+
+    def get_status_display(self):
+        return self.display_status_label
+
+    @property
+    def display_status_key(self):
+        return "complete" if self.status == self.Status.COMPLETED else "active"
 
     @property
     def contact_count(self):
@@ -807,15 +817,34 @@ class Photo(models.Model):
 
     @property
     def public_image_url(self):
-        if self.web_image and self.derivative_status == "ready":
+        if (
+            self.web_image
+            and self.derivative_status == "ready"
+            and self.web_image.storage.exists(self.web_image.name)
+        ):
             return self.web_image.url
         return self.image.url
 
     @property
     def public_thumbnail_url(self):
-        if self.thumbnail_image and self.derivative_status == "ready":
+        if (
+            self.thumbnail_image
+            and self.derivative_status == "ready"
+            and self.thumbnail_image.storage.exists(self.thumbnail_image.name)
+        ):
             return self.thumbnail_image.url
         return self.public_image_url
+
+    @property
+    def display_file_exists(self):
+        for image in (self.web_image, self.image):
+            if image and image.storage.exists(image.name):
+                return True
+        return False
+
+    @property
+    def original_file_exists(self):
+        return bool(self.image and self.image.storage.exists(self.image.name))
 
     @property
     def is_publicly_visible(self):
