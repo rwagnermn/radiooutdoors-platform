@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
@@ -49,6 +51,17 @@ from .forms import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_external_reference_url(value):
+    reference = (value or "").strip()
+    if not reference:
+        return ""
+    try:
+        URLValidator(schemes=["http", "https"])(reference)
+    except ValidationError:
+        return ""
+    return reference
 
 def _journal_location_choices(user):
     return [
@@ -247,6 +260,23 @@ def my_adventures(request):
 
 
 def all_adventures(request):
+    if request.user.is_staff:
+        visible_book_journals = Q()
+        visible_book_photos = Q()
+    elif request.user.is_authenticated:
+        visible_book_journals = Q(owner=request.user) | Q(
+            journal_entries__is_public=True
+        )
+        visible_book_photos = Q(owner=request.user) | Q(
+            journal_entries__is_public=True,
+            journal_entries__photos__moderation_status=Photo.ModerationStatus.APPROVED,
+        )
+    else:
+        visible_book_journals = Q(journal_entries__is_public=True)
+        visible_book_photos = Q(
+            journal_entries__is_public=True,
+            journal_entries__photos__moderation_status=Photo.ModerationStatus.APPROVED,
+        )
     adventures = (
         Adventure.objects.select_related(
             "owner",
@@ -254,9 +284,21 @@ def all_adventures(request):
             "cover_photo",
         )
         .annotate(
-            journal_count=Count("journal_entries", distinct=True),
-            photo_count=Count("journal_entries__photos", distinct=True),
-            contact_count=Count("journal_entries__contacts", distinct=True) + Count("direct_contacts", filter=Q(direct_contacts__journal_entry__isnull=True), distinct=True),
+            journal_count=Count(
+                "journal_entries", filter=visible_book_journals, distinct=True
+            ),
+            photo_count=Count(
+                "journal_entries__photos", filter=visible_book_photos, distinct=True
+            ),
+            contact_count=Count(
+                "journal_entries__contacts",
+                filter=visible_book_journals,
+                distinct=True,
+            ) + Count(
+                "direct_contacts",
+                filter=Q(direct_contacts__journal_entry__isnull=True),
+                distinct=True,
+            ),
         )
     )
 
@@ -417,7 +459,7 @@ def adventure_detail(request, slug):
         seen_contacts.add(identity)
         contacts.append(contact)
     contact_count = len(contacts)
-    pota_rollup = adventure.journal_entries.aggregate(
+    pota_rollup = journal_entries.aggregate(
         cw=Sum("pota_import__cw_contacts"),
         data=Sum("pota_import__data_contacts"),
         phone=Sum("pota_import__phone_contacts"),
@@ -425,9 +467,7 @@ def adventure_detail(request, slug):
     )
     pota_rollup = {key: value or 0 for key, value in pota_rollup.items()}
     contact_map = build_contact_map(adventure, contacts, request.user)
-    can_manage_journals = bool(
-        request.user == adventure.owner and is_verified_member(request.user)
-    )
+    can_manage_journals = can_manage_adventure
     photo_upload_entry = journal_entries.first() if can_manage_journals else None
     if photo_upload_entry is not None:
         photo_add_url = (
@@ -443,7 +483,11 @@ def adventure_detail(request, slug):
         photo_add_url = ""
     can_view_adventure_location = can_view_location(request.user, adventure.location)
     visible_location = adventure.location if can_view_adventure_location else None
+    journal_entry_rows = list(journal_entries)
+    for item in journal_entry_rows:
+        item.can_view_location = can_view_location(request.user, item.location)
     display_cover_photo = adventure.display_cover_photo
+    adventure_reference = (adventure.operating_callsign_url or "").strip()
     if (
         can_manage_adventure
         and adventure.cover_photo_is_explicit
@@ -464,7 +508,9 @@ def adventure_detail(request, slug):
         "adventures/adventure_detail.html",
         {
             "adventure": adventure,
-            "journal_entries": journal_entries,
+            "adventure_reference": adventure_reference,
+            "adventure_reference_url": _safe_external_reference_url(adventure_reference),
+            "journal_entries": journal_entry_rows,
             "adventure_photos": adventure_photos,
             "contacts": contacts,
             "contact_count": contact_count,
@@ -475,7 +521,7 @@ def adventure_detail(request, slug):
             "can_manage_adventure": can_manage_adventure,
             "can_manage_journals": can_manage_journals,
             "can_view_unapproved_photos": can_view_unapproved_photos,
-            "journal_entry_count": journal_entries.count(),
+            "journal_entry_count": len(journal_entry_rows),
             "photo_add_url": photo_add_url,
             "can_view_adventure_location": can_view_adventure_location,
             "can_edit_adventure_location_pin": bool(
@@ -499,7 +545,7 @@ def adventure_detail(request, slug):
                  "url": reverse("journal_entry_detail", args=[item.pk]),
                  "latitude": float(item.latitude), "longitude": float(item.longitude),
                  "status": item.status}
-                for item in journal_entries.select_related("location")
+                for item in journal_entry_rows
                 if item.location and item.latitude is not None and item.longitude is not None
                 and can_view_location(request.user, item.location)
             ],
@@ -562,13 +608,23 @@ def adventure_journals(request, slug):
     journal_count_totals = {
         key: value or 0 for key, value in journal_count_totals.items()
     }
+    visible_photo_filter = Q()
+    if not can_manage_adventure:
+        visible_photo_filter = Q(
+            photos__moderation_status=Photo.ModerationStatus.APPROVED
+        )
     journals = journals.annotate(
         dashboard_contact_count=Count("contacts", distinct=True),
-        dashboard_photo_count=Count("photos", distinct=True),
+        dashboard_photo_count=Count(
+            "photos", filter=visible_photo_filter, distinct=True
+        ),
     ).select_related("location", "pota_import").order_by("-entry_at", "-pk")
+    journal_rows = list(journals)
+    for item in journal_rows:
+        item.can_view_location = can_view_location(request.user, item.location)
     return render(request, "adventures/adventure_journals.html", {
         "adventure": adventure,
-        "journal_entries": journals,
+        "journal_entries": journal_rows,
         "journal_count_totals": journal_count_totals,
         "can_manage_adventure": can_manage_adventure,
     })
@@ -776,14 +832,14 @@ def edit_adventure(request, slug):
 
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def toggle_adventure_visibility(request, slug):
-    adventure = get_object_or_404(
-        Adventure,
-        slug=slug,
-        owner=request.user,
-    )
+    adventure = get_object_or_404(Adventure, slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or authorized staff can change its visibility."
+        )
     adventure.is_public = not adventure.is_public
     adventure.save(update_fields=["is_public", "updated_at"])
     return redirect(request.POST.get("next") or adventure.get_absolute_url())
@@ -827,7 +883,7 @@ def toggle_journal_visibility(request, entry_id):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def delete_selected_contacts(request, entry_id):
     entry = get_object_or_404(
@@ -835,9 +891,9 @@ def delete_selected_contacts(request, entry_id):
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the Adventure owner can delete contacts."
+            "Only the Adventure owner or authorized staff can delete contacts."
         )
 
     selected_ids = request.POST.getlist("contact_ids")
@@ -861,12 +917,14 @@ def delete_selected_contacts(request, entry_id):
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def delete_journal_contact(request, entry_id, contact_id):
     entry = get_object_or_404(JournalEntry.objects.select_related("adventure"), pk=entry_id)
-    if entry.adventure.owner != request.user:
-        return HttpResponseForbidden("Only the Adventure owner can delete contacts.")
+    if not _can_manage_adventure(request.user, entry.adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or authorized staff can delete contacts."
+        )
     contact = get_object_or_404(entry.contacts, pk=contact_id)
     contact.delete()
     entry.adventure.save(update_fields=["updated_at"])
@@ -924,13 +982,13 @@ def mark_adventure_in_progress(request, slug):
     return redirect(_safe_next_url(request, "my_adventures"))
 
 
-@verified_member_required
+@verified_member_or_staff_required
 def add_journal_entry(request, slug):
     adventure = get_object_or_404(Adventure, slug=slug)
 
-    if adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, adventure):
         return HttpResponseForbidden(
-            "Only the operator who owns this adventure can add journal entries."
+            "Only the Adventure owner or authorized staff can add Journal entries."
         )
 
     if request.method == "POST":
@@ -1139,14 +1197,14 @@ def journal_entry_detail(request, entry_id):
             "can_view_adventure": bool(
                 entry.adventure.is_public or entry.adventure.owner == request.user
             ),
-            "can_manage_contacts": bool(request.user == entry.adventure.owner or request.user.is_staff),
+            "can_manage_contacts": can_edit_journal,
             "can_view_journal_location": can_view_location(request.user, entry.location),
             "single_location_map_data": (
                 {"name": entry.location.name, "latitude": float(entry.latitude), "longitude": float(entry.longitude)}
                 if entry.location and entry.latitude is not None and entry.longitude is not None
                 and can_view_location(request.user, entry.location) else None
             ),
-            "can_edit_journal_pin": bool(entry.adventure.owner == request.user or request.user.is_staff),
+            "can_edit_journal_pin": can_edit_journal,
         },
     )
 
@@ -1222,15 +1280,14 @@ def journal_photo_gallery(request, entry_id):
         JournalEntry.objects.select_related("adventure", "adventure__owner"),
         pk=entry_id,
     )
-    if entry.adventure.owner != request.user and (
+    can_manage_adventure = _can_manage_adventure(request.user, entry.adventure)
+    if not can_manage_adventure and (
         not entry.adventure.is_public or not entry.is_public
     ):
         raise Http404("Journal Entry not found.")
 
-    can_edit_journal = bool(
-        request.user == entry.adventure.owner and is_verified_member(request.user)
-    )
-    can_delete_photos = _can_manage_adventure(request.user, entry.adventure)
+    can_edit_journal = can_manage_adventure
+    can_delete_photos = can_manage_adventure
     can_review_photos = bool(request.user.is_staff)
     photos_query = entry.photos.all()
     if not (can_edit_journal or can_review_photos):
@@ -1247,7 +1304,7 @@ def journal_photo_gallery(request, entry_id):
             "can_edit_journal": can_edit_journal,
             "can_delete_photos": can_delete_photos,
             "can_review_photos": can_review_photos,
-            "can_manage_adventure": _can_manage_adventure(request.user, entry.adventure),
+            "can_manage_adventure": can_manage_adventure,
         },
     )
 
@@ -1340,15 +1397,15 @@ def delete_journal_photos(request, entry_id):
     return redirect("journal_photo_gallery", entry_id=entry.pk)
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def make_journal_photo(request, entry_id, photo_id):
     entry = get_object_or_404(
         JournalEntry.objects.select_related("adventure"), pk=entry_id
     )
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the operator who owns this Journal can change its primary photo."
+            "Only the Journal owner or authorized staff can change its primary photo."
         )
     photo = get_object_or_404(Photo, pk=photo_id, journal_entry=entry)
     if not photo.is_publicly_visible:
@@ -1361,7 +1418,7 @@ def make_journal_photo(request, entry_id, photo_id):
     return redirect(_safe_next_url(request, reverse("journal_entry_detail", args=[entry.pk])))
 
 
-@verified_member_required
+@verified_member_or_staff_required
 def edit_journal_entry(request, entry_id):
     entry = get_object_or_404(
         JournalEntry.objects.select_related("adventure"),
@@ -1369,9 +1426,9 @@ def edit_journal_entry(request, entry_id):
     )
     adventure = entry.adventure
 
-    if adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, adventure):
         return HttpResponseForbidden(
-            "Only the operator who owns this adventure can edit this journal entry."
+            "Only the Adventure owner or authorized staff can edit this Journal entry."
         )
 
     if request.method == "POST":
@@ -1733,7 +1790,7 @@ def cancel_adif_import(request, entry_id, token):
     return redirect("import_adif", entry_id=entry.pk)
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def delete_journal_entry(request, entry_id):
     entry = get_object_or_404(
@@ -1742,9 +1799,9 @@ def delete_journal_entry(request, entry_id):
     )
     adventure = entry.adventure
 
-    if adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, adventure):
         return HttpResponseForbidden(
-            "Only the operator who owns this adventure can delete this journal entry."
+            "Only the Adventure owner or authorized staff can delete this Journal entry."
         )
 
     deleting_cover = (

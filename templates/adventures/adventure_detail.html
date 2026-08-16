@@ -15,21 +15,22 @@
   <section class="adventure-dashboard-card adventure-dashboard-hero">
     <div class="adventure-dashboard-intro">
       <div class="adventure-dashboard-title-row">
-        <h1>{{ adventure.title }}{% include "partials/_staff_record_id.html" with object=adventure label="Adventure ID" %}</h1>
-        <span class="adventure-dashboard-state">{{ adventure.display_status_label }} / {% if adventure.is_public %}Public{% else %}Private{% endif %}</span>
+        <h1>{{ adventure.title }}<small class="staff-record-id public-record-id">Adventure ID {{ adventure.pk }}</small></h1>
+        {% include "adventures/_status_control.html" %}
       </div>
       <div class="adventure-dashboard-meta">
         <span><strong>Operator:</strong> {{ adventure.operating_callsign|default:adventure.owner.member_profile.callsign|default:adventure.owner.username }}</span>
         <span><strong>Date:</strong> {{ adventure.started_at|date:"F j, Y" }}</span>
         <span><strong>Managed by:</strong> {{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</span>
       </div>
+      {% if adventure_reference %}<p class="adventure-dashboard-reference"><strong>Event Website or Reference:</strong> {% if adventure_reference_url %}<a href="{{ adventure_reference_url }}" target="_blank" rel="noopener noreferrer">{{ adventure_reference }}</a>{% else %}<span>{{ adventure_reference }}</span>{% endif %}</p>{% endif %}
       {% if adventure.location and not can_view_adventure_location %}<p class="private-location-badge">Private Location</p><p>Contact paths are hidden because this Adventure uses a Private Location.</p>{% endif %}
       {% if adventure.summary %}<div class="adventure-summary-clamp" data-summary-clamp><div class="adventure-summary-text" data-summary-text>{{ adventure.summary|linebreaksbr }}</div><button type="button" class="adventure-summary-toggle" data-summary-toggle aria-expanded="false" hidden>More</button></div>{% endif %}
-      {% if can_manage_adventure %}<div class="adventure-dashboard-quick-controls">{% include "adventures/_status_control.html" %}<form method="post" action="{% url 'toggle_adventure_visibility' adventure.slug %}" class="inline-visibility-form">{% csrf_token %}<button type="submit" class="inline-visibility-control">Make {% if adventure.is_public %}Private{% else %}Public{% endif %}</button></form></div>{% endif %}
     </div>
     <figure class="adventure-dashboard-cover adventure-cover-frame{% if adventure.location and adventure.location.photo and not display_cover_photo %} location-cover-frame{% endif %}">
       {% if display_cover_photo %}<img src="{{ display_cover_photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="Cover for {{ adventure.title }}" class="adventure-cover-image">{% else %}<img src="{% static 'images/hero.jpg' %}" alt="Radio Outdoors landscape" class="adventure-cover-image adventure-cover-image-generic">{% endif %}
     </figure>
+    <p class="adventure-dashboard-hero-footer">QSO’s and Contacts, Map Locations &amp; Photos are stored in Journals</p>
   </section>
 
   <div class="adventure-dashboard-grid">
@@ -53,7 +54,7 @@
     </section>
 
     <section id="adventure-photos" class="adventure-dashboard-card adventure-dashboard-photos">
-      <div class="adventure-dashboard-section-heading"><h2>Photos <small>(Photos are stored in Journals)</small></h2>{% if adventure_photos %}<span>{{ adventure_photos|length }} photo{{ adventure_photos|length|pluralize }}</span>{% elif can_manage_journals %}<a href="{{ photo_add_url }}">Add Photos</a>{% endif %}</div>
+      <div class="adventure-dashboard-section-heading"><h2>Photos</h2>{% if adventure_photos %}<span>{{ adventure_photos|length }} photo{{ adventure_photos|length|pluralize }}</span>{% elif can_manage_journals %}<a href="{{ photo_add_url }}">Add Photos</a>{% endif %}</div>
       {% if adventure_photos %}<div class="adventure-photo-strip" role="region" aria-label="Adventure photos" tabindex="0">{% for photo in adventure_photos %}<figure class="journal-photo journal-photo-manage{% if not photo.is_publicly_visible and not user.is_staff %} adventure-photo-unapproved{% endif %}">{% if photo.display_file_exists %}{% if photo.is_publicly_visible or user.is_staff %}<button type="button" class="journal-photo-viewer-trigger" data-full-src="{{ photo.image.url }}?v={{ adventure.updated_at|date:'U' }}" data-full-alt="{{ photo.caption|default:'Adventure photo' }}" aria-label="View {{ photo.caption|default:'Adventure photo' }} at original size"><img src="{{ photo.public_image_url }}?v={{ adventure.updated_at|date:'U' }}" alt="{{ photo.caption|default:'Adventure photo' }}"></button>{% else %}<img src="{{ photo.public_thumbnail_url }}?v={{ adventure.updated_at|date:'U' }}" alt="Photo awaiting approval" class="adventure-photo-moderation-preview"><span class="adventure-photo-review-label">{{ photo.moderation_display_status }}</span>{% endif %}{% else %}<div class="journal-photo-missing" role="img" aria-label="Photo file unavailable"><strong>Photo unavailable</strong><span>Stored file missing.</span></div>{% endif %}{% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}<p class="photo-source-journal">Journal: {{ photo.journal_entry.title|default:"Journal Entry" }}</p></figure>{% endfor %}</div>{% else %}<p class="adventure-dashboard-empty">No photos have been added yet.</p>{% endif %}
     </section>
   </div>

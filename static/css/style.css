@@ -4665,18 +4665,19 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 .adventure-dashboard-actions { display: flex; align-items: center; gap: 12px; }
 .adventure-dashboard-actions .ro-action-menu-panel { right: 42px; left: auto; }
 .adventure-dashboard-card { border: 1px solid rgba(87, 75, 57, .25); border-radius: 10px; background: rgba(255, 252, 246, .92); box-shadow: 0 2px 8px rgba(55, 43, 27, .06); }
-.adventure-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; padding: 14px 16px; }
-.adventure-dashboard-intro { min-width: 0; }
+.adventure-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); grid-template-areas: "intro cover" "footer footer"; gap: 18px; padding: 14px 16px; }
+.adventure-dashboard-intro { grid-area: intro; min-width: 0; }
 .adventure-dashboard-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .adventure-dashboard h1 { margin: 0; color: #163d2d; font-size: clamp(1.65rem, 2.4vw, 2.25rem); line-height: 1.1; }
 .adventure-dashboard h2 { margin: 0; color: #173c2e; font-size: 1.32rem; line-height: 1.2; }
-.adventure-dashboard-state { flex: 0 0 auto; padding: 7px 12px; border: 1px solid #cdd5b6; border-radius: 8px; background: #edf2df; color: #253527; font-size: 1rem; font-weight: 800; text-transform: uppercase; }
 .adventure-dashboard-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 14px 0 10px; font-size: 1.05rem; }
+.adventure-dashboard-reference { margin: 0 0 10px; font-size: 1rem; line-height: 1.45; overflow-wrap: anywhere; }
+.adventure-dashboard-reference a { color: #8f3512; }
+.adventure-dashboard-hero-footer { grid-area: footer; margin: 0; padding: 9px 2px 0; border-top: 1px solid rgba(87, 75, 57, .2); color: #59625b; font-size: .94rem; line-height: 1.4; }
 .adventure-summary-text { display: -webkit-box; overflow: hidden; font-size: 1.08rem; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .adventure-summary-clamp.is-expanded .adventure-summary-text { display: block; overflow: visible; }
 .adventure-summary-toggle { min-height: 40px; margin-top: 2px; padding: 5px 10px; border: 0; background: transparent; color: #b94712; font: inherit; font-weight: 800; cursor: pointer; }
-.adventure-dashboard-quick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
-.adventure-dashboard-cover { height: 230px; margin: 0; overflow: hidden; border-radius: 8px; background: #e8e2d7; }
+.adventure-dashboard-cover { grid-area: cover; height: 230px; margin: 0; overflow: hidden; border-radius: 8px; background: #e8e2d7; }
 .adventure-dashboard-cover img { width: 100%; height: 100%; object-fit: cover; }
 .adventure-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px; margin-top: 8px; }
 .adventure-dashboard-grid > section { min-width: 0; height: auto; padding: 12px 14px; overflow: visible; align-self: start; }
@@ -4731,7 +4732,8 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     .adventure-dashboard-page main { background-image: none; }
     body.adventure-dashboard-page .content.adventure-dashboard { width: calc(100% - 24px); padding-inline: 12px; }
     .adventure-dashboard-toolbar { align-items: flex-start; }
-    .adventure-dashboard-hero, .adventure-dashboard-grid { grid-template-columns: 1fr; }
+    .adventure-dashboard-hero { grid-template-columns: 1fr; grid-template-areas: "intro" "cover" "footer"; }
+    .adventure-dashboard-grid { grid-template-columns: 1fr; }
     .adventure-dashboard-cover { height: min(55vw, 340px); }
     .adventure-dashboard-grid > section { height: auto; }
     .adventure-dashboard-scroll { max-height: 330px; }
@@ -4761,7 +4763,6 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 @media (max-width: 520px) {
     .adventure-dashboard-toolbar, .adventure-dashboard-title-row { flex-direction: column; }
     .adventure-dashboard-actions { width: 100%; justify-content: flex-end; }
-    .adventure-dashboard-state { font-size: .92rem; }
     .adventure-dashboard-meta { display: grid; }
     .adventure-dashboard-contacts { overflow-x: auto !important; }
     .adventure-journal-row { grid-template-columns: minmax(0,1fr) auto; align-items: start; }
