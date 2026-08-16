@@ -1,0 +1,507 @@
+2025-04-25 	W5RIK	US-12058 Gordie Mikkelson Wildlife Management Area	US-MN	0	0	11	11
+Minnesota Parks List
+
+US-0067 	Voyageurs National Park 	US-MN	EN38	172	158	4752	0	0
+US-0354 	Agassiz National Wildlife Refuge 	US-MN	EN28	11	11	291	0	0
+US-0355 	Big Stone National Wildlife Refuge 	US-MN	EN15	19	17	703	0	0
+US-0356 	Big Stone Wetland Management District 	US-MN	EN24	27	27	1661	0	0
+US-0357 	Crane Meadows National Wildlife Refuge 	US-MN	EN25	58	53	1960	0	0
+US-0358 	Detroit Lakes Wetland Management District 	US-MN	EN26	32	30	1153	0	0
+US-0359 	Fergus Falls Wetland Management District 	US-MN	EN16	247	243	9922	0	0
+US-0360 	Glacial Ridge National Wildlife Refuge 	US-MN	EN17	16	16	433	0	0
+US-0361 	Hamden Slough National Wildlife Refuge 	US-MN	EN16	22	20	690	0	0
+US-0362 	Litchfield Wetland Management District 	US-MN	EN25	378	373	11965	0	0
+US-0364 	Minnesota Valley National Wildlife Refuge 	US-MN	EN34	1136	1113	46466	0	0
+US-0365 	Minnesota Valley Wetland Management District 	US-MN	EN25	344	337	13449	0	0
+US-0366 	Morris Wetland Management District 	US-MN	EN25	19	19	590	0	0
+US-0367 	Northern Tallgrass Prairie National Wildlife Refuge 	US-IA, + 1 	EN14	51	49	2924	0	0
+US-0368 	Rice Lake National Wildlife Refuge 	US-MN	EN36	39	37	1517	0	0
+US-0369 	Rydell National Wildlife Refuge 	US-MN	EN17	15	15	384	0	0
+US-0370 	Sherburne National Wildlife Refuge 	US-MN	EN35	313	299	7473	1	0
+US-0371 	Tamarac National Wildlife Refuge 	US-MN	EN26	19	18	587	0	0
+US-0373 	Windom Wetland Management District 	US-MN	EN23	60	58	2072	0	0
+US-0673 	Saint Croix National Wild and Scenic River 	US-MN, + 1 	EN36	351	335	11702	0	1
+US-0939 	Grand Portage National Monument 	US-MN	EN57	33	33	728	0	0
+US-0957 	Pipestone National Monument 	US-MN	EN14	76	73	2189	0	0
+US-2466 	Afton State Park 	US-MN	EN34	253	238	9851	0	0
+US-2467 	Banning State Park 	US-MN	EN36	79	73	1819	0	0
+US-2468 	Bear Head Lake State Park 	US-MN	EN37	43	39	970	0	0
+US-2469 	Beaver Creek Valley State Park 	US-MN	EN43	44	43	1010	0	0
+US-2470 	Big Stone Lake State Park 	US-MN	EN15	20	19	598	0	0
+US-2471 	Blue Mounds State Park 	US-MN	EN13	131	131	4507	0	0
+US-2472 	Buffalo River State Park 	US-MN	EN16	82	75	2559	0	0
+US-2473 	Camden State Park 	US-MN	EN24	71	65	2502	0	0
+US-2474 	Carley State Park 	US-MN	EN34	43	42	1280	0	0
+US-2475 	Cascade River State Park 	US-MN	EN47	57	56	1545	0	0
+US-2476 	Charles A. Lindbergh State Park 	US-MN	EN25	124	116	3410	0	0
+US-2477 	Crow Wing State Park 	US-MN	EN26	114	106	3188	0	0
+US-2478 	Father Hennepin State Park 	US-MN	EN36	51	47	1280	0	0
+US-2479 	Flandrau State Park 	US-MN	EN24	240	236	11902	0	0
+US-2480 	Forestville/Mystery Cave State Park 	US-MN	EN33	49	43	1162	0	0
+US-2481 	Fort Ridgely State Park 	US-MN	EN24	178	173	8148	0	0
+US-2482 	Fort Snelling State Park 	US-MN	EN34	939	896	33428	0	0
+US-2483 	Franz Jevne State Park 	US-MN	EN28	9	9	215	0	0
+US-2484 	Frontenac State Park 	US-MN	EN34	178	165	7087	0	0
+US-2485 	George Crosby Manitou State Park 	US-MN	EN47	34	31	1119	0	0
+US-2486 	Glacial Lakes State Park 	US-MN	EN25	65	62	1836	0	0
+US-2487 	Glendalough State Park 	US-MN	EN26	159	134	8260	0	0
+US-2488 	Gooseberry Falls State Park 	US-MN	EN47	111	104	2579	0	0
+US-2489 	Grand Portage State Park 	US-MN	EN57	43	41	1211	0	0
+US-2490 	Great River Bluffs State Park 	US-MN	EN43	114	112	4142	0	0
+US-2491 	Hayes Lake State Park 	US-MN	EN28	12	12	401	0	0
+US-2493 	Interstate State Park 	US-MN	EN35	103	97	2578	0	0
+US-2494 	Itasca State Park 	US-MN	EN27	91	83	2608	0	0
+US-2495 	Jay Cooke State Park 	US-MN	EN36	150	140	4927	0	0
+US-2496 	John A. Latsch State Park 	US-MN	EN44	67	64	2354	0	0
+US-2497 	Judge C.R. Magney State Park 	US-MN	EN47	37	34	700	0	0
+US-2498 	Kilen Woods State Park 	US-MN	EN23	39	39	1174	0	0
+US-2499 	Lac Qui Parle State Park 	US-MN	EN25	41	41	2165	0	0
+US-2500 	Lake Bemidji State Park 	US-MN	EN27	112	110	3254	0	0
+US-2501 	Lake Bronson State Park 	US-MN	EN18	15	14	400	0	0
+US-2502 	Lake Carlos State Park 	US-MN	EN26	104	98	3653	0	0
+US-2503 	Lake Louise State Park 	US-MN	EN33	39	39	1313	0	0
+US-2504 	Lake Maria State Park 	US-MN	EN35	435	414	13637	0	0
+US-2505 	Lake Shetek State Park 	US-MN	EN24	69	63	2658	0	0
+US-2506 	Lake Vermilion State Park 	US-MN	EN37	38	36	1000	0	0
+US-2507 	Maplewood State Park 	US-MN	EN26	147	146	11626	0	0
+US-2508 	McCarthy Beach State Park 	US-MN	EN37	14	14	409	0	0
+US-2509 	Mille Lacs Kathio State Park 	US-MN	EN36	89	83	3114	0	0
+US-2510 	Minneopa State Park 	US-MN	EN24	326	311	14513	0	0
+US-2511 	Monson Lake State Park 	US-MN	EN25	49	46	1377	0	0
+US-2512 	Moose Lake State Park 	US-MN	EN36	75	72	1903	0	0
+US-2513 	Myre-Big Island State Park 	US-MN	EN33	144	142	4414	0	0
+US-2514 	Nerstrand Big Woods State Park 	US-MN	EN34	133	125	4892	0	0
+US-2515 	Old Mill State Park 	US-MN	EN18	18	17	554	0	0
+US-2516 	Rice Lake State Park 	US-MN	EN34	116	111	5429	0	0
+US-2517 	St. Croix State Park 	US-MN	EN35	93	92	3430	0	0
+US-2518 	Sakatah Lake State Park 	US-MN	EN34	154	149	5609	0	0
+US-2519 	Savanna Portage State Park 	US-MN	EN36	32	30	896	0	0
+US-2520 	Scenic State Park 	US-MN	EN37	20	20	657	0	0
+US-2521 	Schoolcraft State Park 	US-MN	EN37	21	21	423	0	0
+US-2522 	Sibley State Park 	US-MN	EN25	94	85	3840	0	0
+US-2523 	Split Rock Creek State Park 	US-MN	EN13	67	65	2307	0	0
+US-2524 	Split Rock Lighthouse State Park 	US-MN	EN47	265	244	21910	0	0
+US-2525 	Temperance River State Park 	US-MN	EN47	92	87	3091	0	0
+US-2526 	Tettegouche State Park 	US-MN	EN47	107	104	2617	0	0
+US-2528 	Whitewater State Park 	US-MN	EN34	89	83	2378	0	0
+US-2529 	Wild River State Park 	US-MN	EN35	142	127	3978	0	0
+US-2530 	William O'Brien State Park 	US-MN	EN35	226	219	6186	0	0
+US-2531 	Zippel Bay State Park 	US-MN	EN28	11	11	823	0	0
+US-4236 	Upper Mississippi River National Wildlife Refuge 	US-IA, + 3 	EN44	496	488	21289	0	0
+US-4239 	North Country Trail National Scenic Trail 	US-MI, + 7 	DN97	5840	5745	233091	0	0
+US-4490 	Chippewa National Forest 	US-MN	EN27	189	121	6076	0	0
+US-4491 	Superior National Forest 	US-MN	EN47	227	195	6566	0	0
+US-4780 	Badoura State Forest 	US-MN	EN26	8	8	243	0	0
+US-4781 	Battleground State Forest 	US-MN	EN27	11	11	280	0	0
+US-4782 	Bear Island State Forest 	US-MN	EN47	22	20	696	0	0
+US-4783 	Beltrami Island State Forest 	US-MN	EN28	10	10	382	0	0
+US-4784 	Big Fork State Forest 	US-MN	EN37	11	10	305	0	0
+US-4785 	Birch Lakes State Forest 	US-MN	EN25	83	81	1500	0	0
+US-4786 	Blackduck State Forest 	US-MN	EN27	7	7	152	0	0
+US-4787 	Bowstring State Forest 	US-MN	EN37	15	15	334	0	0
+US-4788 	Buena Vista State Forest 	US-MN	EN27	17	17	410	0	0
+US-4789 	Burntside State Forest 	US-MN	EN48	16	16	376	0	0
+US-4790 	Chengwatana State Forest 	US-MN	EN35	42	39	896	0	0
+US-4791 	Cloquet Valley State Forest 	US-MN	EN47	11	11	344	0	0
+US-4792 	Crow Wing State Forest 	US-MN	EN26	17	17	697	0	0
+US-4793 	D.A.R. State Forest 	US-MN	EN36	24	24	583	0	0
+US-4794 	Emily State Forest 	US-MN	EN36	9	9	219	0	0
+US-4795 	Finland State Forest 	US-MN	EN47	44	44	1160	0	0
+US-4796 	Fond du Lac State Forest 	US-MN	EN36	24	23	727	0	0
+US-4797 	Foot Hills State Forest 	US-MN	EN26	10	10	286	0	0
+US-4798 	General C. C. Andrews State Forest 	US-MN	EN36	30	29	590	0	0
+US-4799 	George Washington State Forest 	US-MN	EN37	9	9	215	0	0
+US-4800 	Golden Anniversary State Forest 	US-MN	EN37	13	13	266	0	0
+US-4801 	Grand Portage State Forest 	US-MN	EN57	20	20	347	0	0
+US-4802 	Hill River State Forest 	US-MN	EN36	9	8	239	0	0
+US-4803 	Huntersville State Forest 	US-MN	EN26	13	13	367	0	0
+US-4804 	Insula Lake State Forest 	US-MN	EN47	2	2	75	0	0
+US-4805 	Lake Jeanette State Forest 	US-MN	EN38	7	7	208	0	0
+US-4806 	Kabetogama State Forest 	US-MN	EN38	42	42	1399	0	0
+US-4807 	Koochiching State Forest 	US-MN	EN37	8	8	186	0	0
+US-4808 	Lake Isabella State Forest 	US-MN	EN47	7	7	196	0	0
+US-4809 	Lake of the Woods State Forest 	US-MN	EN28	7	7	280	0	0
+US-4810 	Land O'Lakes State Forest 	US-MN	EN36	33	31	751	0	0
+US-4811 	Lost River State Forest 	US-MN	EN28	9	9	395	0	0
+US-4812 	Lyons State Forest 	US-MN	EN26	10	10	308	0	0
+US-4813 	Mississippi Headwaters State Forest 	US-MN	EN27	16	16	355	0	0
+US-4814 	Nemadji State Forest 	US-MN	EN36	25	25	625	0	0
+US-4815 	Northwest Angle State Forest 	US-MN	EN29	7	7	501	0	0
+US-4816 	Pat Bayle State Forest 	US-MN	EN47	20	19	407	0	0
+US-4817 	Paul Bunyan State Forest 	US-MN	EN27	31	27	969	0	0
+US-4818 	Pillsbury State Forest 	US-MN	EN26	55	54	2317	0	0
+US-4819 	Pine Island State Forest 	US-MN	EN28	6	6	111	0	0
+US-4820 	Red Lake State Forest 	US-MN	EN28	6	6	155	0	0
+US-4821 	Remer State Forest 	US-MN	EN37	12	12	207	0	0
+US-4822 	Richard J. Dorer Memorial Hardwood State Forest 	US-MN	EN43	58	55	1312	0	0
+US-4823 	Rum River State Forest 	US-MN	EN35	39	36	821	0	0
+US-4824 	St. Croix State Forest 	US-MN	EN36	30	30	728	0	0
+US-4825 	Sand Dunes State Forest 	US-MN	EN35	150	141	3164	0	0
+US-4826 	Savanna State Forest 	US-MN	EN36	19	19	509	0	0
+US-4827 	Smokey Bear State Forest 	US-MN	EN38	6	6	178	0	0
+US-4828 	Smoky Hills State Forest 	US-MN	EN26	16	16	455	0	0
+US-4829 	Snake River State Forest 	US-MN	EN36	18	18	457	0	0
+US-4830 	Solana State Forest 	US-MN	EN36	17	17	413	0	0
+US-4831 	Sturgeon River State Forest 	US-MN	EN37	9	9	208	0	0
+US-4832 	Two Inlets State Forest 	US-MN	EN27	12	12	487	0	0
+US-4833 	Waukenabo State Forest 	US-MN	EN36	10	10	268	0	0
+US-4834 	Wealthwood State Forest 	US-MN	EN36	24	24	590	0	0
+US-4835 	Welsh Lake State Forest 	US-MN	EN27	17	17	409	0	0
+US-4836 	White Earth State Forest 	US-MN	EN27	23	21	456	0	0
+US-4837 	Whiteface River State Forest 	US-MN	EN37	13	13	252	0	0
+US-6463 	Garden Island State Recreation Area 	US-MN	EN29	4	4	221	0	0
+US-6464 	Big Bog State Recreation Area 	US-MN	EN28	9	9	230	0	0
+US-6465 	Greenleaf State Recreation Area 	US-MN	EN25	162	154	5344	0	0
+US-6466 	Cuyuna Country State Recreation Area 	US-MN	EN36	63	57	1593	0	0
+US-6468 	Iron Range OHV State Recreation Area 	US-MN	EN37	16	15	383	0	0
+US-7144 	La Salle Lake State Recreation Area 	US-MN	EN27	15	15	317	0	0
+US-7145 	Minnesota Valley State Recreation Area 	US-MN	EN34	727	705	28095	0	0
+US-7146 	Red River State Recreation Area 	US-MN	EN17	86	75	2308	0	0
+US-7147 	Centennial State Forest 	US-MN	EN26	10	10	224	0	0
+US-7148 	Lake Vermilion Soudan Iron Mine State Park 	US-MN	EN37	31	30	636	0	0
+US-7759 	David Dill Arrowhead State Trail 	US-MN	EN37	18	18	434	0	0
+US-8095 	Gitchi Gami State Trail 	US-MN	EN47	254	234	19161	0	0
+US-9373 	Paul Bunyan State Trail 	US-MN	EN27	158	152	4804	0	0
+US-9374 	Root River State Trail 	US-MN	EN43	46	45	1132	0	0
+US-9375 	Harmony-Preston State Trail 	US-MN	EN33	20	20	557	0	0
+US-9376 	Shooting Star State Trail 	US-MN	EN33	36	36	1016	0	0
+US-9377 	Blazing Star State Trail 	US-MN	EN33	74	70	2022	0	0
+US-9378 	Casey Jones State Trail 	US-MN	EN24	36	35	1210	0	0
+US-9379 	Sakatah Singing Hills State Trail 	US-MN	EN34	226	219	8632	0	0
+US-9380 	Mills Town State Trail 	US-MN	EN34	130	128	4047	0	0
+US-9381 	Douglas State Trail 	US-MN	EN34	92	86	2507	0	0
+US-9382 	Great River Ridge State Trail 	US-MN	EN34	43	42	1521	0	0
+US-9383 	Goodhue-Pioneer State Trail 	US-MN	EN34	47	46	1553	0	0
+US-9384 	Minnesota Valley State Trail 	US-MN	EN34	1190	1163	51066	0	0
+US-9385 	Gateway Overview State Trail 	US-MN	EN35	262	240	6486	0	0
+US-9386 	Browns Creek State Trail 	US-MN	EN35	272	254	9416	0	0
+US-9387 	Luce Line State Trail 	US-MN	EN34	865	834	27687	0	0
+US-9388 	Glacial Lakes State Trail 	US-MN	EN25	58	58	1408	0	0
+US-9389 	Central Lakes State Trail 	US-MN	EN26	334	332	15603	0	0
+US-9390 	Williard Munger State Trail 	US-MN	EN36	95	93	2890	0	0
+US-10278 	Inspiration Peak State Wayside State Natural Site 	US-MN	EN26	55	55	3803	0	1
+US-10306 	Paul Hugo Farms WMA Wildlife Management Area 	US-MN	EN35	63	61	1432	0	0
+US-10307 	Lamprey Pass WMA Wildlife Management Area 	US-MN	EN35	81	79	1930	0	0
+US-10308 	Carlos Avery WMA Wildlife Management Area 	US-MN	EN35	146	143	3675	6	0
+US-10380 	Orwell WMA Wildlife Management Area 	US-MN	EN16	171	168	9040	0	0
+US-10720 	Forest Lake AMA Aquatic Reserve 	US-MN	EN35	16	16	332	0	0
+US-10721 	Brown's Creek AMA Aquatic Reserve 	US-MN	EN35	72	69	1860	0	0
+US-10722 	Lost Valley Prairie SNA Scenic Reserve 	US-MN	EN34	49	48	2141	0	0
+US-10723 	Crystal Spring SNA Scenic Reserve 	US-MN	EN35	24	24	487	0	0
+US-10724 	Falls Creek SNA Scenic Reserve 	US-MN	EN35	32	32	974	0	0
+US-10725 	St. Croix Savanna SNA Scenic Reserve 	US-MN	EN34	58	56	1516	0	0
+US-10727 	Pine Bend Bluffs SNA Scenic Reserve 	US-MN	EN34	86	84	3676	0	0
+US-10728 	Grey Cloud Dunes SNA Scenic Reserve 	US-MN	EN34	68	66	2583	0	0
+US-11014 	David Dill/Taconite and Taconite State Trails State Trail 	US-MN	EN37	12	12	299	0	0
+US-11022 	Otter Tail Prairie SNA State Conservation Area 	US-MN	EN16	51	50	3743	0	0
+US-11023 	Egret Island SNA State Conservation Area 	US-MN	EN26	5	5	240	0	0
+US-11024 	Blanket Flower Prairie SNA State Conservation Area 	US-MN	EN16	16	15	507	0	0
+US-11147 	Jensen Memorial WMA Wildlife Management Area 	US-MN	EN26	48	48	3665	0	0
+US-11148 	Hardwood Creek WMA Wildlife Management Area 	US-MN	EN35	46	46	1319	0	0
+US-11150 	CJ Ramstad North Shore State Trail State Trail 	US-MN	EN36	52	51	1829	0	0
+US-11151 	Cuyuna Lakes State Trail State Trail 	US-MN	EN26	30	29	749	0	0
+US-11152 	Heartland State Trail State Trail 	US-MN	EN27	10	10	394	0	0
+US-11153 	Matthew Lourey State Trail State Trail 	US-MN	EN35	76	76	2786	0	0
+US-11154 	Taconite State Trail State Trail 	US-MN	EN37	16	15	397	0	0
+US-11698 	Seminary Fen SNA State Sanctuary 	US-MN	EN34	203	200	6883	0	0
+US-11699 	Savage FEN SNA State Sanctuary 	US-MN	EN34	87	87	2762	0	0
+US-11700 	Wolsfeld Woods SNA State Sanctuary 	US-MN	EN34	136	133	2534	0	0
+US-11701 	Wood-Rill SNA State Sanctuary 	US-MN	EN34	228	220	6484	0	0
+US-11786 	Prairie Ridge WMA Wildlife Management Area 	US-MN	EN16	105	105	5389	0	0
+US-11787 	Berskow WMA Wildlife Management Area 	US-MN	EN25	11	10	371	0	0
+US-11788 	Toad River AMA State Conservation Area 	US-MN	EN26	18	17	397	0	0
+US-11865 	Mound Prairie Wildlife Management Area 	US-MN	EN43	19	19	372	0	0
+US-11872 	Lost 40 SNA State Natural Area 	US-MN	EN27	6	6	141	0	0
+US-11904 	Migizi National Recreation Trail 	US-MN	EN27	16	16	425	0	0
+US-11962 	Manston Marsh Wildlife Management Area 	US-MN	EN16	13	13	569	0	0
+US-11972 	Dead Lake Wildlife Management Area 	US-MN	EN26	17	17	518	0	0
+US-11973 	Rothsay Wildlife Management Area 	US-MN	EN16	20	20	875	0	0
+US-11974 	Robert and Marilyn Burman Wildlife Management Area 	US-MN	EN35	39	38	1346	0	0
+US-11980 	Bethel Wildlife Management Area 	US-MN	EN35	163	158	5762	0	1
+US-11983 	Keystone Wildlife Management Area 	US-MN	EN35	58	58	1616	0	0
+US-12058 	Gordie Mikkelson Wildlife Management Area 	US-MN	EN35	28	28	855	4	0
+US-12073 	Elmo Wildlife Management Area 	US-MN	EN26	15	15	677	0	0
+US-12074 	Wrightstown Wildlife Management Area 	US-MN	EN26	9	9	260	0	0
+US-12075 	Staples Wildlife Management Area 	US-MN	EN26	20	20	622	0	0
+US-12076 	Bluff Creek Wildlife Management Area 	US-MN	EN26	5	5	96	0	0
+US-12152 	Canosia Wildlife Management Area 	US-MN	EN36	23	22	830	0	0
+US-12164 	Schneewind Wildlife Management Area 	US-MN	EN34	88	86	2527	0	0
+US-12165 	Kettle River Wildlife Management Area 	US-MN	EN36	14	14	244	0	0
+US-12377 	Coldwater Spring Unit National Recreation Area 	US-MN	EN34	67	63	1310	0	0
+US-12378 	Whitewater Wildlife Management Area 	US-MN	EN34	16	16	790	0	0
+US-12380 	McCarthy Lake Wildlife Management Area 	US-MN	EN44	16	16	554	0	0
+US-12388 	Caribou Falls Unique Area 	US-MN	EN47	13	13	226	1	0
+US-12389 	Devils Track Falls Unique Area 	US-MN	EN47	6	6	150	0	0
+US-12390 	Flood Bay Unique Area 	US-MN	EN47	18	18	524	1	0
+US-12392 	Joseph R. Brown Unique Area 	US-MN	EN24	12	12	445	0	0
+US-12393 	Kodonce River Unique Area 	US-MN	EN47	16	16	271	0	0
+US-12394 	Ray Berglund Unique Area 	US-MN	EN47	20	20	415	1	0
+US-12395 	St. Croix Boom Site Unique Area 	US-MN	EN35	67	66	2356	0	0
+US-12396 	Sam Brown Memorial Unique Area 	US-MN	EN15	10	10	248	0	0
+US-12446 	McGowan Wildlife Management Area 	US-MN	EN36	10	10	246	0	0
+US-12447 	Rice Creek Wildlife Management Area 	US-MN	EN35	15	15	641	0	0
+US-12448 	Spectacle Wildlife Management Area 	US-MN	EN35	25	25	670	0	0
+US-12449 	Assumption Wildlife Management Area 	US-MN	EN34	25	24	448	0	0
+US-12450 	Clark Lake Wildlife Management Area 	US-MN	EN34	35	35	980	0	0
+US-12451 	Pheasants Forever #3 Wildlife Management Area 	US-MN	EN34	35	35	1184	0	0
+US-12452 	Bradshaw Lake Wildlife Management Area 	US-MN	EN34	34	33	1867	0	0
+US-12457 	Riverlands State Forest 	US-MN	EN37	9	9	183	0	0
+US-12458 	Mille Lacs Wildlife Management Area 	US-MN	EN35	16	16	550	0	0
+US-12463 	Pool #4 Wildlife Management Area 	US-MN	EN44	34	34	1725	0	0
+US-12600 	Blackhoof River Wildlife Management Area 	US-MN	EN36	7	7	184	0	0
+US-12625 	Tiger Marsh Wildlife Management Area 	US-MN	EN34	83	82	3198	0	0
+US-12626 	Indian Lake Wildlife Management Area 	US-MN	EN24	78	72	2865	0	0
+
+
+Wisconsin Parks List
+US-0598 	Fox River National Wildlife Refuge 	US-WI	EN53	80	78	2206	0	0
+US-0600 	Green Bay National Wildlife Refuge 	US-WI	EN65	4	4	396	0	0
+US-0601 	Horicon National Wildlife Refuge 	US-WI	EN53	99	98	3360	0	0
+US-0602 	Leopold Wetland Management District 	US-WI	EN53	264	259	12450	0	0
+US-0603 	Necedah National Wildlife Refuge 	US-WI	EN44	37	35	1023	0	0
+US-0604 	St. Croix Wetland Management District 	US-WI	EN35	42	42	928	0	0
+US-0605 	Trempealeau National Wildlife Refuge 	US-WI	EN44	47	46	1215	0	0
+US-0606 	Whittlesey Creek National Wildlife Refuge 	US-WI	EN46	28	27	707	0	0
+US-0673 	Saint Croix National Wild and Scenic River 	US-MN, + 1 	EN36	351	335	11702	0	1
+US-0764 	Apostle Islands National Lakeshore 	US-WI	EN46	43	39	1478	0	0
+US-1436 	Amnicon Falls State Park 	US-WI	EN46	97	95	3409	0	0
+US-1437 	Aztalan State Park 	US-WI	EN53	123	123	6872	0	0
+US-1438 	Belmont Mound State Park 	US-WI	EN42	126	125	5319	0	0
+US-1439 	Big Bay State Park 	US-WI	EN46	52	47	2249	0	0
+US-1440 	Big Foot Beach State Park 	US-WI	EN52	322	303	11914	0	0
+US-1441 	Blue Mound State Park 	US-WI	EN53	201	177	9718	0	0
+US-1442 	Brunet Island State Park 	US-WI	EN45	135	131	5256	0	0
+US-1443 	Buckhorn State Park 	US-WI	EN43	194	168	7154	0	0
+US-1444 	Campbellsport Drumlin State Park 	US-WI	EN53	46	44	1436	0	0
+US-1445 	Copper Culture State Park 	US-WI	EN64	39	38	1139	0	0
+US-1446 	Copper Falls State Park 	US-WI	EN46	50	49	1618	0	0
+US-1447 	Council Grounds State Park 	US-WI	EN55	75	74	3335	0	0
+US-1448 	Cross Plains State Park 	US-WI	EN53	57	56	2259	0	0
+US-1449 	Devil's Lake State Park 	US-WI	EN53	201	189	7055	0	0
+US-1450 	Grand Traverse Island State Park 	US-WI	EN65	3	3	43	0	0
+US-1451 	Governor Dodge State Park 	US-WI	EN43	159	153	7897	0	0
+US-1452 	Governor Nelson State Park 	US-WI	EN53	445	414	11830	0	0
+US-1453 	Governor Thompson State Park 	US-WI	EN55	45	39	2149	0	0
+US-1454 	Harrington Beach State Park 	US-WI	EN63	127	117	3642	0	0
+US-1455 	Hartman Creek State Park 	US-WI	EN54	176	170	9108	0	0
+US-1456 	High Cliff State Park 	US-WI	EN54	433	418	25647	0	0
+US-1457 	Kinnickinnic State Park 	US-WI	EN34	187	182	10372	0	0
+US-1458 	Kohler-Andrae State Park 	US-WI	EN63	180	165	6199	0	0
+US-1459 	Lake Kegonsa State Park 	US-WI	EN52	182	175	7641	0	0
+US-1460 	Lake Wissota State Park 	US-WI	EN44	172	168	8748	0	0
+US-1461 	Lakeshore State Park 	US-WI	EN63	207	203	9089	0	0
+US-1462 	Merrick State Park 	US-WI	EN44	41	39	1529	0	0
+US-1463 	Mill Bluff State Park 	US-WI	EN43	72	72	1850	0	0
+US-1464 	Mirror Lake State Park 	US-WI	EN53	158	152	5695	0	0
+US-1465 	Natural Bridge State Park 	US-WI	EN53	37	34	1504	0	0
+US-1466 	Nelson Dewey State Park 	US-WI	EN42	137	131	6617	0	0
+US-1467 	New Glarus Woods State Park 	US-WI	EN52	88	83	4076	0	0
+US-1468 	Newport State Park 	US-WI	EN65	55	51	1457	0	0
+US-1469 	Pattison State Park 	US-WI	EN36	83	81	3592	0	0
+US-1470 	Peninsula State Park 	US-WI	EN65	148	128	3747	0	0
+US-1471 	Perrot State Park 	US-WI	EN44	112	107	2967	0	0
+US-1472 	Potawatomi State Park 	US-WI	EN64	74	69	1965	0	0
+US-1473 	Rib Mountain State Park 	US-WI	EN54	161	151	7836	0	0
+US-1474 	Roche-A-Cri State Park 	US-WI	EN54	52	51	1465	0	0
+US-1475 	Rock Island State Park 	US-WI	EN65	25	22	623	0	0
+US-1476 	Rocky Arbor State Park 	US-WI	EN53	95	92	3104	0	0
+US-1477 	Straight Lake State Park 	US-WI	EN35	37	34	851	0	0
+US-1478 	Tower Hill State Park 	US-WI	EN43	56	51	2847	0	0
+US-1479 	Whitefish Dunes State Park 	US-WI	EN64	41	40	1135	0	0
+US-1480 	Wildcat Mountain State Park 	US-WI	EN43	126	119	4289	0	0
+US-1481 	Willow River State Park 	US-WI	EN35	138	133	5139	0	0
+US-1482 	Wyalusing State Park 	US-WI	EN42	244	235	14536	0	0
+US-1483 	Yellowstone Lake State Park 	US-WI	EN52	61	58	2715	0	0
+US-3319 	Menominee River State Recreation Area 	US-MI, + 1 	EN65	24	22	706	0	0
+US-4236 	Upper Mississippi River National Wildlife Refuge 	US-IA, + 3 	EN44	496	488	21289	0	0
+US-4238 	Ice Age National Scenic Trail 	US-WI	EN54	1755	1720	72787	0	0
+US-4239 	North Country Trail National Scenic Trail 	US-MI, + 7 	DN97	5840	5745	233091	0	0
+US-4242 	Fenley State Recreation Area 	US-WI	EN42	104	102	3701	0	0
+US-4243 	Sauk Prairie State Recreation Area 	US-WI	EN53	90	86	3525	0	0
+US-4244 	Big Bay Sand Spit and Bog State Natural Area 	US-WI	EN46	32	31	1527	0	0
+US-4245 	Two Creeks Buried Forest State Natural Area 	US-WI	EN64	54	54	1659	0	0
+US-4246 	Whitefish Dunes State Natural Area 	US-WI	EN64	26	25	666	0	0
+US-4247 	Heritage Hill State Park 	US-WI	EN54	63	56	3254	0	0
+US-4248 	Lost Dauphin State Park 	US-WI	EN54	106	103	5280	0	0
+US-4249 	WI Interstate State Park 	US-WI	EN35	125	118	4284	0	0
+US-4250 	Capitol Springs State Recreation Area 	US-WI	EN53	234	216	9664	0	0
+US-4251 	Bibon Swamp State Natural Area 	US-WI	EN46	7	7	247	0	0
+US-4252 	Brule Glacial Spillway State Natural Area 	US-WI	EN46	20	20	801	0	0
+US-4253 	Cedarburg Bog State Natural Area 	US-WI	EN63	93	89	2730	0	0
+US-4254 	Chimney Rock Oak Savanna State Natural Area 	US-WI	EN44	18	18	675	0	0
+US-4255 	Lodi Marsh State Natural Area 	US-WI	EN53	81	77	2295	0	0
+US-4256 	Cadiz Springs State Recreation Area 	US-WI	EN52	48	45	2258	0	0
+US-4257 	Chippewa Moraine State Recreation Area 	US-WI	EN45	27	25	1139	0	0
+US-4258 	Fischer Creek State Recreation Area 	US-WI	EN63	52	50	1411	0	0
+US-4259 	Hoffman Hills State Recreation Area 	US-WI	EN44	80	68	2556	0	0
+US-4260 	Long Lake State Recreation Area 	US-WI	EN53	134	130	4468	0	0
+US-4261 	Mauthe Lake State Recreation Area 	US-WI	EN53	153	145	5472	0	0
+US-4262 	Pemene Falls Unit of Menominee River State Recreation Area 	US-MI, + 1 	EN65	12	11	293	0	0
+US-4263 	Piers Gorge Unit of Menominee River State Recreation Area 	US-MI, + 1 	EN65	15	15	380	0	0
+US-4264 	Quiver Falls Unit of Menominee River State Recreation Area 	US-MI, + 1 	EN65	9	9	229	0	0
+US-4265 	Richard Bong State Recreation Area 	US-WI	EN52	783	749	28897	0	0
+US-4266 	Ackley State Wildlife Area 	US-WI	EN55	48	46	2553	0	0
+US-4267 	Amberg State Wildlife Area 	US-WI	EN55	8	8	225	0	0
+US-4268 	Amsterdam Sloughs State Wildlife Area 	US-WI	EN35	29	29	697	0	0
+US-4269 	Augusta State Wildlife Area 	US-WI	EN44	91	90	3220	0	0
+US-4270 	Balsam Branch State Wildlife Area 	US-WI	EN35	24	24	553	0	0
+US-4271 	Beaver Brook State Wildlife Area 	US-WI	EN45	30	30	866	0	0
+US-4272 	Bill Cross State Wildlife Area 	US-WI	EN55	26	23	868	0	0
+US-4273 	Borst Valley State Wildlife Area 	US-WI	EN44	16	16	340	0	0
+US-4274 	Brillion State Wildlife Area 	US-WI	EN54	242	233	11364	0	0
+US-4275 	Chief River State Wildlife Area 	US-WI	EN46	26	18	521	0	0
+US-4276 	Chimney Rock State Wildlife Area 	US-WI	EN44	19	18	559	0	0
+US-4277 	Collins Marsh State Wildlife Area 	US-WI	EN64	187	180	4948	0	0
+US-4278 	Crex Meadows State Wildlife Area 	US-WI	EN35	60	59	1833	0	0
+US-4279 	Cylon State Wildlife Area 	US-WI	EN35	33	32	578	0	0
+US-4280 	Deer Creek State Wildlife Area 	US-WI	EN54	33	33	1765	0	0
+US-4281 	Dell Creek State Wildlife Area 	US-WI	EN53	42	40	1567	0	0
+US-4282 	Douglas County State Wildlife Area 	US-WI	EN46	25	23	459	0	0
+US-4283 	Dunnville State Wildlife Area 	US-WI	EN44	34	33	818	0	0
+US-4284 	Eldorado State Wildlife Area 	US-WI	EN53	189	185	10295	0	0
+US-4285 	Fish Lake State Wildlife Area 	US-WI	EN35	48	48	1678	0	0
+US-4286 	French Creek State Wildlife Area 	US-WI	EN53	161	161	4939	0	0
+US-4287 	Gardner Swamp State Wildlife Area 	US-WI	EN64	19	19	414	0	0
+US-4288 	Germania Marsh State Wildlife Area 	US-WI	EN53	22	22	579	0	0
+US-4289 	Goose Lake State Wildlife Area 	US-WI	EN53	87	78	4369	0	0
+US-4290 	Grand River Marsh State Wildlife Area 	US-WI	EN53	55	54	3234	0	0
+US-4291 	Green Bay West Shores State Wildlife Area 	US-WI	EN54	45	40	1239	0	0
+US-4292 	Hay Creek-Hoffman Lake State Wildlife Area 	US-WI	EN46	10	10	387	0	0
+US-4293 	Holland State Wildlife Area 	US-WI	EN54	175	172	7233	0	0
+US-4294 	Horicon Marsh State Wildlife Area 	US-WI	EN53	81	78	3279	0	0
+US-4295 	Joel Marsh State Wildlife Area 	US-WI	EN35	28	27	932	0	0
+US-4296 	Kickapoo River State Wildlife Area 	US-WI	EN43	41	41	2757	0	0
+US-4297 	Kiel Marsh State Wildlife Area 	US-WI	EN53	141	135	2836	0	0
+US-4298 	Killsnake State Wildlife Area 	US-WI	EN54	342	322	9807	0	0
+US-4299 	Kimberly Clark State Wildlife Area 	US-WI	EN45	9	9	276	0	0
+US-4300 	Kissick Swamp State Wildlife Area 	US-WI	EN46	11	11	200	0	0
+US-4301 	Lake Noquebay State Wildlife Area 	US-WI	EN65	14	14	501	0	0
+US-4302 	Lawrence Creek State Fish and Wildlife Area 	US-WI	EN53	19	18	1237	0	0
+US-4303 	Little Rice State Wildlife Area 	US-WI	EN55	153	152	3938	0	0
+US-4304 	Lodi Marsh State Wildlife Area 	US-WI	EN53	75	72	2022	0	0
+US-4305 	Loon Lake State Wildlife Area 	US-WI	EN35	21	21	602	0	0
+US-4306 	Mack State Wildlife Area 	US-WI	EN54	387	383	40184	0	0
+US-4307 	Maine State Wildlife Area 	US-WI	EN54	30	30	2162	0	0
+US-4308 	McKenzie Creek State Wildlife Area 	US-WI	EN35	23	22	447	0	0
+US-4309 	McMillan Marsh State Wildlife Area 	US-WI	EN44	17	16	738	0	0
+US-4310 	Mead State Wildlife Area 	US-WI	EN54	61	56	4702	0	0
+US-4311 	Meadow Valley State Wildlife Area 	US-WI	EN44	23	22	671	0	0
+US-4312 	Mud Lake State Wildlife Area 	US-WI	EN65	36	35	740	0	0
+US-4313 	Muddy Creek State Wildlife Area 	US-WI	EN44	127	118	5438	0	0
+US-4314 	Mukwa State Wildlife Area 	US-WI	EN54	84	78	5315	0	0
+US-4315 	Mullet Creek State Wildlife Area 	US-WI	EN53	93	93	2926	0	0
+US-4316 	Navarino State Wildlife Area 	US-WI	EN54	45	44	2628	0	0
+US-4317 	New Auburn State Wildlife Area 	US-WI	EN45	23	21	590	0	0
+US-4318 	New Wood State Wildlife Area 	US-WI	EN55	19	18	760	0	0
+US-4319 	Pershing State Wildlife Area 	US-WI	EN45	15	15	921	0	0
+US-4320 	Peshtigo Brook State Wildlife Area 	US-WI	EN55	12	12	480	0	0
+US-4321 	Peters Marsh State Wildlife Area 	US-WI	EN55	60	59	1769	0	0
+US-4322 	Pine Island State Wildlife Area 	US-WI	EN53	51	50	2220	0	0
+US-4323 	Potato Creek State Wildlife Area 	US-WI	EN45	14	14	339	0	0
+US-4324 	Powell Marsh State Wildlife Area 	US-WI	EN56	80	80	6125	0	0
+US-4325 	Poygan Marsh State Wildlife Area 	US-WI	EN54	45	43	3869	0	0
+US-4326 	Rat River State Wildlife Area 	US-WI	EN54	310	301	22548	0	0
+US-4327 	Rice Beds Creek State Wildlife Area 	US-WI	EN35	13	13	614	0	0
+US-4328 	Sandhill State Wildlife Area 	US-WI	EN44	20	20	547	0	0
+US-4329 	Sheboygan Marsh State Wildlife Area 	US-WI	EN53	162	155	3870	0	0
+US-4330 	Spring Creek State Wildlife Area 	US-WI	EN45	12	10	346	0	0
+US-4331 	Swan Lake State Wildlife Area 	US-WI	EN53	45	44	1560	0	0
+US-4332 	Theresa Marsh State Wildlife Area 	US-WI	EN53	69	65	1943	0	0
+US-4333 	Thunder Lake State Wildlife Area 	US-WI	EN55	54	54	4893	0	0
+US-4334 	Tom Lawin State Wildlife Area 	US-WI	EN45	27	27	689	0	0
+US-4335 	Totagatic Lake State Wildlife Area 	US-WI	EN46	13	13	290	0	0
+US-4336 	Totogatic State Wildlife Area 	US-WI	EN46	14	14	523	0	0
+US-4337 	Underwood State Wildlife Area 	US-WI	EN46	8	8	405	0	0
+US-4338 	Washington Creek State Wildlife Area 	US-WI	EN45	15	15	351	0	0
+US-4339 	Waunakee Marsh State Wildlife Area 	US-WI	EN53	184	172	5842	0	0
+US-4340 	Weirgor Springs State Wildlife Area 	US-WI	EN45	11	11	501	0	0
+US-4341 	White River Marsh State Wildlife Area 	US-WI	EN53	92	86	2659	0	0
+US-4342 	Herb Behnke Unit of Wolf River Bottoms State Wildlife Area 	US-WI	EN54	37	37	2315	0	0
+US-4343 	LaSage Unit of Wolf River Bottoms State Wildlife Area 	US-WI	EN54	71	69	4537	0	0
+US-4344 	Wolf River State Wildlife Area 	US-WI	EN54	91	90	6796	0	0
+US-4345 	Woodboro Lakes State Wildlife Area 	US-WI	EN55	41	41	3173	0	0
+US-4346 	Yellow River State Wildlife Area 	US-WI	EN43	37	34	831	0	0
+US-4347 	Yellowstone State Wildlife Area 	US-WI	EN52	36	35	1572	0	0
+US-4348 	Black River State Forest 	US-WI	EN44	74	71	2684	0	0
+US-4349 	Flambeau River State Forest 	US-WI	EN45	22	22	1072	0	0
+US-4350 	Governor Knowles State Forest 	US-WI	EN35	67	65	1863	0	1
+US-4352 	Kettle Moraine State Forest 	US-WI	EN53	838	795	37735	0	0
+US-4354 	Point Beach State Forest 	US-WI	EN64	128	117	3869	0	0
+US-4533 	Chequamegon-Nicolet National Forest 	US-WI	EN46	453	416	18322	0	0
+US-5577 	Brule River State Forest 	US-WI	EN46	41	41	1671	0	0
+US-5578 	Coulee Experimental State Forest 	US-WI	EN43	130	117	3643	0	0
+US-5579 	Havenwoods State Forest 	US-WI	EN63	163	152	5101	0	0
+US-5580 	Governor Earl Peshtigo River State Forest 	US-WI	EN55	36	34	987	0	0
+US-5643 	Lower Wisconsin State Riverway State Park 	US-WI	EN43	631	629	61284	0	0
+US-7260 	Northern Highland American Legion State Forest 	US-WI	EN55	297	266	17807	0	0
+US-8205 	Kangaroo Lake State Natural Area 	US-WI	EN65	31	29	607	0	0
+US-8206 	Meridian Park State Natural Area 	US-WI	EN65	26	25	498	0	0
+US-8208 	Shaw Marsh State Wildlife Area 	US-WI	EN53	230	226	9519	0	0
+US-8209 	Dewey Marsh State Natural Area 	US-WI	EN54	29	29	1576	0	0
+US-8210 	Bark Bay Slough State Natural Area 	US-WI	EN46	15	14	313	0	0
+US-8211 	Bear Beach State Natural Area 	US-WI	EN46	27	27	1376	0	0
+US-8213 	Belden Swamp State Natural Area 	US-WI	EN36	16	16	326	0	0
+US-8214 	Empire Swamp State Natural Area 	US-WI	EN36	11	11	243	0	0
+US-8215 	Ericson Creek Forest and Wetlands State Natural Area 	US-WI	EN36	13	13	248	0	0
+US-8216 	Osceola Bedrock Glades State Natural Area 	US-WI	EN35	39	38	1057	0	0
+US-8217 	Casey Lake State Wildlife Area 	US-WI	EN35	34	34	991	0	0
+US-8218 	Hortonville Bog State Natural Area 	US-WI	EN54	61	60	4292	0	0
+US-8219 	Jackson Marsh State Natural Area 	US-WI	EN53	89	88	2867	0	0
+US-8220 	Turtle Flambeau Flowage State Wilderness Area 	US-WI	EN46	35	33	1899	0	0
+US-8221 	Chippewa River State Trail 	US-WI	EN44	293	284	10800	0	0
+US-8222 	Red Cedar State Trail 	US-WI	EN44	93	88	2216	0	0
+US-8223 	Old Abe State Trail 	US-WI	EN44	163	161	4741	0	0
+US-8224 	Lower Chippewa River State Natural Area 	US-WI	EN44	53	52	2501	0	0
+US-8225 	Badfish Creek State Wildlife Area 	US-WI	EN52	57	55	3903	0	0
+US-8363 	Gibraltar Rock State Natural Area 	US-WI	EN53	74	73	2194	0	0
+US-8667 	Haskell Noyes Memorial Woods State Natural Area 	US-WI	EN53	51	51	1103	0	0
+US-8668 	Waterloo Prairie State Natural Area 	US-WI	EN53	41	41	1929	0	0
+US-8669 	Scuppernong Prairie State Natural Area 	US-WI	EN52	102	101	5818	0	0
+US-8670 	Vernon State Wildlife Area 	US-WI	EN52	175	169	9188	0	0
+US-8671 	Tichigan State Wildlife Area 	US-WI	EN52	151	145	6939	0	0
+US-8672 	Great River State Trail 	US-WI	EN43	110	110	2861	0	0
+US-8673 	La Crosse River State Trail 	US-WI	EN43	90	86	2408	0	0
+US-9704 	Lizard Mound State Park 	US-WI	EN53	69	68	1908	0	0
+US-9762 	400 State Trail 	US-WI	EN43	25	25	1419	0	0
+US-9766 	Badger State Trail 	US-WI	EN52	60	57	2168	0	0
+US-9768 	Bearskin State Trail 	US-WI	EN55	41	39	2193	0	0
+US-9771 	Buffalo River State Trail 	US-WI	EN44	45	44	2029	0	0
+US-9773 	Capital City State Trail 	US-WI	EN53	157	152	7192	0	0
+US-9778 	Devil’s River State Trail 	US-WI	EN64	31	28	704	0	0
+US-9783 	Elroy-Sparta State Trail 	US-WI	EN43	39	39	913	0	0
+US-9785 	Fox River State Trail 	US-WI	EN54	123	123	5418	0	0
+US-9790 	Gandy Dancer State Trail 	US-WI	EN36	30	29	809	0	0
+US-9792 	Glacial Drumlin State Trail 	US-WI	EN53	64	63	4039	0	0
+US-9794 	Great Sauk State Trail 	US-WI	EN53	53	52	2474	0	0
+US-9796 	Green Circle State Trail 	US-WI	EN54	26	25	831	0	0
+US-9800 	Hank Aaron State Trail 	US-WI	EN63	212	207	9209	0	0
+US-9804 	Military Ridge State Trail 	US-WI	EN53	48	47	2813	0	0
+US-9805 	Mound View State Trail 	US-WI	EN42	104	103	3194	0	0
+US-9806 	Mountain-Bay State Trail 	US-WI	EN54	49	48	2933	0	0
+US-9807 	Newton Blackmour State Trail 	US-WI	EN54	320	318	36748	0	0
+US-9809 	Oconto River State Trail 	US-WI	EN54	8	8	329	0	0
+US-9813 	Stower Seven Lakes State Trail 	US-WI	EN35	26	24	865	0	0
+US-9814 	Sugar River State Trail 	US-WI	EN52	56	55	4629	0	0
+US-9815 	Tomorrow River State Trail 	US-WI	EN54	73	68	2287	0	0
+US-9816 	Tuscobia State Trail 	US-WI	EN45	32	32	1094	0	0
+US-9819 	Wild Rivers State Trail 	US-WI	EN45	46	46	1677	0	0
+US-9821 	Wolf River State Trail 	US-WI	EN55	41	41	1607	0	0
+US-9826 	Blackhawk Lake State Recreation Area 	US-WI	EN43	26	26	2280	0	0
+US-9827 	Willow Flowage State Wilderness Area 	US-WI	EN55	56	55	5449	0	0
+US-9828 	Chippewa Flowage State Wilderness Area 	US-WI	EN45	15	14	487	0	0
+US-9829 	Adell State Wildlife Area 	US-WI	EN63	32	32	1529	0	0
+US-9830 	Albany State Wildlife Area 	US-WI	EN52	46	45	3484	0	0
+US-9831 	Allenton Marsh State Wildlife Area 	US-WI	EN53	35	33	1073	0	0
+US-9832 	Avon Bottoms State Wildlife Area 	US-WI	EN52	34	34	1840	0	0
+US-9833 	Big Swamp State Wildlife Area 	US-WI	EN44	9	9	352	0	0
+US-9834 	Bloomfield State Wildlife Area 	US-WI	EN52	93	91	4088	0	0
+US-9835 	Brooklyn State Wildlife Area 	US-WI	EN52	24	24	1539	0	0
+US-9836 	Buena Vista State Wildlife Area 	US-WI	EN54	27	20	486	0	0
+US-9837 	Buzz Besadny State Fish and Wildlife Area 	US-WI	EN64	28	28	781	0	0
+US-9838 	Colburn State Wildlife Area 	US-WI	EN54	13	13	278	0	0
+US-9839 	Deansville State Wildlife Area 	US-WI	EN53	26	26	1176	0	0
+US-9840 	Dewey Marsh State Wildlife Area 	US-WI	EN54	23	22	1289	0	0
+US-9841 	Evansville State Wildlife Area 	US-WI	EN52	35	35	3253	0	0
+US-9842 	Footville State Wildlife Area 	US-WI	EN52	33	33	2530	0	0
+US-9843 	Grassy Lake State Wildlife Area 	US-WI	EN53	25	25	839	0	0
+Copyright © 2018-2026 Parks on the Air®
