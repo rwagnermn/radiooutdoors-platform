@@ -58,13 +58,73 @@ def normalize_pota_page_paste(text):
         if normalized:
             yield number, normalized
 
+
+def _invalid_activation_row(line_number, original_text, normalized, *, field=None, value=None, reason=None, correction=None):
+    multi_entity = re.search(
+        r"\b(?P<entity>[A-Z]{2}-[A-Z0-9-]+)\s*,\s*\+\s*(?P<count>\d+)\b",
+        normalized,
+        re.I,
+    )
+    if multi_entity:
+        field = "Entity"
+        value = multi_entity.group(0)
+        reason = (
+            "The Entity field must identify the single entity where the activation "
+            "occurred. A value such as '+ 7' describes other states associated with "
+            "the park and is not a valid activation entity."
+        )
+        correction = (
+            f"Replace {value} with the one activation entity, such as "
+            f"{multi_entity.group('entity').upper()}."
+        )
+    elif field is None:
+        values = normalized.split()
+        if not values or _date(values[0]) is None:
+            field, value = "Date", values[0] if values else ""
+            reason = "The activation date is missing or invalid."
+            correction = "Use YYYY-MM-DD or a supported month/day/year date."
+        elif len(values) < 2 or not CALL_RE.match(values[1]):
+            field, value = "Callsign", values[1] if len(values) > 1 else ""
+            reason = "The activation callsign is missing or invalid."
+            correction = "Enter the callsign used for this activation."
+        elif len(values) < 3 or not PARK_RE.match(values[2]):
+            field, value = "POTA reference", values[2] if len(values) > 2 else ""
+            reason = "The POTA park reference is missing or invalid."
+            correction = "Use a reference such as US-1234."
+        elif len(values) < 7 or not all(re.fullmatch(r"\d+", item) for item in values[-4:]):
+            field = "Contact totals"
+            value = " ".join(values[-4:]) if len(values) >= 4 else normalized
+            reason = "The activation row does not contain four contact totals as non-negative whole numbers."
+            correction = "Provide CW, Data, Phone, and Total counts at the end of the row."
+        else:
+            entity_value = values[-5]
+            if not re.fullmatch(r"[A-Z]{2}-[A-Z0-9-]+", entity_value, re.I):
+                field, value = "Entity", entity_value
+                reason = "The Entity field must identify one valid activation entity."
+                correction = "Use the single entity where the activation occurred, such as US-MN."
+            else:
+                field, value = "Row format", normalized
+                reason = "The activation row fields could not be recognized in the expected order."
+                correction = "Provide date, callsign, POTA reference, park name, one entity, and four contact totals."
+    return {
+        "line_number": line_number,
+        "original_text": original_text,
+        "field": field,
+        "value": value or "",
+        "reason": reason,
+        "correction": correction,
+    }
+
 def parse_pota_history(text, max_rows=1000):
     rows, ignored, invalid = [], 0, []
+    original_lines = {number: raw for number, raw in enumerate(text.splitlines(), 1)}
     for number, normalized in normalize_pota_page_paste(text):
         match = ROW_RE.match(normalized)
         if not match:
             if re.match(r"^\d{4}-\d{2}-\d{2}\b|^\d{1,2}/\d{1,2}/\d{2,4}\b", normalized):
-                invalid.append({"line_number": number, "reason": "The activation row does not contain a valid date, callsign, POTA reference, park name, entity, and four contact totals."})
+                if len(rows) + len(invalid) >= max_rows:
+                    raise ValueError(f"No more than {max_rows} activation rows may be imported at once.")
+                invalid.append(_invalid_activation_row(number, original_lines[number], normalized))
             else:
                 ignored += 1
             continue
@@ -73,10 +133,20 @@ def parse_pota_history(text, max_rows=1000):
         values = match.groupdict()
         parsed_date = _date(values["date"])
         if parsed_date is None:
-            invalid.append({"line_number": number, "reason": "The activation date is not valid."})
+            invalid.append(_invalid_activation_row(
+                number, original_lines[number], normalized,
+                field="Date", value=values["date"],
+                reason="The activation date is not valid.",
+                correction="Correct the date using YYYY-MM-DD or a supported month/day/year date.",
+            ))
             continue
         if not CALL_RE.match(values["callsign"]):
-            invalid.append({"line_number": number, "reason": "The activation callsign is not valid."})
+            invalid.append(_invalid_activation_row(
+                number, original_lines[number], normalized,
+                field="Callsign", value=values["callsign"],
+                reason="The activation callsign is not valid.",
+                correction="Enter the callsign used for this activation.",
+            ))
             continue
         row = PotaRow(number)
         row.activation_date = parsed_date.isoformat()

@@ -2187,6 +2187,7 @@ td{padding:14px;border-bottom:1px solid #ddd;}
     cursor: text;
 }
 .photo-paste-zone:focus { outline: 3px solid #f0b429; outline-offset: 2px; }
+.photo-paste-zone.is-dragging { border-color:#b85c00; background:#fff4df; box-shadow:0 0 0 3px rgba(240,180,41,.35); }
 .amenity-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .amenity-bulk-actions button { min-height: 44px; }
 .map-pin-placement-actions { display:flex; gap:10px; margin-top:10px; }
@@ -4813,6 +4814,11 @@ body.journal-dashboard-page .content.journal-dashboard {
 .journal-panel-heading a,.journal-contact-actions-top a,.journal-view-all-photos { color:#b94712; font-weight:800; }
 .journal-detail-map { width:100%; height:215px; margin-top:7px; border-radius:7px; }
 .journal-contact-actions-top { display:flex; flex-wrap:wrap; gap:5px 13px; min-height:28px; font-size:.9rem; }
+.journal-visibility-form { display:inline-flex; margin:0; }
+.journal-visibility-control,.journal-visibility-badge { display:inline-flex; min-height:40px; align-items:center; padding:7px 14px; border:2px solid currentColor; border-radius:999px; font-size:1rem; font-weight:900; line-height:1; }
+.journal-visibility-control { cursor:pointer; }
+.journal-visibility-public { color:#07572f; background:#e9f6ee; }
+.journal-visibility-private { color:#74420a; background:#fff1d6; }
 .journal-dashboard-scroll { max-height:198px; overflow:auto; scrollbar-gutter:stable; }
 .journal-dashboard-contact-table { width:100%; border-collapse:collapse; font-size:.97rem; }
 .journal-dashboard-contact-table th { position:sticky; top:0; z-index:2; background:#fffaf2; text-align:left; }
@@ -5667,6 +5673,37 @@ body.location-help-open { overflow: hidden; }
 .contact-map-summary { margin-bottom: .6rem; font-weight: 650; }
 .contact-map-legend { display: flex; flex-wrap: wrap; gap: .6rem 1rem; margin-bottom: .75rem; }
 .contact-map-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.map-legend-path { display:inline-block; width:28px; border-top:3px solid #d86a1c; }
+.journal-contact-map-content { max-width:1240px; }
+.journal-globe-controls { display:flex; flex-wrap:wrap; align-items:end; gap:10px 18px; margin:18px 0 8px; padding:12px; border:1px solid #b9c6bd; border-radius:10px; background:#f8faf8; }
+.journal-globe-controls fieldset { margin:0; padding:0; border:0; }
+.journal-globe-controls legend { margin-bottom:5px; color:#263c31; font-size:.9rem; font-weight:850; }
+.journal-map-segmented { display:flex; }
+.journal-map-segmented button { min-height:42px; padding:7px 15px; border:1px solid #8ea097; color:#173c2e; background:#fff; font-size:1rem; font-weight:850; cursor:pointer; }
+.journal-map-segmented button:first-child { border-radius:7px 0 0 7px; }
+.journal-map-segmented button:last-child { border-radius:0 7px 7px 0; }
+.journal-map-segmented button+button { margin-left:-1px; }
+.journal-map-segmented button[aria-pressed="true"] { z-index:1; border-color:#174d36; color:#fff; background:#07572f; }
+.journal-map-segmented button:focus-visible,.journal-globe-reset:focus-visible { outline:3px solid #e77722; outline-offset:2px; }
+.journal-globe-reset { min-height:42px; margin:0; }
+.journal-globe-status { margin:8px 0; font-weight:800; }
+.journal-globe-shell { position:relative; border-radius:10px; overflow:hidden; background:radial-gradient(circle at 50% 45%,#164c72 0,#071c31 55%,#020912 100%); }
+.journal-contact-globe { width:100%; height:clamp(430px,68vh,720px); border:1px solid #647b89; border-radius:10px; }
+.journal-globe-live { position:absolute; z-index:3; right:10px; bottom:34px; display:grid; gap:2px; max-width:min(330px,calc(100% - 20px)); padding:8px 11px; border:1px solid rgba(255,255,255,.55); border-radius:7px; color:#fff; background:rgba(3,18,31,.88); pointer-events:none; }
+.journal-globe-live[hidden] { display:none; }
+.journal-globe-live time,.journal-globe-live span { font-size:.83rem; }
+.journal-globe-marker { display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; padding:0; border:0; color:#fff; background:transparent; line-height:1; cursor:pointer; }
+.journal-globe-marker-head { display:inline-flex; width:17px; height:17px; flex:0 0 17px; align-items:center; justify-content:center; padding:0; border:1.5px solid #fff; border-radius:50%; color:#fff; background:#1769aa; box-shadow:0 1px 4px rgba(0,0,0,.65); font-size:.42rem; font-weight:950; line-height:1; }
+.journal-globe-marker-origin { width:40px; height:40px; }
+.journal-globe-marker-origin .journal-globe-marker-head { width:40px; height:40px; flex-basis:40px; border-width:3px; background:#db6419; box-shadow:0 2px 8px rgba(0,0,0,.65); font-size:.84rem; }
+.journal-globe-night .journal-globe-marker-contact .journal-globe-marker-head { background:#42a5f5; }
+.journal-globe-night .journal-globe-marker-origin .journal-globe-marker-head { background:#ff8c35; }
+.journal-contact-globe .maplibregl-popup-content { max-width:360px; padding:12px; color:#17231d; font-size:1rem; line-height:1.4; }
+.journal-contact-globe .maplibregl-ctrl button { width:38px; height:38px; }
+.journal-contact-globe .maplibregl-ctrl-attrib { font-size:11px; }
+.journal-flat-map-shell[hidden],.journal-globe-shell[hidden] { display:none; }
+@media (max-width:700px) { .journal-globe-controls { align-items:stretch; } .journal-globe-controls fieldset { flex:1 1 100%; } .journal-map-segmented button { flex:1; } .journal-contact-globe { height:min(62vh,500px); } }
+@media (prefers-reduced-motion:reduce) { .journal-contact-globe * { transition:none!important; animation:none!important; } }
 .map-legend-pin { width: 18px; height: 18px; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 .map-legend-origin { background: #d86a1c; }
 .map-legend-contact { background: #1769aa; }
@@ -5708,6 +5745,21 @@ body.location-help-open { overflow: hidden; }
 .pota-import-error p { margin: 0.35rem 0; }
 .pota-error-icon { font-size: 1.6rem; font-weight: 700; line-height: 1; }
 .pota-error-dismiss { background: transparent; border: 2px solid currentColor; color: inherit; font-size: 1.5rem; margin-left: auto; min-height: 44px; min-width: 44px; }
+.pota-invalid-review-panel { margin:16px 0 20px; padding:16px; border:3px solid #b51f2e; border-radius:10px; color:#68111b; background:#fff2f3; }
+.pota-invalid-review-panel h2 { margin:0 0 6px; color:inherit; }
+.pota-invalid-warning { font-size:1.08rem; }
+.pota-invalid-row-list { display:grid; gap:12px; margin:14px 0; padding:0; list-style:none; }
+.pota-invalid-row { padding:12px; border:1px solid #cf6570; border-left-width:5px; border-radius:7px; background:#fff; }
+.pota-invalid-row p { margin:0 0 6px; }
+.pota-invalid-source { max-width:100%; margin:6px 0 10px; padding:9px; overflow:auto; border:1px solid #e1a5aa; border-radius:5px; color:#3b1115; background:#fff8f8; white-space:pre-wrap; overflow-wrap:anywhere; }
+.pota-invalid-details { display:grid; gap:6px; margin:0; }
+.pota-invalid-details div { display:grid; grid-template-columns:minmax(105px,145px) 1fr; gap:8px; }
+.pota-invalid-details dt { font-weight:850; }
+.pota-invalid-details dd { margin:0; }
+.pota-correction-editor { margin-top:14px; }
+.pota-correction-editor summary { min-height:44px; cursor:pointer; font-weight:850; }
+.pota-correction-editor form { display:grid; gap:8px; }
+.pota-correction-editor textarea { width:100%; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
 .ro-busy-spinner {
   animation: ro-spin 0.8s linear infinite;
   border: 3px solid rgba(31, 79, 51, 0.25);
@@ -6359,8 +6411,6 @@ body.adventure-book-page .content.adventure-book-content {
 .adventure-visibility-public { color:#153a80; background:#e9efff; }
 .adventure-visibility-private { color:#663d09; background:#fff0cf; }
 .adventure-panel-owner { color:#526159; font-weight:750; }
-.adventure-panel-location { margin:9px 0 0; color:#27362f; font-size:1rem; line-height:1.3; overflow-wrap:anywhere; }
-.adventure-panel-location::before { content:"⌖"; margin-right:7px; color:#c34f16; font-weight:900; }
 .adventure-panel-updated { display:grid; gap:2px; padding-left:12px; border-left:1px solid #dde2de; font-size:.98rem; }
 .adventure-panel-updated span { font-weight:850; }
 .adventure-panel-counts { display:grid; grid-template-columns:repeat(3,1fr); margin:0; text-align:center; }

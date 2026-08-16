@@ -12,8 +12,20 @@ from .adif_parser import maidenhead_to_latlon
 MISSING_ORIGIN_MESSAGE = (
     "A Location pin is required before contact paths can be mapped."
 )
+JOURNAL_CONTACTS_WITHOUT_ORIGIN_MESSAGE = (
+    "This Journal's Location does not have coordinates. Contact markers are "
+    "shown, but contact paths cannot be drawn."
+)
+NO_MAPPABLE_CONTACTS_MESSAGE = (
+    "None of this Journal's contacts contain coordinates or grid squares that "
+    "can be placed on the map."
+)
+NO_CONTACTS_MESSAGE = "This Journal has no contacts to map."
 PRIVATE_ORIGIN_MESSAGE = (
     "Contact paths are hidden because this Adventure uses a Private Location."
+)
+PRIVATE_JOURNAL_ORIGIN_MESSAGE = (
+    "Contact paths are hidden because this Journal uses a Private Location."
 )
 LINE_LIMIT = 250
 
@@ -25,6 +37,8 @@ def _coordinate_pair(latitude, longitude):
     except (InvalidOperation, TypeError, ValueError):
         return None
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return None
+    if latitude == 0 and longitude == 0:
         return None
     return latitude, longitude
 
@@ -44,25 +58,40 @@ def _contact_coordinates(contact: JournalContact, user):
     return None, "Unavailable", False
 
 
-def build_contact_map(adventure, contacts: Iterable[JournalContact], user):
+def build_contact_map(
+    adventure,
+    contacts: Iterable[JournalContact],
+    user,
+    *,
+    journal_entry=None,
+):
     contacts = list(contacts)
-    location = adventure.location
+    location = journal_entry.location if journal_entry is not None else adventure.location
     if location is not None and not can_view_location(user, location):
         return {
             "available": False,
-            "message": PRIVATE_ORIGIN_MESSAGE,
+            "message": (
+                PRIVATE_JOURNAL_ORIGIN_MESSAGE
+                if journal_entry is not None
+                else PRIVATE_ORIGIN_MESSAGE
+            ),
             "total": len(contacts),
             "mapped": 0,
             "unmapped": len(contacts),
             "contacts": [],
             "origin": None,
+            "has_map_points": False,
+            "path_count": 0,
             "filters": {},
         }
 
-    origin = None if location is None else _coordinate_pair(
-        location.latitude, location.longitude
-    )
-    if origin is None:
+    if journal_entry is not None:
+        origin = _coordinate_pair(journal_entry.latitude, journal_entry.longitude)
+    else:
+        origin = None if location is None else _coordinate_pair(
+            location.latitude, location.longitude
+        )
+    if origin is None and journal_entry is None:
         return {
             "available": False,
             "message": MISSING_ORIGIN_MESSAGE,
@@ -71,6 +100,8 @@ def build_contact_map(adventure, contacts: Iterable[JournalContact], user):
             "unmapped": len(contacts),
             "contacts": [],
             "origin": None,
+            "has_map_points": False,
+            "path_count": 0,
             "filters": {},
         }
 
@@ -120,17 +151,41 @@ def build_contact_map(adventure, contacts: Iterable[JournalContact], user):
             }
         )
 
+    origin_data = None
+    if origin is not None:
+        origin_data = {
+            "latitude": origin[0],
+            "longitude": origin[1],
+            "name": (
+                location.name
+                if location is not None
+                else journal_entry.title or "Journal Location"
+            ),
+            "label": (
+                "Journal Location"
+                if journal_entry is not None
+                else "Adventure Location"
+            ),
+        }
+
+    message = ""
+    if journal_entry is not None:
+        if not contacts:
+            message = NO_CONTACTS_MESSAGE
+        elif not points:
+            message = NO_MAPPABLE_CONTACTS_MESSAGE
+        elif origin is None:
+            message = JOURNAL_CONTACTS_WITHOUT_ORIGIN_MESSAGE
+
     return {
         "available": True,
-        "message": "",
+        "message": message,
         "total": len(contacts),
         "mapped": len(points),
         "unmapped": len(unmapped_contacts),
-        "origin": {
-            "latitude": origin[0],
-            "longitude": origin[1],
-            "name": location.name,
-        },
+        "origin": origin_data,
+        "has_map_points": bool(origin_data or points),
+        "path_count": len(points) if origin_data else 0,
         "contacts": points,
         "unmapped_contacts": unmapped_contacts,
         "filters": {
@@ -141,6 +196,8 @@ def build_contact_map(adventure, contacts: Iterable[JournalContact], user):
             "bands": sorted(bands, key=str.lower),
             "modes": sorted(modes, key=str.lower),
         },
-        "line_limit": LINE_LIMIT,
-        "lines_default": len(points) <= LINE_LIMIT,
+        "line_limit": None if journal_entry is not None else LINE_LIMIT,
+        "lines_default": bool(origin_data) and (
+            journal_entry is not None or len(points) <= LINE_LIMIT
+        ),
     }

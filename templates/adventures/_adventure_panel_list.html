@@ -5,7 +5,6 @@
     <div class="adventure-panel-main">
       <div class="adventure-panel-title-row"><a class="adventure-panel-title" href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a><span class="adventure-panel-id">Adventure ID {{ adventure.pk }}</span></div>
       <div class="adventure-panel-badges"><span class="adventure-status adventure-status-{{ adventure.display_status_key }}">{{ adventure.display_status_label }}</span><span class="adventure-visibility adventure-visibility-{% if adventure.is_public %}public{% else %}private{% endif %}">{% if adventure.is_public %}Public{% else %}Private{% endif %}</span>{% if book_mode == 'public' %}<span class="adventure-panel-owner">{{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</span>{% endif %}</div>
-      <p class="adventure-panel-location">{% if adventure.location %}{% if adventure.can_view_location %}{{ adventure.location.name }}{% if adventure.location.state %}, {{ adventure.location.state }}{% endif %}{% else %}Private Location{% endif %}{% else %}Location not specified{% endif %}</p>
     </div>
     <div class="adventure-panel-updated"><span>Updated</span><time datetime="{{ adventure.updated_at|date:'Y-m-d' }}">{{ adventure.updated_at|date:"M j, Y" }}</time></div>
     <dl class="adventure-panel-counts"><div><dt>Journals</dt><dd>{{ adventure.journal_count }}</dd></div><div><dt>Photos</dt><dd>{{ adventure.photo_count }}</dd></div><div><dt>Contacts</dt><dd>{{ adventure.contact_count }}</dd></div></dl>

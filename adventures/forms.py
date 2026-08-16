@@ -27,13 +27,20 @@ class MultipleImageField(forms.ImageField):
         single_clean = super().clean
         files = data if isinstance(data, (list, tuple)) else [data]
         cleaned = []
+        self.rejected_files = []
         for item in files:
-            image = single_clean(item, initial)
-            if image and image.size > MAX_PROFILE_PHOTO_BYTES:
-                raise forms.ValidationError("Each image must be smaller than 12 MB.")
-            if image:
-                validate_image_file(image)
-                cleaned.append(optimize_location_photo(image))
+            filename = getattr(item, "name", "Clipboard image") or "Clipboard image"
+            try:
+                image = single_clean(item, initial)
+                if image and image.size > MAX_PROFILE_PHOTO_BYTES:
+                    raise forms.ValidationError("The image must be smaller than 12 MB.")
+                if image:
+                    validate_image_file(image)
+                    image.seek(0)
+                    cleaned.append(image)
+            except forms.ValidationError as exc:
+                reason = "; ".join(exc.messages)
+                self.rejected_files.append((filename, reason))
         return cleaned if isinstance(data, (list, tuple)) else (cleaned[0] if cleaned else None)
 
 

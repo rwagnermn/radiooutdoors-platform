@@ -495,7 +495,7 @@ class AddAdventureWorkflowTests(TestCase):
         )
         self.assertContains(response, "data-photo-preview")
         self.assertContains(response, "Load Photos")
-        self.assertContains(response, "Change Photos")
+        self.assertContains(response, "Choose Photos")
         self.assertContains(response, "Clear Selection")
         self.assertContains(response, "photo-preview.js")
         self.assertContains(response, "multiple")

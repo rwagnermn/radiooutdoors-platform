@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.test import TestCase, override_settings
 from unittest.mock import MagicMock, patch
 from django.core.cache import cache
 from django.core.management import call_command
 import json
 import hashlib
+from datetime import date, timedelta
 from io import StringIO
 from django.urls import reverse
 
@@ -87,12 +89,31 @@ class PotaParserTests(TestCase):
         self.assertEqual(ignored, 2)
         self.assertEqual(invalid[0]["line_number"], 2)
 
+    def test_multi_entity_value_has_specific_source_preserving_error(self):
+        original = "2025-06-04 W5RIK US-4239 North Country Trail US-IA, + 1 0 0 15 15"
+        rows, ignored, invalid = parse_pota_history(original)
+        self.assertEqual(rows, [])
+        self.assertEqual(ignored, 0)
+        self.assertEqual(invalid[0]["line_number"], 1)
+        self.assertEqual(invalid[0]["original_text"], original)
+        self.assertEqual(invalid[0]["field"], "Entity")
+        self.assertEqual(invalid[0]["value"], "US-IA, + 1")
+        self.assertIn("single entity where the activation occurred", invalid[0]["reason"])
+        self.assertIn("other states associated with the park", invalid[0]["reason"])
+        self.assertIn("US-IA", invalid[0]["correction"])
+
 @override_settings(GOOGLE_GEOCODING_API_KEY="")
 class PotaImportEntryPointTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = get_user_model().objects.create_user(username="W5TEST", password="password")
         MemberProfile.objects.create(user=self.user, callsign="W5TEST", callsign_verified=True, verification_method=MemberProfile.VerificationMethod.QRZ)
+
+    def activation_rows(self, count, *, start=date(2024, 1, 1), park="US-1234", entity="US-MN"):
+        return "\n".join(
+            f"{(start + timedelta(days=index)).isoformat()} W5TEST {park} Pike Lake {entity} 0 0 10 10"
+            for index in range(count)
+        )
 
     def test_verified_member_sees_working_import_links(self):
         self.client.force_login(self.user)
@@ -150,8 +171,10 @@ class PotaImportEntryPointTests(TestCase):
         preview = self.client.get(start.url)
         self.assertEqual(preview.status_code, 200)
         self.assertContains(preview, "250 activations at 1 unique park")
-        self.assertContains(preview, 'name="selected"', count=250)
-        self.assertContains(preview, 'name="park_resolution_', count=1)
+        self.assertContains(preview, 'class="pota-activation-selector"', count=250)
+        self.assertContains(preview, 'name="selected_rows"', count=1)
+        self.assertContains(preview, 'name="row_visibility_overrides"', count=1)
+        self.assertNotContains(preview, 'name="park_resolution_')
         self.assertNotContains(preview, "data-pota-park-map")
         self.assertNotContains(preview, "pota-single-park-map")
         self.assertEqual(Adventure.objects.count(), 0)
@@ -167,15 +190,211 @@ class PotaImportEntryPointTests(TestCase):
         self.assertContains(response, 'role="alert"')
         self.assertContains(response, 'aria-live="assertive"')
 
-    def test_partial_failure_preserves_exact_text_and_reports_line(self):
+    def test_mixed_valid_and_invalid_rows_advance_with_diagnostics_and_no_writes(self):
         self.client.force_login(self.user)
-        pasted = SUPPLIED_SAMPLE.splitlines()[0] + "\r\n2025-06-05 W5RIK malformed"
+        valid = "2025-06-04 W5TEST US-12388 Caribou Falls Unique Area US-MN 0 0 15 15"
+        invalid = "2025-06-05 W5TEST US-4239 North Country Trail US-IA, + 1 0 0 12 12"
+        pasted = "My Activations\r\n" + valid + "\r\n" + invalid
         response = self.client.post(reverse("import_pota_history"), {"pota_history": pasted})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "2025-06-05 W5RIK malformed")
-        self.assertContains(response, "1 recognized; 0 ignored; 1 invalid.")
-        self.assertContains(response, "Line 2:")
+        self.assertEqual(response.status_code, 302)
+
+        preview = self.client.get(response.url)
+        self.assertContains(preview, "1 activations are ready to review. 1 invalid rows will not be imported.")
+        self.assertContains(preview, "Source line 3")
+        self.assertContains(preview, invalid)
+        self.assertContains(preview, "Invalid field")
+        self.assertContains(preview, "Entity")
+        self.assertContains(preview, "US-IA, + 1")
+        self.assertContains(preview, "single entity where the activation occurred")
+        self.assertContains(preview, "other states associated with the park")
+        self.assertContains(preview, "Correct the preserved pasted data")
+        self.assertContains(preview, pasted)
+        self.assertContains(preview, 'class="pota-activation-selector"', count=1)
+        self.assertContains(preview, 'name="selected_rows"', count=1)
+        self.assertContains(preview, "checked data-pota-eligible", count=1)
+        self.assertNotContains(preview, 'name="selected" value="1"')
         self.assertEqual(Adventure.objects.count(), 0)
+        self.assertEqual(JournalEntry.objects.count(), 0)
+        self.assertEqual(Location.objects.count(), 0)
+        self.assertEqual(PotaImportBatch.objects.count(), 0)
+        self.assertEqual(PotaActivationImport.objects.count(), 0)
+
+    def test_confirmation_rejects_manipulated_invalid_indexes(self):
+        self.client.force_login(self.user)
+        valid = "2025-06-04 W5TEST US-12388 Caribou Falls Unique Area US-MN 0 0 15 15"
+        invalid = "2025-06-05 W5TEST US-4239 North Country Trail US-MI, + 7 0 0 12 12"
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": valid + "\n" + invalid}
+        )
+        token = start.url.rstrip("/").split("/")[-1]
+        result = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {"selected": ["0", "1", "999"]},
+        )
+        self.assertRedirects(result, reverse("preview_pota_history", args=[token]))
+        self.assertEqual(PotaActivationImport.objects.count(), 0)
+        self.assertEqual(PotaImportBatch.objects.count(), 0)
+
+    def test_manipulated_invalid_only_selection_is_rejected_without_writes(self):
+        self.client.force_login(self.user)
+        valid = "2025-06-04 W5TEST US-12388 Caribou Falls Unique Area US-MN 0 0 15 15"
+        invalid = "2025-06-05 W5TEST US-4239 North Country Trail US-MI, + 7 0 0 12 12"
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": valid + "\n" + invalid}
+        )
+        token = start.url.rstrip("/").split("/")[-1]
+        rejected = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {"selected": ["1", "999"]},
+            follow=True,
+        )
+        self.assertRedirects(rejected, reverse("preview_pota_history", args=[token]))
+        self.assertContains(rejected, "does not belong to this review batch")
+        self.assertEqual(PotaImportBatch.objects.count(), 0)
+        self.assertEqual(PotaActivationImport.objects.count(), 0)
+        self.assertEqual(Adventure.objects.count(), 0)
+
+    def test_entirely_invalid_paste_cannot_reach_importable_review(self):
+        self.client.force_login(self.user)
+        invalid = "2025-06-05 W5TEST US-4239 North Country Trail US-MI, + 7 0 0 12 12"
+        response = self.client.post(
+            reverse("import_pota_history"), {"pota_history": invalid}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "We couldn’t recognize the pasted POTA activations.")
+        self.assertContains(response, "Source line 1")
+        self.assertContains(response, invalid)
+        self.assertContains(response, "Entity")
+        self.assertNotContains(response, 'name="selected_rows"')
+        self.assertEqual(Adventure.objects.count(), 0)
+        self.assertEqual(PotaImportBatch.objects.count(), 0)
+
+    def test_compact_confirmation_processes_500_rows_below_field_limit(self):
+        self.client.force_login(self.user)
+        start = self.client.post(
+            reverse("import_pota_history"),
+            {"pota_history": self.activation_rows(500)},
+        )
+        self.assertEqual(start.status_code, 302)
+        self.assertEqual(Adventure.objects.count(), 0)
+        self.assertEqual(JournalEntry.objects.count(), 0)
+        self.assertEqual(PotaImportBatch.objects.count(), 0)
+        preview = self.client.get(start.url)
+        self.assertContains(preview, 'name="selected_rows"', count=1)
+        self.assertContains(preview, 'name="row_visibility_overrides"', count=1)
+        self.assertContains(preview, 'class="pota-activation-selector"', count=500)
+        self.assertNotContains(preview, 'name="row_visibility_0"')
+        self.assertNotContains(preview, 'name="row_visibility_499"')
+        self.assertNotContains(preview, 'name="park_resolution_')
+
+        token = start.url.rstrip("/").split("/")[-1]
+        post = {
+            "selected_rows": json.dumps(list(range(500))),
+            "row_visibility_overrides": "{}",
+            "publish_pota_batch": "yes",
+            "import_organization": "grouped",
+            "destination_choice": "new",
+            "new_adventure_name": "Five Hundred Activations",
+            "new_adventure_visibility": "private",
+        }
+        self.assertEqual(len(post) + 1, 8)  # Include the browser's CSRF field.
+        self.assertLess(len(post) + 1, settings.DATA_UPLOAD_MAX_NUMBER_FIELDS)
+        confirmed = self.client.post(
+            reverse("confirm_pota_history", args=[token]), post
+        )
+        adventure = Adventure.objects.get(title="Five Hundred Activations")
+        self.assertRedirects(confirmed, adventure.get_absolute_url())
+        self.assertEqual(adventure.journal_entries.count(), 500)
+        self.assertEqual(PotaActivationImport.objects.count(), 500)
+
+    def test_mixed_489_and_11_compact_confirmation_imports_valid_rows_only(self):
+        self.client.force_login(self.user)
+        valid = self.activation_rows(489)
+        invalid = "\n".join(
+            f"{(date(2026, 1, 1) + timedelta(days=index)).isoformat()} W5TEST US-4239 North Country Trail US-MI, + 7 0 0 10 10"
+            for index in range(11)
+        )
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": valid + "\n" + invalid}
+        )
+        preview = self.client.get(start.url)
+        self.assertContains(preview, "489 activations are ready to review. 11 invalid rows will not be imported.")
+        self.assertContains(preview, 'class="pota-activation-selector"', count=489)
+        token = start.url.rstrip("/").split("/")[-1]
+        confirmed = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {
+                "selected_rows": json.dumps(list(range(489))),
+                "row_visibility_overrides": "{}",
+                "import_organization": "grouped",
+                "destination_choice": "new",
+                "new_adventure_name": "Mixed POTA Review",
+            },
+        )
+        adventure = Adventure.objects.get(title="Mixed POTA Review")
+        self.assertRedirects(confirmed, adventure.get_absolute_url())
+        self.assertEqual(PotaActivationImport.objects.count(), 489)
+        self.assertFalse(PotaActivationImport.objects.filter(park_reference="US-4239").exists())
+        self.assertEqual(PotaImportBatch.objects.get().diagnostics["invalid_rows"], 11)
+
+    def test_posted_activation_values_cannot_override_cached_validated_row(self):
+        self.client.force_login(self.user)
+        authoritative = "2025-06-04 W5TEST US-12388 Caribou Falls Unique Area US-MN 1 2 12 15"
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": authoritative}
+        )
+        token = start.url.rstrip("/").split("/")[-1]
+        confirmed = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {
+                "selected_rows": "[0]",
+                "row_visibility_overrides": "{}",
+                "activation_date": "1900-01-01",
+                "callsign": "N0EVIL",
+                "park_reference": "US-9999",
+                "entity": "US-XX",
+                "cw": "999",
+                "total": "999",
+            },
+        )
+        self.assertRedirects(confirmed, reverse("pota_history_result"))
+        imported = PotaActivationImport.objects.get()
+        self.assertEqual(str(imported.activation_date), "2025-06-04")
+        self.assertEqual(imported.callsign, "W5TEST")
+        self.assertEqual(imported.park_reference, "US-12388")
+        self.assertEqual(imported.entity, "US-MN")
+        self.assertEqual(imported.cw_contacts, 1)
+        self.assertEqual(imported.total_contacts, 15)
+
+    def test_review_token_is_owner_scoped_and_missing_token_is_readable(self):
+        self.client.force_login(self.user)
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": SAMPLE}
+        )
+        token = start.url.rstrip("/").split("/")[-1]
+        other = get_user_model().objects.create_user("W6OTHER", password="password")
+        MemberProfile.objects.create(
+            user=other,
+            callsign="W6OTHER",
+            callsign_verified=True,
+            verification_method=MemberProfile.VerificationMethod.QRZ,
+        )
+        self.client.force_login(other)
+        rejected = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {"selected_rows": "[0]"},
+            follow=True,
+        )
+        self.assertRedirects(rejected, reverse("import_pota_history"))
+        self.assertContains(rejected, "expired or was already processed")
+        missing = self.client.post(
+            reverse("confirm_pota_history", args=["0" * 32]),
+            {"selected_rows": "[0]"},
+            follow=True,
+        )
+        self.assertRedirects(missing, reverse("import_pota_history"))
+        self.assertContains(missing, "expired or was already processed")
+        self.assertEqual(PotaActivationImport.objects.count(), 0)
 
     def test_busy_indicator_markup_is_accessible(self):
         self.client.force_login(self.user)
@@ -195,9 +414,9 @@ class PotaImportEntryPointTests(TestCase):
         start = self.client.post(reverse("import_pota_history"), {"pota_history": repeated})
         preview = self.client.get(start.url)
         self.assertContains(preview, "Existing Location matched")
-        self.assertContains(preview, f'value="existing:{location.pk}"')
-        self.assertContains(preview, 'name="park_resolution_', count=1)
-        self.assertContains(preview, 'name="park_latitude_', count=1)
+        self.assertNotContains(preview, f'value="existing:{location.pk}"')
+        self.assertNotContains(preview, 'name="park_resolution_')
+        self.assertNotContains(preview, 'name="park_latitude_')
 
     def test_review_proposes_one_location_without_inventing_coordinates(self):
         self.client.force_login(self.user)
@@ -207,9 +426,10 @@ class PotaImportEntryPointTests(TestCase):
         self.assertContains(preview, "Long Park Name")
         self.assertContains(preview, "Lookup unavailable")
         self.assertNotContains(preview, "data-pota-park-map")
-        self.assertContains(preview, 'name="park_resolution_', count=1)
-        self.assertContains(preview, 'name="park_latitude_', count=1)
-        self.assertContains(preview, 'name="park_longitude_', count=1)
+        self.assertContains(preview, 'name="selected_rows"', count=1)
+        self.assertNotContains(preview, 'name="park_resolution_')
+        self.assertNotContains(preview, 'name="park_latitude_')
+        self.assertNotContains(preview, 'name="park_longitude_')
         self.assertEqual(Location.objects.count(), 0)
         self.assertEqual(Adventure.objects.count(), 0)
 
@@ -330,9 +550,11 @@ class PotaImportEntryPointTests(TestCase):
         preview = self.client.get(start.url)
         self.assertContains(preview, "Clipboard Name")
         self.assertContains(preview, "Approximate pin found")
-        self.assertContains(preview, 'value="46.123456"')
-        self.assertContains(preview, 'value="-92.654321"')
+        self.assertEqual(preview.context["parks"][0]["latitude"], "46.123456")
+        self.assertEqual(preview.context["parks"][0]["longitude"], "-92.654321")
+        self.assertNotContains(preview, 'value="46.123456"')
 
+    @override_settings(POTA_PARK_REFERENCE_DATA={"US-9999": {"name": "Long Park Name", "entity": "US-MN", "latitude": "46.123456", "longitude": "-92.654321"}})
     def test_confirmation_creates_one_location_and_reuses_it(self):
         self.client.force_login(self.user)
         repeated = "2024-06-01 W5TEST US-9999 Long Park Name US-MN 0 0 10 10\n2024-06-02 W5TEST US-9999 Long Park Name US-MN 0 0 11 11"
@@ -360,7 +582,7 @@ class PotaImportEntryPointTests(TestCase):
         token = start.url.rstrip("/").split("/")[-1]
         preview = self.client.get(start.url)
         self.assertContains(preview, 'action="' + reverse("confirm_pota_history", args=[token]) + '"')
-        self.assertContains(preview, 'name="selected" value="0" checked')
+        self.assertContains(preview, 'class="pota-activation-selector" type="checkbox" value="0" checked')
 
         result = self.client.post(
             reverse("confirm_pota_history", args=[token]),
@@ -392,12 +614,12 @@ class PotaImportEntryPointTests(TestCase):
         self.assertContains(preview, "Already imported")
         self.assertContains(preview, "Ready to import")
         self.assertContains(preview, "checked data-pota-eligible", count=1)
-        self.assertContains(preview, 'name="selected" value="0" disabled')
-        self.assertContains(preview, 'name="selected" value="1" checked data-pota-eligible')
+        self.assertContains(preview, 'type="checkbox" value="0" disabled')
+        self.assertContains(preview, 'type="checkbox" value="1" checked data-pota-eligible')
 
         imported = self.client.post(
             reverse("confirm_pota_history", args=[token]),
-            {"selected": ["0", "1"]},
+            {"selected": ["1"]},
         )
         self.assertRedirects(imported, reverse("pota_history_result"))
         self.assertEqual(PotaActivationImport.objects.filter(batch__owner=self.user).count(), 2)
@@ -572,7 +794,11 @@ class PotaImportEntryPointTests(TestCase):
         start = self.client.post(reverse("import_pota_history"), {"pota_history": SAMPLE})
         token = start.url.rstrip("/").split("/")[-1]
 
-        result = self.client.post(reverse("confirm_pota_history", args=[token]), {}, follow=True)
+        result = self.client.post(
+            reverse("confirm_pota_history", args=[token]),
+            {"selected_rows": "[]", "row_visibility_overrides": "{}"},
+            follow=True,
+        )
 
         self.assertRedirects(result, reverse("preview_pota_history", args=[token]))
         self.assertContains(result, "Select at least one eligible activation to import.")
@@ -667,9 +893,10 @@ class PotaImportEntryPointTests(TestCase):
         preview = self.client.get(start.url)
         self.assertEqual(mocked_open.call_count, 2)
         self.assertContains(preview, "Approximate pin found")
-        self.assertContains(preview, 'value="Caribou Falls State Wayside"')
         self.assertNotContains(preview, "Accept This General Location")
-        self.assertContains(preview, 'value="47.463"')
+        self.assertEqual(preview.context["parks"][0]["provider_name"], "Caribou Falls State Wayside")
+        self.assertEqual(preview.context["parks"][0]["latitude"], "47.463")
+        self.assertNotContains(preview, 'value="Caribou Falls State Wayside"')
         first_query = mocked_open.call_args_list[0].args[0]
         second_query = mocked_open.call_args_list[1].args[0]
         self.assertIn("Caribou+Falls+Unique+Area", first_query)
@@ -737,6 +964,16 @@ class PotaImportEntryPointTests(TestCase):
         self.assertEqual(list(Adventure.objects.order_by("started_at").values_list("is_public", flat=True)), [False, True])
 
     def test_public_import_with_private_location_masks_location_from_visitor(self):
+        private_location = Location.objects.create(
+            name="Secret Park",
+            reference_code="US-7777",
+            state="MN",
+            country="USA",
+            latitude="47.123456",
+            longitude="-93.654321",
+            visibility=Location.Visibility.PRIVATE,
+            created_by=self.user,
+        )
         self.client.force_login(self.user)
         start = self.client.post(reverse("import_pota_history"), {"pota_history": "2024-08-01 W5TEST US-7777 Secret Park US-MN 0 0 10 10"})
         token = start.url.rstrip("/").split("/")[-1]
@@ -748,7 +985,7 @@ class PotaImportEntryPointTests(TestCase):
         })
         adventure = Adventure.objects.get()
         self.assertTrue(adventure.is_public)
-        self.assertEqual(adventure.location.visibility, Location.Visibility.PRIVATE)
+        self.assertEqual(adventure.location, private_location)
         self.client.logout()
         response = self.client.get(adventure.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -772,8 +1009,8 @@ class PotaImportEntryPointTests(TestCase):
         start = self.client.post(reverse("import_pota_history"), {"pota_history": "2025-06-04 W5TEST US-12388 Caribou Falls Unique Area US-MN 0 0 15 15"})
         preview = self.client.get(start.url)
         self.assertContains(preview, "Pin pending")
-        self.assertContains(preview, 'name="park_latitude_', count=1)
-        self.assertContains(preview, 'name="park_longitude_', count=1)
+        self.assertNotContains(preview, 'name="park_latitude_')
+        self.assertNotContains(preview, 'name="park_longitude_')
 
     def _create_pin_review_location(self, *, owner=None, reference="US-9999"):
         owner = owner or self.user

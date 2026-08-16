@@ -185,11 +185,23 @@ def _save_entry_photos(entry, uploaded_files):
     return saved_count, duplicate_count, statuses
 
 
+def _report_rejected_entry_photos(request, form):
+    rejected = getattr(form.fields["photos"], "rejected_files", [])
+    if not rejected:
+        return
+    messages.warning(
+        request,
+        f"{len(rejected)} photo{'s were' if len(rejected) != 1 else ' was'} rejected.",
+    )
+    for filename, reason in rejected:
+        messages.warning(request, f"{filename}: {reason}")
+
+
 @verified_member_required
 def my_adventures(request):
     adventures = (
         Adventure.objects.filter(owner=request.user)
-        .select_related("location", "operating_location", "cover_photo")
+        .select_related("operating_location", "cover_photo")
         .annotate(
             journal_count=Count("journal_entries", distinct=True),
             photo_count=Count("journal_entries__photos", distinct=True),
@@ -205,24 +217,28 @@ def my_adventures(request):
     if search:
         adventures = adventures.filter(
             Q(title__icontains=search)
-            | Q(location__name__icontains=search)
-            | Q(location__city__icontains=search)
-            | Q(location__state__icontains=search)
-        )
+            | Q(journal_entries__location__name__icontains=search)
+            | Q(journal_entries__location__city__icontains=search)
+            | Q(journal_entries__location__state__icontains=search)
+        ).distinct()
     if activity == "open":
         adventures = adventures.filter(status=Adventure.Status.ACTIVE)
     elif activity == "complete":
         adventures = adventures.filter(status=Adventure.Status.COMPLETED)
     if place:
-        adventures = adventures.filter(location_id=place)
-    adventures = mark_adventure_location_visibility(adventures, request.user)
+        adventures = adventures.filter(
+            journal_entries__location_id=place,
+            journal_entries__location__in=visible_locations(request.user),
+        ).distinct()
 
     return render(
         request,
         "adventures/my_adventures.html",
         {
             "adventures": adventures,
-            "locations": visible_locations(request.user).order_by("name"),
+            "locations": visible_locations(request.user).filter(
+                journal_entries__adventure__owner=request.user,
+            ).distinct().order_by("name"),
             "search": search,
             "selected_activity": activity,
             "selected_place": place,
@@ -234,7 +250,6 @@ def all_adventures(request):
     adventures = (
         Adventure.objects.select_related(
             "owner",
-            "location",
             "operating_location",
             "cover_photo",
         )
@@ -266,25 +281,41 @@ def all_adventures(request):
 
     if search:
         location_search = (
-            Q(location__name__icontains=search)
-            | Q(location__city__icontains=search)
-            | Q(location__state__icontains=search)
-        ) & location_access_q(request.user, "location__")
+            Q(journal_entries__location__name__icontains=search)
+            | Q(journal_entries__location__city__icontains=search)
+            | Q(journal_entries__location__state__icontains=search)
+        ) & location_access_q(request.user, "journal_entries__location__")
+        if request.user.is_authenticated:
+            journal_access = Q(owner=request.user) | Q(journal_entries__is_public=True)
+        else:
+            journal_access = Q(journal_entries__is_public=True)
         adventures = adventures.filter(
             Q(title__icontains=search)
             | Q(owner__username__icontains=search)
-            | location_search
-        )
+            | (location_search & journal_access)
+        ).distinct()
 
     if state:
+        if request.user.is_authenticated:
+            journal_access = Q(owner=request.user) | Q(journal_entries__is_public=True)
+        else:
+            journal_access = Q(journal_entries__is_public=True)
         adventures = adventures.filter(
-            location_access_q(request.user, "location__"), location__state=state
-        )
+            journal_access,
+            location_access_q(request.user, "journal_entries__location__"),
+            journal_entries__location__state=state,
+        ).distinct()
 
     if place:
+        if request.user.is_authenticated:
+            journal_access = Q(owner=request.user) | Q(journal_entries__is_public=True)
+        else:
+            journal_access = Q(journal_entries__is_public=True)
         adventures = adventures.filter(
-            location_access_q(request.user, "location__"), location_id=place
-        )
+            journal_access,
+            location_access_q(request.user, "journal_entries__location__"),
+            journal_entries__location_id=place,
+        ).distinct()
 
     if activity in {"open", "operating", "progress"}:
         adventures = adventures.filter(status=Adventure.Status.ACTIVE)
@@ -293,28 +324,16 @@ def all_adventures(request):
             status=Adventure.Status.COMPLETED,
         )
 
-    if sort == "state":
-        adventures = adventures.order_by(
-            "location__state",
-            "location__name",
-            "-started_at",
-        )
-    elif sort == "place":
-        adventures = adventures.order_by(
-            "location__name",
-            "-started_at",
-        )
-    else:
-        adventures = adventures.order_by("-started_at", "-updated_at")
+    adventures = adventures.order_by("-started_at", "-updated_at")
 
-    states = (
-        visible_locations(request.user).exclude(state="")
-        .values_list("state", flat=True)
-        .distinct()
-        .order_by("state")
-    )
-    locations = visible_locations(request.user).order_by("name")
-    adventures = mark_adventure_location_visibility(adventures, request.user)
+    location_journals = Q(journal_entries__adventure__is_public=True, journal_entries__is_public=True)
+    if request.user.is_authenticated:
+        location_journals |= Q(journal_entries__adventure__owner=request.user)
+    book_locations = visible_locations(request.user).filter(location_journals).distinct()
+    states = book_locations.exclude(state="").values_list(
+        "state", flat=True
+    ).distinct().order_by("state")
+    locations = book_locations.order_by("name")
 
     return render(
         request,
@@ -785,7 +804,7 @@ def delete_adventure(request, slug):
     return redirect(_safe_next_url(request, default))
 
 
-@verified_member_required
+@verified_member_or_staff_required
 @require_POST
 def toggle_journal_visibility(request, entry_id):
     entry = get_object_or_404(
@@ -793,14 +812,18 @@ def toggle_journal_visibility(request, entry_id):
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user:
+    if not _can_manage_adventure(request.user, entry.adventure):
         return HttpResponseForbidden(
-            "Only the Adventure owner can change Journal visibility."
+            "Only the Adventure owner or authorized staff can change Journal visibility."
         )
 
     entry.is_public = not entry.is_public
     entry.save(update_fields=["is_public", "updated_at"])
     entry.adventure.save(update_fields=["updated_at"])
+    messages.success(
+        request,
+        f"Journal visibility changed to {'Public' if entry.is_public else 'Private'}.",
+    )
     return redirect("journal_entry_detail", entry_id=entry.pk)
 
 
@@ -911,6 +934,7 @@ def add_journal_entry(request, slug):
         )
 
     if request.method == "POST":
+        submitted_photos = request.FILES.getlist("photos")
         form_data = request.POST.copy()
         form_data.setdefault("operating_callsign", adventure.operating_callsign)
         form_data.setdefault("status", JournalEntry.Status.OPEN)
@@ -946,7 +970,10 @@ def add_journal_entry(request, slug):
 
                 saved_count, duplicate_count, statuses = _save_entry_photos(
                     entry,
-                    request.FILES.getlist("photos"),
+                    [
+                        photo for photo in submitted_photos
+                        if photo in (form.cleaned_data.get("photos") or [])
+                    ],
                 )
                 adventure.save(update_fields=["updated_at"])
 
@@ -962,6 +989,7 @@ def add_journal_entry(request, slug):
                     request,
                     f"{duplicate_count} duplicate photo{'s were' if duplicate_count != 1 else ' was'} skipped.",
                 )
+            _report_rejected_entry_photos(request, form)
 
 
             if request.POST.get("return_to_contacts") == "1":
@@ -1052,13 +1080,13 @@ def journal_entry_detail(request, entry_id):
         pk=entry_id,
     )
 
-    if entry.adventure.owner != request.user and (not entry.adventure.is_public or not entry.is_public):
+    if not request.user.is_staff and entry.adventure.owner != request.user and (
+        not entry.adventure.is_public or not entry.is_public
+    ):
         raise Http404("Journal Entry not found.")
 
     contacts = entry.contacts.select_related("journal_entry", "resolved_location").order_by("-qso_date", "-time_on", "callsign")
-    can_edit_journal = bool(
-        request.user == entry.adventure.owner and is_verified_member(request.user)
-    )
+    can_edit_journal = _can_manage_adventure(request.user, entry.adventure)
     can_review_photos = bool(request.user.is_staff)
     journal_photos_query = entry.photos.all()
     if not (can_edit_journal or can_review_photos):
@@ -1073,7 +1101,6 @@ def journal_entry_detail(request, entry_id):
             journal_photos[0] if journal_photos else None,
         ),
     )
-    contact_map = build_contact_map(entry.adventure, contacts, request.user)
     longest_contact = (
         contacts.exclude(distance_miles__isnull=True)
         .order_by("-distance_miles")
@@ -1103,10 +1130,6 @@ def journal_entry_detail(request, entry_id):
             "longest_contact": longest_contact,
             "country_count": country_count,
             "state_count": state_count,
-            "contact_map": contact_map,
-            "contact_map_dom_id": f"journal-{entry.pk}-contact-map",
-            "contact_map_data_id": f"journal-{entry.pk}-contact-map-data",
-            "contact_map_heading": "Contacts From This Journal",
             "can_edit_journal": can_edit_journal,
             "can_review_photos": can_review_photos,
             "journal_photos": journal_photos,
@@ -1124,6 +1147,42 @@ def journal_entry_detail(request, entry_id):
                 and can_view_location(request.user, entry.location) else None
             ),
             "can_edit_journal_pin": bool(entry.adventure.owner == request.user or request.user.is_staff),
+        },
+    )
+
+
+def journal_contact_map(request, entry_id):
+    entry = get_object_or_404(
+        JournalEntry.objects.select_related(
+            "adventure", "adventure__owner", "location"
+        ),
+        pk=entry_id,
+    )
+    if not request.user.is_staff and entry.adventure.owner != request.user and (
+        not entry.adventure.is_public or not entry.is_public
+    ):
+        raise Http404("Journal Entry not found.")
+
+    contacts = entry.contacts.select_related(
+        "journal_entry", "resolved_location"
+    ).order_by("pk")
+    contact_map = build_contact_map(
+        entry.adventure,
+        contacts,
+        request.user,
+        journal_entry=entry,
+    )
+    return render(
+        request,
+        "adventures/journal_contact_map.html",
+        {
+            "adventure": entry.adventure,
+            "entry": entry,
+            "contact_map": contact_map,
+            "contact_map_dom_id": f"journal-{entry.pk}-contact-map",
+            "contact_map_data_id": f"journal-{entry.pk}-contact-map-data",
+            "contact_map_heading": "Contacts From This Journal",
+            "contact_map_origin_label": "Journal Location",
         },
     )
 
@@ -1316,6 +1375,7 @@ def edit_journal_entry(request, entry_id):
         )
 
     if request.method == "POST":
+        submitted_photos = request.FILES.getlist("photos")
         form_data = request.POST.copy()
         form_data.setdefault("operating_callsign", entry.operating_callsign)
         if not form_data.get("location_name") and form_data.get("location"):
@@ -1335,7 +1395,10 @@ def edit_journal_entry(request, entry_id):
 
                 saved_count, duplicate_count, statuses = _save_entry_photos(
                     entry,
-                    request.FILES.getlist("photos"),
+                    [
+                        photo for photo in submitted_photos
+                        if photo in (form.cleaned_data.get("photos") or [])
+                    ],
                 )
                 adventure.save(update_fields=["updated_at"])
 
@@ -1351,6 +1414,7 @@ def edit_journal_entry(request, entry_id):
                     request,
                     f"{duplicate_count} duplicate photo{'s were' if duplicate_count != 1 else ' was'} skipped.",
                 )
+            _report_rejected_entry_photos(request, form)
 
 
             return redirect("journal_entry_detail", entry_id=entry.pk)

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import Adventure, Location, MemberProfile
+from core.models import Adventure, JournalEntry, Location, MemberProfile
 
 
 class AdventureBookDashboardTests(TestCase):
@@ -39,6 +39,21 @@ class AdventureBookDashboardTests(TestCase):
             status=Adventure.Status.COMPLETED,
             is_public=False,
         )
+        self.open_journal = JournalEntry.objects.create(
+            adventure=self.open_adventure,
+            location=self.lake,
+            title="Lake journal",
+            body="At the lake.",
+            is_public=True,
+        )
+        self.complete_journal = JournalEntry.objects.create(
+            adventure=self.complete_adventure,
+            location=self.park,
+            status=JournalEntry.Status.COMPLETED,
+            title="Park journal",
+            body="At the park.",
+            is_public=True,
+        )
         self.client.force_login(self.owner)
 
     def test_my_book_has_actions_modes_panels_and_real_links(self):
@@ -74,6 +89,85 @@ class AdventureBookDashboardTests(TestCase):
         self.assertContains(located, self.complete_adventure.title)
         self.assertNotContains(located, self.open_adventure.title)
 
+    def test_book_panels_never_present_an_adventure_location(self):
+        no_journals = Adventure.objects.create(
+            owner=self.owner,
+            title="Adventure Without Journals",
+            is_public=True,
+        )
+        second_location = Location.objects.create(
+            name="Second Journal Location",
+            created_by=self.owner,
+        )
+        JournalEntry.objects.create(
+            adventure=self.open_adventure,
+            location=second_location,
+            title="Second place",
+            body="At another place.",
+        )
+
+        for url in (reverse("my_adventures"), reverse("all_adventures")):
+            response = self.client.get(url)
+            panel_markup = response.content.decode().split(
+                '<div class="adventure-panel-list"', 1
+            )[1]
+            self.assertContains(response, no_journals.title)
+            self.assertNotContains(response, "Location not specified")
+            self.assertNotContains(response, 'class="adventure-panel-location"')
+            self.assertNotContains(response, "⌖")
+            self.assertNotIn(self.lake.name, panel_markup)
+            self.assertNotIn(second_location.name, panel_markup)
+
+    def test_location_filter_uses_authorized_journals_without_duplicates(self):
+        JournalEntry.objects.create(
+            adventure=self.open_adventure,
+            location=self.lake,
+            title="Same place again",
+            body="A return visit.",
+        )
+        located = self.client.get(reverse("my_adventures"), {"place": self.lake.pk})
+        self.assertEqual(
+            list(located.context["adventures"]).count(self.open_adventure),
+            1,
+        )
+
+        private_location = Location.objects.create(
+            name="Owner Secret Journal Place",
+            created_by=self.owner,
+            visibility=Location.Visibility.PRIVATE,
+        )
+        JournalEntry.objects.create(
+            adventure=self.open_adventure,
+            location=private_location,
+            title="Public journal at private location",
+            body="The Location itself is private.",
+            is_public=True,
+        )
+        private_journal_location = Location.objects.create(
+            name="Private Journal Public Place",
+            created_by=self.owner,
+        )
+        JournalEntry.objects.create(
+            adventure=self.open_adventure,
+            location=private_journal_location,
+            title="Private journal",
+            body="The Journal is not public.",
+            is_public=False,
+        )
+        self.client.logout()
+        for hidden_location in (private_location, private_journal_location):
+            public_filter = self.client.get(
+                reverse("all_adventures"), {"place": hidden_location.pk}
+            )
+            self.assertNotContains(public_filter, self.open_adventure.title)
+            self.assertNotContains(public_filter, hidden_location.name)
+
+    def test_journal_location_still_displays_on_journal_page(self):
+        response = self.client.get(
+            reverse("journal_entry_detail", args=[self.open_journal.pk])
+        )
+        self.assertContains(response, self.lake.name)
+
     def test_public_switch_and_filters_preserve_visibility_permissions(self):
         public = self.client.get(reverse("all_adventures"), {"activity": "open"})
         self.assertContains(public, self.open_adventure.title)
@@ -104,6 +198,7 @@ class AdventureBookDashboardTests(TestCase):
         self.assertIn("body.adventure-book-page .content.adventure-book-content", css)
         self.assertIn('url("../images/adventure-detail-pencil-background.png")', css)
         self.assertIn("overflow-wrap:anywhere", css)
+        self.assertNotIn(".adventure-panel-location", css)
         self.assertIn(".adventure-panel-list { display:grid; gap:10px; overflow:visible; }", css)
         self.assertNotIn(".adventure-panel-list { height:100vh", css)
         self.assertIn("@media (max-width:700px)", css)

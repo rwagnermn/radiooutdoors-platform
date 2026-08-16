@@ -1,0 +1,14 @@
+<ol class="pota-invalid-row-list">
+  {% for invalid in invalid_lines %}
+    <li class="pota-invalid-row">
+      <p><strong>Source line {{ invalid.line_number }}</strong></p>
+      <pre class="pota-invalid-source"><code>{{ invalid.original_text }}</code></pre>
+      <dl class="pota-invalid-details">
+        <div><dt>Invalid field</dt><dd>{{ invalid.field }}</dd></div>
+        {% if invalid.value %}<div><dt>Invalid value</dt><dd><code>{{ invalid.value }}</code></dd></div>{% endif %}
+        <div><dt>Problem</dt><dd>{{ invalid.reason }}</dd></div>
+        <div><dt>How to correct it</dt><dd>{{ invalid.correction }}</dd></div>
+      </dl>
+    </li>
+  {% endfor %}
+</ol>

@@ -17,7 +17,7 @@
     group.slice(0, 20).forEach((contact) => {
       const item = document.createElement("div");
       item.className = "contact-map-popup-item";
-      const details = [contact.callsign, contact.date, contact.time, contact.band, contact.frequency, contact.mode, contact.grid_square, contact.country, contact.journal].filter(Boolean);
+      const details = [contact.callsign, contact.date, contact.time, contact.band, contact.frequency, contact.mode, contact.grid_square, contact.state, contact.country, contact.journal].filter(Boolean);
       item.append(textElement("span", details.join(" · ")));
       item.append(textElement("small", contact.coordinate_source));
       wrapper.append(item);
@@ -31,14 +31,18 @@
     const dataNode = document.getElementById(container.dataset.mapDataId);
     if (!dataNode) return;
     const data = JSON.parse(dataNode.textContent);
-    if (!data.available || !data.origin) return;
+    if (!data.available || !data.has_map_points) return;
     activeMaps.add(container);
 
-    const origin = { lat: data.origin.latitude, lng: data.origin.longitude };
-    const map = new google.maps.Map(container, { center: origin, zoom: 4, minZoom: 2, mapTypeControl: true, fullscreenControl: true, streetViewControl: false, mapId: "DEMO_MAP_ID" });
+    const origin = data.origin ? { lat: data.origin.latitude, lng: data.origin.longitude } : null;
+    const firstContact = data.contacts[0];
+    const initialCenter = origin || { lat: firstContact.latitude, lng: firstContact.longitude };
+    const map = new google.maps.Map(container, { center: initialCenter, zoom: 4, minZoom: 2, mapTypeControl: true, fullscreenControl: true, streetViewControl: false, mapId: "DEMO_MAP_ID" });
     const infoWindow = new google.maps.InfoWindow();
-    const originPin = new google.maps.marker.PinElement({ background: "#d86a1c", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "A", scale: 1.15 });
-    new google.maps.marker.AdvancedMarkerElement({ map, position: origin, title: `Adventure Location: ${data.origin.name}`, content: originPin.element });
+    if (origin) {
+      const originPin = new google.maps.marker.PinElement({ background: "#d86a1c", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "A", scale: 1.15 });
+      new google.maps.marker.AdvancedMarkerElement({ map, position: origin, title: `${data.origin.label || "Adventure Location"}: ${data.origin.name}`, content: originPin.element });
+    }
 
     const controls = container.closest(".adventure-contact-map-section");
     const filter = (name) => controls.querySelector(`[data-contact-filter="${name}"]`);
@@ -79,7 +83,7 @@
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(contact);
       });
-      const positions = [origin];
+      const positions = origin ? [origin] : [];
       groups.forEach((group) => {
         const first = group[0];
         const position = { lat: first.latitude, lng: first.longitude };
@@ -96,10 +100,10 @@
         marker.addListener("click", () => { infoWindow.setContent(popupContent(group)); infoWindow.open({ map, anchor: marker }); });
         markers.push(marker);
       });
-      if (filter("lines").checked) {
-        const lineContacts = visible.slice(0, data.line_limit);
+      if (origin && filter("lines").checked) {
+        const lineContacts = data.line_limit ? visible.slice(0, data.line_limit) : visible;
         lineContacts.forEach((contact) => lines.push(new google.maps.Polyline({ map, path: [origin, { lat: contact.latitude, lng: contact.longitude }], geodesic: true, strokeColor: "#d86a1c", strokeOpacity: 0.42, strokeWeight: 1 })));
-        if (visible.length > data.line_limit) {
+        if (data.line_limit && visible.length > data.line_limit) {
           lineNote.hidden = false;
           lineNote.textContent = `Showing the first ${data.line_limit} contact paths. All ${visible.length} mapped contacts remain visible.`;
         } else lineNote.hidden = true;

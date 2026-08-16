@@ -17,8 +17,11 @@
         );
         const saveLabel = control.dataset.photoPreviewSaveLabel || "Profile";
         const mode = control.dataset.photoPreviewMode || "single";
+        const maxBytes = Number(control.dataset.photoMaxBytes || 0);
         const objectUrls = [];
         let previousSingleFiles = [];
+        let multipleFiles = [];
+        let dragDepth = 0;
 
         if (!input || !stage || !status || !loadButton) {
             return;
@@ -38,7 +41,11 @@
         }
 
         function selectedFiles() {
-            return Array.from(input.files || []);
+            return mode === "multiple" ? multipleFiles.slice() : Array.from(input.files || []);
+        }
+
+        function readyMessage(count) {
+            return count + " photo" + (count === 1 ? "" : "s") + " ready to upload";
         }
 
         function setRemoveValue(value) {
@@ -66,14 +73,29 @@
                 transfer.items.add(file);
             });
             input.files = transfer.files;
+            if (mode === "multiple") multipleFiles = files.slice();
         }
 
         function acceptImages(files, source) {
-            const images = files.filter(function (file) {
-                return file.type && file.type.indexOf("image/") === 0;
+            const existing = selectedFiles();
+            const images = [];
+            const rejected = [];
+            files.forEach(function (file, index) {
+                const filename = file.name || "Clipboard item " + (index + 1);
+                if (!file.type || file.type.indexOf("image/") !== 0) {
+                    rejected.push(filename + ": unsupported file type");
+                    return;
+                }
+                if (maxBytes && file.size > maxBytes) {
+                    rejected.push(filename + ": file is larger than 12 MB");
+                    return;
+                }
+                images.push(file);
             });
             if (!images.length) {
-                status.textContent = "The clipboard does not contain an image.";
+                status.textContent = rejected.length
+                    ? rejected.join("; ")
+                    : "The clipboard does not contain an image.";
                 return;
             }
             let combined;
@@ -83,7 +105,7 @@
                 }
                 combined = [images[0]];
             } else {
-                combined = selectedFiles().concat(images);
+                combined = existing.concat(images);
             }
             setSelectedFiles(combined);
             if (mode === "single") previousSingleFiles = combined.slice();
@@ -97,8 +119,12 @@
             } else {
                 renderMultiplePreview(combined);
             }
-            status.textContent = combined.length + " photo" + (combined.length === 1 ? "" : "s") +
-                " selected from " + source + ". Nothing is saved until the form is saved.";
+            status.textContent = readyMessage(combined.length) + ". " +
+                (rejected.length ? rejected.join("; ") + ". " : "") +
+                (source === "the clipboard" && images.length === 1
+                    ? "If you copied multiple Explorer files, the browser may have provided only one; drag them here or use Choose Photos. "
+                    : "") +
+                "Nothing is saved until the form is saved.";
         }
 
         function renderMultiplePreview(files) {
@@ -128,9 +154,7 @@
                     setSelectedFiles(remaining);
                     renderMultiplePreview(remaining);
                     status.textContent = remaining.length
-                        ? remaining.length + " photo" +
-                            (remaining.length === 1 ? " remains" : "s remain") +
-                            " selected."
+                        ? readyMessage(remaining.length) + "."
                         : "Photo selection cleared. Nothing will be uploaded.";
                 });
                 figure.append(previewImage, caption, removeSelection);
@@ -139,7 +163,11 @@
         }
 
         input.addEventListener("change", function () {
-            let files = selectedFiles();
+            let files = Array.from(input.files || []);
+            if (mode === "multiple") {
+                acceptImages(files, "the file picker");
+                return;
+            }
             if (mode === "single" && files.length > 1) {
                 files = [files[files.length - 1]];
                 setSelectedFiles(files);
@@ -164,9 +192,52 @@
 
         if (pasteZone) {
             pasteZone.addEventListener("click", function () { pasteZone.focus(); });
+            pasteZone.addEventListener("dragenter", function (event) {
+                event.preventDefault();
+                dragDepth += 1;
+                pasteZone.classList.add("is-dragging");
+            });
+            pasteZone.addEventListener("dragover", function (event) {
+                event.preventDefault();
+                if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+            });
+            pasteZone.addEventListener("dragleave", function (event) {
+                event.preventDefault();
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (!dragDepth) pasteZone.classList.remove("is-dragging");
+            });
+            pasteZone.addEventListener("drop", function (event) {
+                event.preventDefault();
+                dragDepth = 0;
+                pasteZone.classList.remove("is-dragging");
+                const files = Array.from(
+                    (event.dataTransfer && event.dataTransfer.files) || []
+                );
+                acceptImages(files, "drag and drop");
+            });
             pasteZone.addEventListener("paste", function (event) {
-                const files = Array.from((event.clipboardData && event.clipboardData.files) || []);
-                if (files.length) event.preventDefault();
+                const clipboard = event.clipboardData;
+                let files = [];
+                if (clipboard) {
+                    const itemFiles = [];
+                    Array.from(clipboard.items || []).forEach(function (item) {
+                        if (item.kind === "file") {
+                            const file = item.getAsFile();
+                            if (file) itemFiles.push(file);
+                        }
+                    });
+                    const clipboardFiles = Array.from(clipboard.files || []);
+                    // Browsers commonly expose the same clipboard payload through both
+                    // collections. Use whichever representation contains more files so
+                    // the event is not doubled and a truncated collection is not trusted.
+                    files = clipboardFiles.length > itemFiles.length ? clipboardFiles : itemFiles;
+                }
+                event.preventDefault();
+                if (!files.length) {
+                    status.textContent = "Firefox did not provide the copied files. " +
+                        "Drag the selected photos here or use Choose Photos.";
+                    return;
+                }
                 acceptImages(files, "the clipboard");
             });
         }
@@ -194,8 +265,7 @@
 
             renderMultiplePreview(files);
             status.textContent =
-                files.length + " photo" + (files.length === 1 ? "" : "s") +
-                " previewed. Save the Journal Entry to upload " +
+                readyMessage(files.length) + ". Save the Journal Entry to upload " +
                 (files.length === 1 ? "it." : "them.");
         });
 
@@ -209,6 +279,7 @@
             clearButton.addEventListener("click", function () {
                 input.value = "";
                 previousSingleFiles = [];
+                multipleFiles = [];
                 setRemoveValue(false);
                 restoreOriginalPreview();
                 status.textContent = mode === "single"

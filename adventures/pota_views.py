@@ -1,5 +1,6 @@
 from datetime import datetime, time
 import hashlib
+import json
 from uuid import uuid4
 from decimal import Decimal, InvalidOperation
 
@@ -33,6 +34,54 @@ def _preserve_preview_form(token, payload, request):
         "new_adventure_visibility": request.POST.get("new_adventure_visibility", "public"),
     }
     cache.set(_key(token), payload, 3600)
+
+
+def _selected_review_indexes(request, rows):
+    """Return selected server-side row indexes from the compact review form."""
+    if "selected_rows" in request.POST:
+        try:
+            submitted = json.loads(request.POST.get("selected_rows", ""))
+        except (TypeError, ValueError):
+            return None, "The selected activation list is invalid. Review the activations and try again."
+        if not isinstance(submitted, list):
+            return None, "The selected activation list is invalid. Review the activations and try again."
+    else:
+        submitted = request.POST.getlist("selected")
+        if submitted == ["all"]:
+            submitted = [row["index"] for row in rows if row.get("eligible", True)]
+    chosen = set()
+    for value in submitted:
+        if isinstance(value, bool) or not str(value).isdigit():
+            return None, "The selected activation list contains an invalid row identifier."
+        chosen.add(int(value))
+    known = {row["index"] for row in rows}
+    eligible = {row["index"] for row in rows if row.get("eligible", not row.get("errors") and not row.get("duplicate") and row.get("callsign_status") != "conflict")}
+    if chosen - known:
+        return None, "The selected activation list contains a row that does not belong to this review batch."
+    if chosen - eligible:
+        return None, "The selected activation list contains a row that is not eligible for import."
+    return chosen, None
+
+
+def _row_visibility_overrides(request, chosen):
+    if "row_visibility_overrides" in request.POST:
+        try:
+            submitted = json.loads(request.POST.get("row_visibility_overrides", ""))
+        except (TypeError, ValueError):
+            return None, "The activation visibility choices are invalid."
+        if not isinstance(submitted, dict):
+            return None, "The activation visibility choices are invalid."
+        overrides = {}
+        for key, value in submitted.items():
+            if not str(key).isdigit() or int(key) not in chosen or value not in {"public", "private"}:
+                return None, "The activation visibility choices contain an invalid row or value."
+            overrides[int(key)] = value
+        return overrides, None
+    return {
+        index: request.POST.get(f"row_visibility_{index}")
+        for index in chosen
+        if request.POST.get(f"row_visibility_{index}") in {"public", "private"}
+    }, None
 
 def _fingerprint(owner_id, row, source=PotaImportBatch.Source.ACTIVATION_HISTORY):
     if source == PotaImportBatch.Source.HUNTER_LOG:
@@ -148,14 +197,21 @@ def import_pota_history(request):
             parsed, ignored, invalid = parse_pota_history(pasted)
         except ValueError as exc:
             return render(request, "adventures/pota_history_import.html", {"error": str(exc), "submitted_text": pasted, "recognized_count": 0, "ignored_count": 0, "invalid_count": 0})
-        if invalid:
-            return render(request, "adventures/pota_history_import.html", {"error": "Some activation rows could not be recognized. Correct the listed lines and review again.", "submitted_text": pasted, "recognized_count": len(parsed), "ignored_count": ignored, "invalid_count": len(invalid), "invalid_lines": invalid})
         if not parsed:
-            return render(request, "adventures/pota_history_import.html", {"error": "No recognizable POTA activation rows were found.", "complete_failure": True, "submitted_text": pasted, "recognized_count": 0, "ignored_count": ignored, "invalid_count": 0})
+            return render(request, "adventures/pota_history_import.html", {"error": "No recognizable POTA activation rows were found.", "complete_failure": True, "submitted_text": pasted, "recognized_count": 0, "ignored_count": ignored, "invalid_count": len(invalid), "invalid_lines": invalid})
         rows = _decorate_rows(request.user, [row.as_dict() for row in parsed])
         parks = _unique_parks(rows, request.user)
         token = uuid4().hex
-        cache.set(_key(token), {"owner": request.user.pk, "source": PotaImportBatch.Source.ACTIVATION_HISTORY, "rows": rows, "parks": parks, "ignored": ignored}, 3600)
+        cache.set(_key(token), {
+            "owner": request.user.pk,
+            "source": PotaImportBatch.Source.ACTIVATION_HISTORY,
+            "rows": rows,
+            "parks": parks,
+            "ignored": ignored,
+            "invalid": len(invalid),
+            "invalid_rows": invalid,
+            "submitted_text": pasted,
+        }, 3600)
         return redirect("preview_pota_history", token=token)
     return render(request, "adventures/pota_history_import.html", {"submitted_text": ""})
 
@@ -173,7 +229,7 @@ def preview_pota_history(request, token):
     for row in payload["rows"]:
         row["location_status"] = statuses.get(normalize_pota_reference(row["park_reference"]), "Pin pending")
     manageable_adventures = Adventure.objects.filter(owner=request.user)
-    return render(request, "adventures/pota_history_preview.html", {"token": token, "rows": payload["rows"], "parks": parks, "ignored": payload["ignored"], "locations": locations, "manageable_adventures": manageable_adventures.order_by("title", "pk"), "form_values": payload.get("form_values", {}), "attestation": ATTESTATION, "needs_attestation": any(r["callsign_status"] == "attestation" and not r["errors"] and not r["duplicate"] for r in payload["rows"]), "lookup_unavailable": any(park["geocode_status"] == "unavailable" for park in parks), "existing_match_count": sum(bool(park["matched_location_id"]) for park in parks), "approximate_count": sum(bool(park["latitude"] and park["longitude"] and not park["matched_location_id"]) for park in parks), "pending_count": sum(not park["matched_location_id"] and not (park["latitude"] and park["longitude"]) for park in parks)})
+    return render(request, "adventures/pota_history_preview.html", {"token": token, "rows": payload["rows"], "parks": parks, "ignored": payload["ignored"], "invalid_count": payload.get("invalid", 0), "invalid_rows": payload.get("invalid_rows", []), "submitted_text": payload.get("submitted_text", ""), "locations": locations, "manageable_adventures": manageable_adventures.order_by("title", "pk"), "form_values": payload.get("form_values", {}), "attestation": ATTESTATION, "needs_attestation": any(r["callsign_status"] == "attestation" and not r["errors"] and not r["duplicate"] for r in payload["rows"]), "lookup_unavailable": any(park["geocode_status"] == "unavailable" for park in parks), "existing_match_count": sum(bool(park["matched_location_id"]) for park in parks), "approximate_count": sum(bool(park["latitude"] and park["longitude"] and not park["matched_location_id"]) for park in parks), "pending_count": sum(not park["matched_location_id"] and not (park["latitude"] and park["longitude"]) for park in parks)})
 
 
 @verified_member_required
@@ -187,8 +243,12 @@ def confirm_pota_history(request, token):
     if not payload or payload["owner"] != request.user.pk:
         messages.error(request, "That import preview expired or was already processed.")
         return redirect(import_route)
-    chosen = {int(x) for x in request.POST.getlist("selected") if x.isdigit()}
-    selected = [r for r in payload["rows"] if r["index"] in chosen and r.get("eligible", not r["errors"] and not r["duplicate"] and r["callsign_status"] != "conflict")]
+    chosen, selection_error = _selected_review_indexes(request, payload["rows"])
+    if selection_error:
+        _preserve_preview_form(token, payload, request)
+        messages.error(request, selection_error)
+        return redirect(preview_route, token=token)
+    selected = [r for r in payload["rows"] if r["index"] in chosen]
     needs_attestation = any(r["callsign_status"] == "attestation" for r in selected)
     if needs_attestation and request.POST.get("callsign_attestation") != "yes":
         _preserve_preview_form(token, payload, request)
@@ -197,6 +257,11 @@ def confirm_pota_history(request, token):
     if not selected:
         _preserve_preview_form(token, payload, request)
         messages.error(request, "Select at least one eligible activation to import.")
+        return redirect(preview_route, token=token)
+    visibility_overrides, visibility_error = _row_visibility_overrides(request, chosen)
+    if visibility_error:
+        _preserve_preview_form(token, payload, request)
+        messages.error(request, visibility_error)
         return redirect(preview_route, token=token)
     organization = request.POST.get("import_organization", "separate")
     destination_choice = request.POST.get("destination_choice", "").strip()
@@ -244,7 +309,7 @@ def confirm_pota_history(request, token):
     created, journals_created, contacts_imported, duplicate_contacts, needs_location, links = 0, 0, 0, 0, 0, []
     duplicates = sum(bool(row.get("duplicate")) for row in payload["rows"])
     with transaction.atomic():
-        batch = PotaImportBatch.objects.create(owner=request.user, source=source, diagnostics={"ignored_lines": payload["ignored"], "selected_rows": len(selected), "source_qso_count": payload.get("qso_count", 0)})
+        batch = PotaImportBatch.objects.create(owner=request.user, source=source, diagnostics={"ignored_lines": payload["ignored"], "invalid_rows": payload.get("invalid", 0), "selected_rows": len(selected), "source_qso_count": payload.get("qso_count", 0)})
         if organization == "grouped" and destination_adventure is None:
             destination_adventure = Adventure.objects.create(
                 owner=request.user, title=new_destination_name,
@@ -259,8 +324,13 @@ def confirm_pota_history(request, token):
         resolved_locations = {}
         park_type = LocationType.objects.filter(key="park").first()
         for reference, park in parks.items():
-            key = park["key"]
-            resolution = request.POST.get(f"park_resolution_{key}", "create")
+            resolution = (
+                f"existing:{park['matched_location_id']}"
+                if park.get("matched_location_id")
+                else f"repair:{park['repair_location_id']}"
+                if park.get("repair_location_id")
+                else "create"
+            )
             location = None
             if resolution == "unresolved":
                 resolution = "create"
@@ -277,8 +347,8 @@ def confirm_pota_history(request, token):
             if location is None and not resolution.startswith("repair:"):
                 location = visible_locations(request.user).select_for_update().filter(reference_code__iexact=reference).first()
             if location is None or resolution.startswith("repair:"):
-                latitude = request.POST.get(f"park_latitude_{key}", "").strip()
-                longitude = request.POST.get(f"park_longitude_{key}", "").strip()
+                latitude = str(park.get("latitude") or "").strip()
+                longitude = str(park.get("longitude") or "").strip()
                 try:
                     latitude = Decimal(latitude) if latitude else None
                     longitude = Decimal(longitude) if longitude else None
@@ -296,9 +366,7 @@ def confirm_pota_history(request, token):
                     coordinate_note = "Pin needed; no coordinate was supplied by the POTA history or a configured park lookup."
                 if park.get("coordinate_quality"):
                     coordinate_note = "Coordinate source: geocoded park name. Coordinate quality: approximate/general park location."
-                submitted_provider = request.POST.get(f"park_provider_name_{key}", "").strip()
-                allowed_provider_names = {candidate.get("provider_name", "") for candidate in park.get("candidates", [])}
-                provider_name = submitted_provider if submitted_provider in allowed_provider_names else park.get("provider_name", "")
+                provider_name = park.get("provider_name", "")
                 provider_note = f" Provider suggestion: {provider_name}." if provider_name else ""
                 description = ("Created from POTA Hunter Log import. " if is_hunter else "Created from POTA historical import. ") + coordinate_note + provider_note
                 entity = park.get("entity", "")
@@ -312,7 +380,7 @@ def confirm_pota_history(request, token):
                     location.needs_pin_review = latitude is None or longitude is None
                     location.save(update_fields=["name", "latitude", "longitude", "state", "country", "description", "needs_pin_review"])
                 else:
-                    location = Location.objects.create(name=park["display_name"], created_by=request.user, visibility=Location.Visibility.PRIVATE if request.POST.get(f"park_private_{key}") == "yes" else Location.Visibility.PUBLIC, location_type=Location.LocationType.PARK, location_type_record=park_type, state=entity.split("-", 1)[1] if entity.startswith("US-") else entity, country="USA" if entity.startswith("US-") else "", latitude=latitude, longitude=longitude, reference_code=reference, description=description, needs_pin_review=latitude is None or longitude is None)
+                    location = Location.objects.create(name=park["display_name"], created_by=request.user, visibility=Location.Visibility.PUBLIC, location_type=Location.LocationType.PARK, location_type_record=park_type, state=entity.split("-", 1)[1] if entity.startswith("US-") else entity, country="USA" if entity.startswith("US-") else "", latitude=latitude, longitude=longitude, reference_code=reference, description=description, needs_pin_review=latitude is None or longitude is None)
             resolved_locations[reference] = location
         for row in selected:
             other_source = PotaImportBatch.Source.ACTIVATION_HISTORY if is_hunter else PotaImportBatch.Source.HUNTER_LOG
@@ -323,7 +391,7 @@ def confirm_pota_history(request, token):
             started = timezone.make_aware(datetime.combine(datetime.fromisoformat(row["activation_date"]).date(), time(12)))
             publication_values = request.POST.getlist("publish_pota_batch")
             batch_public = "yes" in publication_values if publication_values else True
-            row_visibility = request.POST.get(f"row_visibility_{row['index']}", "batch")
+            row_visibility = visibility_overrides.get(row["index"], "batch")
             is_public = True if row_visibility == "public" else False if row_visibility == "private" else batch_public
             summary = "Imported from POTA Hunter Log as a grouped activation session." if is_hunter else "Imported from POTA activation history. Add any Journal details or contacts you want."
             if organization == "grouped":

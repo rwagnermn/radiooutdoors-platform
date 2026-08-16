@@ -103,8 +103,10 @@ class JournalDashboardTests(TestCase):
             fingerprint="journal-dashboard-contact",
         )
         visitor = self.client.get(self.url)
+        self.assertContains(visitor, '<thead class="visually-hidden">')
         for heading in ("Date", "Callsign", "Band", "Mode", "Location"):
-            self.assertContains(visitor, f"<th>{heading}</th>", html=True)
+            self.assertContains(visitor, f'<th scope="col">{heading}</th>', html=True)
+        self.assertNotContains(visitor, "<thead><tr>")
         self.assertNotContains(visitor, "<th>State</th>", html=True)
         self.assertNotContains(visitor, "<th>Country</th>", html=True)
         self.assertContains(visitor, "Illinois, USA")
@@ -293,9 +295,9 @@ class JournalDashboardTests(TestCase):
         self.assertNotIn("Make Journal Photo", template)
         self.assertNotIn("Make Adventure Photo", template)
 
-    def test_journal_view_heading_is_centered_independently_of_toolbar_actions(self):
+    def test_journal_page_heading_is_centered_independently_of_toolbar_actions(self):
         response = self.client.get(self.url)
-        self.assertContains(response, '<h1 class="journal-dashboard-view-heading">Journal View</h1>', html=True)
+        self.assertContains(response, '<h1 class="journal-dashboard-view-heading">Journal Page</h1>', html=True)
         css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
         self.assertIn("grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)", css)
         self.assertIn(".journal-dashboard-view-heading { grid-column:2", css)
