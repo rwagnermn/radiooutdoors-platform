@@ -42,8 +42,11 @@ Assert-True ($classification.Excluded.Count -eq 7) 'all porcelain backup/tool/ar
 $ProjectRoot=$PSScriptRoot
 $live=Get-CheckpointClassification
 Assert-True (!$live.Error) "live Git classification failed: $($live.Error)"
-Assert-True ($live.Intentional.Path -ccontains '.gitignore') 'live classification must place root .gitignore in the intentional list'
-Assert-True (!($live.Excluded.Path -ccontains '.gitignore')) 'live classification must not exclude root .gitignore'
+$liveStatus=Run-Cmd 'git status --short --untracked-files=all' 30
+if($liveStatus.Out -match '(?m)^.. \.gitignore$'){
+    Assert-True ($live.Intentional.Path -ccontains '.gitignore') 'live classification must place a changed root .gitignore in the intentional list'
+    Assert-True (!($live.Excluded.Path -ccontains '.gitignore')) 'live classification must not exclude a changed root .gitignore'
+}
 
 @(
     'work.bak',

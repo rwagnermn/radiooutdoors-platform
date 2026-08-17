@@ -36,7 +36,7 @@ function Log($m){Add-Content (Join-Path $LogDir ("manager-"+(Get-Date -Format "y
 function Status($state,$text,$detail=""){[pscustomobject]@{State=$state;Text=$text;Detail=$detail}}
 
 function GitBranch(){ $r=Run-Cmd "git branch --show-current" 20; if($r.Exit-eq0){Status ($(if($r.Out-eq"main"){"green"}else{"yellow"})) $r.Out "Expected main"}else{Status "red" "Git failed" $r.Err}}
-function Tree(){ $r=Run-Cmd "git status --porcelain" 30;if($r.Exit-ne0){return Status "red" "Git failed" $r.Err};if(!$r.Out){return Status "green" "Clean" "No uncommitted changes"};$n=@($r.Out -split "`r?`n"|?{$_}).Count;Status "yellow" "$n changed/new" $r.Out}
+function Tree(){ $r=Run-Cmd "git status --porcelain" 30;if($r.Exit-ne0){return Status "red" "Git failed" $r.Err};if(!$r.Out){return Status "green" "Clean" "No uncommitted changes"};$lines=@($r.Out -split "`r?`n"|?{$_});$conflicts=@($lines|?{$_ -match '^(DD|AU|UD|UA|DU|AA|UU) '});if($conflicts.Count){return Status "red" "$($conflicts.Count) merge conflict(s)" ($conflicts-join"`r`n")};Status "yellow" "$($lines.Count) changed/new" ($lines-join"`r`n")}
 function Sync(){ $f=Run-Cmd "git fetch --quiet origin" 45;if($f.Exit-ne0){return Status "yellow" "Fetch unavailable" $f.Err};$r=Run-Cmd "git rev-list --left-right --count HEAD...origin/main" 20;if($r.Exit-ne0){return Status "yellow" "Unknown" $r.Err};$x=$r.Out -split '\s+';$a=[int]$x[0];$b=[int]$x[1];$s=if($b-gt0){"red"}elseif($a-gt0){"yellow"}else{"green"};Status $s "Ahead $a / Behind $b" "origin/main"}
 function LastCommit(){ $r=Run-Cmd 'git log -1 --format="%h %ad %s" --date=format:"%Y-%m-%d %H:%M"' 20;if($r.Exit-eq0){Status "green" ($r.Out.Substring(0,[Math]::Min(32,$r.Out.Length))) $r.Out}else{Status "yellow" "Unavailable" $r.Err}}
 function DjCheck(){ $r=Django "check" 90;if($r.Exit-eq0){Status "green" "Passed" ($r.Out+" "+$r.Err).Trim()}else{Status "red" "Failed" ($r.Out+"`r`n"+$r.Err).Trim()}}
@@ -100,9 +100,69 @@ function Tests(){
     Status $s $last $f[0].FullName
 }
 
+function Get-TestFailureSummary($path){
+    $result=[ordered]@{Path=$path;Exists=$false;Date='Unknown';ExitCode='Unknown';FailureCount=0;Failures=@();Summary='Test log is missing.'}
+    if(!$path-or!(Test-Path -LiteralPath $path)){return [pscustomobject]$result}
+    $file=Get-Item -LiteralPath $path;$result.Exists=$true;$result.Date=$file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
+    $lines=@(Get-Content -LiteralPath $path -ErrorAction SilentlyContinue)
+    $exitLine=@($lines|?{$_ -match '^(PASS|FAIL) exit=(-?\d+)\s*$'}|Select-Object -Last 1)
+    if($exitLine-and$exitLine[-1]-match 'exit=(-?\d+)'){$result.ExitCode=$Matches[1]}
+    $reported=@($lines|?{$_ -match '^FAILED \((?:failures|errors)='}|Select-Object -Last 1)
+    if($reported){$counts=[regex]::Matches($reported[-1],'(?:failures|errors)=(\d+)');$result.FailureCount=($counts|%{[int]$_.Groups[1].Value}|Measure-Object -Sum).Sum}
+    for($i=0;$i-lt$lines.Count;$i++){
+        if($lines[$i]-notmatch '^(FAIL|ERROR):\s+(.+)$'){continue}
+        $name=$Matches[2].Trim();$source='';$message=''
+        for($j=$i+1;$j-lt[Math]::Min($lines.Count,$i+35);$j++){
+            if(!$source-and$lines[$j]-match '^\s*File "([^"]+)", line (\d+)'){$source="$($Matches[1]):$($Matches[2])"}
+            if(!$message-and$lines[$j]-match '^(AssertionError|[A-Za-z_][\w.]*Error|[A-Za-z_][\w.]*Exception):\s*(.+)$'){$message=$lines[$j].Trim()}
+            if($j-gt$i+2-and$lines[$j]-match '^(FAIL|ERROR):'){break}
+        }
+        if(!$message){$message='See the complete test log for the traceback.'}
+        $result.Failures+=,[pscustomobject]@{Name=$name;Message=$message;Source=$source}
+    }
+    if(!$result.FailureCount){$result.FailureCount=$result.Failures.Count}
+    $result.Summary=if($result.Failures.Count){($result.Failures|%{"$($_.Name)`r`n  $($_.Message)$(if($_.Source){"`r`n  Source: $($_.Source)"})"})-join"`r`n`r`n"}elseif($result.ExitCode-ne'0'){'Tests exited unsuccessfully, but no named failure block was found. Open the log for complete output.'}else{'No test failures were found.'}
+    [pscustomobject]$result
+}
+
+function Test-StatusBlocksPush($key,$status){
+    if(!$status){return $false}
+    switch($key){'secrets'{return $status.State-eq'red'}'django'{return $status.State-eq'red'}'missing'{return $status.State-eq'red'}'migrations'{return $status.State-ne'green'}'tests'{return $status.State-eq'red'-or$status.Text-like'Running*'}'tree'{return $status.State-eq'red'}'sync'{return $status.State-eq'red'}default{return $false}}
+}
+function Get-CorrectiveInfo($key,$status){
+    $name=if($script:TileNames-and$script:TileNames.ContainsKey($key)){$script:TileNames[$key]}else{$key}
+    $blocks=Test-StatusBlocksPush $key $status;$explanation='This status needs attention before normal development continues.';$evidence=$status.Detail;$actions=@('Review the supporting evidence.','Correct the underlying condition.','Refresh status and verify that the tile turns green.');$task="Repository: $ProjectRoot`r`nCondition: $name - $($status.Text)`r`nEvidence:`r`n$($status.Detail)`r`n`r`nInspect and correct this condition. Run the relevant verification commands. Do not commit or push. Restart exactly one development server at 127.0.0.1:8000 when complete.";$logPath=$null;$run='Refresh'
+    switch($key){
+        'tests'{$summary=Get-TestFailureSummary $status.Detail;$logPath=$summary.Path;$explanation=if($summary.Exists){"The most recent test run exited with code $($summary.ExitCode). $($summary.FailureCount) failure(s) or error(s) were reported."}else{'The latest test result refers to a log that is missing, so the failure output cannot be inspected.'};$evidence="Exit code: $($summary.ExitCode)`r`nTest date/time: $($summary.Date)`r`nComplete test-log path: $($summary.Path)`r`nFailure/error count: $($summary.FailureCount)`r`n`r`n$($summary.Summary)";$actions=@('Open the test log and inspect each complete traceback.','Correct the application or test code responsible for each named failure.','Run the failed tests, then run the complete Django test suite.','Run python manage.py check, python manage.py makemigrations --check --dry-run, and git diff --check.','Do not commit or push; stop all development servers and restart exactly one at 127.0.0.1:8000.');$names=($summary.Failures|%{$_.Name})-join"`r`n";$task="Repository path: $ProjectRoot`r`nTest-log path: $($summary.Path)`r`n`r`nFailed-test names:`r`n$names`r`n`r`nError summaries:`r`n$($summary.Summary)`r`n`r`nInspect the complete log and correct every failure. Verify with the failed-test commands, then:`r`npython manage.py test`r`npython manage.py check`r`npython manage.py makemigrations --check --dry-run`r`ngit diff --check`r`n`r`nDo not commit or push. At completion, stop all Radio Outdoors development-server processes and restart exactly one server at 127.0.0.1:8000.";$run='Tests'}
+        'django'{$explanation='Django found a configuration, import, model, URL, or application-system error.';$actions=@('Read the Django check output below.','Correct the first reported application error and repeat until clean.','Run python manage.py check.');$run='Django'}
+        'migrations'{$explanation='Migration files exist but have not been applied to this development database.';$actions=@('Back up db.sqlite3.','Review the unapplied migration names.','Use Apply Migrations only after confirming the backup.','Run python manage.py showmigrations --plan.');$run='Migrations'}
+        'missing'{$explanation='Model changes are not represented by migration files.';$actions=@('Review the model changes.','Create and inspect the required migration.','Run python manage.py makemigrations --check --dry-run.');$run='Missing'}
+        'tree'{if($status.State-eq'red'){$explanation='Git reports unresolved merge conflicts.';$actions=@('Open each conflicted file listed below.','Resolve conflict markers without discarding unrelated work.','Run git status --short and the project verification commands.')}else{$explanation='The working tree contains uncommitted work. This is expected while work is in progress and is a warning, not an automatic failure.';$actions=@('Review the changed and untracked paths.','Preserve unrelated work.','Finish and verify the intended changes before checkpointing.')}}
+        'branch'{$explanation="The current branch differs from the expected main branch. A feature branch may intentionally protect unfinished work, so this is a warning rather than a failure.";$actions=@('Confirm that the displayed branch is intentional.','Do not switch branches while uncommitted work exists unless that work is safely preserved.','Refresh status after returning to the expected branch.');$run='Branch'}
+        'sync'{if($status.Text-match'Behind ([1-9]\d*)'){$explanation='This repository is behind origin/main; pushing without reconciling remote work is blocked.';$actions=@('Preserve all local work.','Fetch and review the incoming commits.','Integrate them deliberately, resolve conflicts, and rerun verification.')}elseif($status.Text-match'Ahead ([1-9]\d*)'){$explanation='Local commits have not yet reached GitHub. This is a warning when the commits are intentional.';$actions=@('Review the local commits and current branch.','Verify the working tree and checks.','Use the checkpoint workflow only when explicitly ready.')}else{$explanation='GitHub synchronization could not be confirmed.'};$run='Sync'}
+        'db'{$explanation='The database backup is missing or older than the safe freshness window.';$actions=@('Review the backup path and age.','Click Backup Database to create a new recoverable copy.','Refresh and confirm the backup tile is green.');$run='Database Backup'}
+        'media'{$explanation='The media backup is missing or stale.';$actions=@('Review the media folder and latest backup path.','Click Backup Media to create a current archive.','Refresh and confirm the backup age.');$run='Media Backup'}
+        'server'{$explanation=if($status.Text-eq'Stopped'){'No development server is listening at 127.0.0.1:8000.'}else{'Port 8000 has multiple listeners or a listener that could not be identified as Radio Outdoors.'};$actions=@('Review every PID and command line below.','Use the explicit Stop Server control for confirmed Radio Outdoors processes.','Start exactly one server at 127.0.0.1:8000 and refresh.');$run='Server'}
+        'leftovers'{$explanation='One or more Radio Outdoors development-server processes remain outside the active listener.';$actions=@('Review each PID and command line.','Stop only confirmed leftover Radio Outdoors server processes.','Start or retain exactly one listener at 127.0.0.1:8000.');$run='Server'}
+        'python'{$explanation='The project virtual environment or its Python executable is missing or unusable.';$actions=@('Confirm the expected .venv path below.','Create or repair the virtual environment without deleting unrelated files.','Install requirements and rerun Python and Django checks.');$run='Python'}
+        'venv'{$explanation='The required .venv environment is missing.';$actions=@('Create .venv in the repository root.','Install requirements.txt.','Run python manage.py check.');$run='Python'}
+        'secrets'{$explanation='A credential or sensitive local file is not safely ignored, or is staged. A push is blocked to prevent disclosure.';$actions=@('Unstage any sensitive path without deleting the local file.','Add the appropriate ignore rule and verify it with git check-ignore.','Rotate any credential that may already have been exposed.','Refresh status before attempting a checkpoint.');$run='Secrets'}
+        'disk'{$explanation='Available disk space is below the recommended development threshold.';$actions=@('Review the drive and free-space amount.','Remove only known disposable files outside this dialog.','Maintain backups before clearing project data, then refresh.');$run='Disk'}
+        'safe'{$explanation='One or more checkpoint prerequisites are blocked or need review.';$actions=@('Open the Full Checkpoint & Push control to see all blockers.','Open each relevant tile and follow its corrective actions.','Refresh and confirm no blocking issues remain.');$run='Refresh'}
+    }
+    [pscustomobject]@{Key=$key;Name=$name;Status=$status.Text;Blocks=$blocks;Explanation=$explanation;Evidence=$evidence;Actions=$actions;Task=$task;LogPath=$logPath;Run=$run}
+}
+
 function BackupDB(){ $db=Join-Path $ProjectRoot "db.sqlite3";if(!(Test-Path $db)){[Windows.Forms.MessageBox]::Show("db.sqlite3 not found.")|Out-Null;return};$to=Join-Path $BackupDir ("db-"+(Get-Date -Format "yyyyMMdd-HHmmss")+".sqlite3");Copy-Item $db $to;Log "Database backup: $to";[Windows.Forms.MessageBox]::Show("Backup created:`r`n$to")|Out-Null}
 function BackupMedia(){ $m=Join-Path $ProjectRoot "media";if(!(Test-Path $m)){[Windows.Forms.MessageBox]::Show("No media folder.")|Out-Null;return};$to=Join-Path $BackupDir ("media-"+(Get-Date -Format "yyyyMMdd-HHmmss")+".zip");Compress-Archive (Join-Path $m "*") $to -Force;Log "Media backup: $to";[Windows.Forms.MessageBox]::Show("Backup created:`r`n$to")|Out-Null}
-function StartServer(){if(@(Listeners).Count){[Windows.Forms.MessageBox]::Show("Port 8000 is already occupied. Server not started.")|Out-Null;return};$p=Py;if(!$p){[Windows.Forms.MessageBox]::Show(".venv Python missing.")|Out-Null;return};$cmd="cd /d `"$ProjectRoot`" && `"$p`" manage.py runserver 127.0.0.1:8000 --noreload";Start-Process cmd.exe -ArgumentList "/k",$cmd -WorkingDirectory $ProjectRoot;Log "Server started"}
+function StartServer(){
+    if(@(Listeners).Count){[Windows.Forms.MessageBox]::Show("Port 8000 is already occupied. Server not started.")|Out-Null;return}
+    $p=Py;if(!$p){[Windows.Forms.MessageBox]::Show(".venv Python missing.")|Out-Null;return}
+    $base=(& $p -c "import sys; print(sys._base_executable)").Trim();if(!$base-or!(Test-Path -LiteralPath $base)){[Windows.Forms.MessageBox]::Show("Base Python executable could not be resolved.")|Out-Null;return}
+    $previousPythonPath=$env:PYTHONPATH
+    try{$env:PYTHONPATH=Join-Path $ProjectRoot '.venv\Lib\site-packages';$process=Start-Process -FilePath $base -ArgumentList @('manage.py','runserver','127.0.0.1:8000','--noreload') -WorkingDirectory $ProjectRoot -WindowStyle Hidden -PassThru}finally{$env:PYTHONPATH=$previousPythonPath}
+    Log "Server started PID $($process.Id) at 127.0.0.1:8000"
+}
 function StopServer(){ $a=@(Listeners|?{$_.RO});if(!$a.Count){[Windows.Forms.MessageBox]::Show("No Radio Outdoors server on port 8000.")|Out-Null;return};$ok=[Windows.Forms.MessageBox]::Show("Stop Radio Outdoors listener(s): "+(($a|%{$_.PID})-join", ")+"?","Stop Server","YesNo");if($ok-ne"Yes"){return};$a|%{Stop-Process -Id $_.PID -Force -ErrorAction SilentlyContinue;Log "Stopped server PID $($_.PID)"}}
 function ApplyMigrations(){if([Windows.Forms.MessageBox]::Show("Back up database and apply migrations?","Migrations","YesNo")-ne"Yes"){return};BackupDB;$r=Django "migrate" 300;[Windows.Forms.MessageBox]::Show(($r.Out+"`r`n"+$r.Err).Trim(),"Migration Result")|Out-Null}
 function RunTests(){
@@ -212,7 +272,7 @@ function Test-IntentionalCheckpointPath($path){
     # This is intentionally an exact repository-relative match. Do not broaden
     # this to every dotfile or to nested .gitignore files.
     if([string]::Equals($p,'.gitignore',[StringComparison]::OrdinalIgnoreCase)){return $true}
-    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
+    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','RadioOutdoorsProjectManager-corrective-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
     if($p -notmatch '^(adventures|backend|core|static|templates|docs|tools)/'){return $false}
     return ($leaf -match '(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$')
 }
@@ -334,6 +394,7 @@ function Test-StagedCheckpointSet($approvedItems){
 }
 
 function Checkpoint([bool]$quick=$false){
+    if(!$quick){$blocking=@($last.GetEnumerator()|?{Test-StatusBlocksPush $_.Key $_.Value}|%{Get-CorrectiveInfo $_.Key $_.Value});if($blocking.Count){Show-CheckpointBlockers $blocking;return}}
     $sec=Secrets;if($sec.State-eq"red"){[Windows.Forms.MessageBox]::Show($sec.Detail,"DO NOT PUSH")|Out-Null;return}
     if(!$quick){
         $d=DjCheck;if($d.State-eq"red"){[Windows.Forms.MessageBox]::Show($d.Detail,"Django Check Failed")|Out-Null;return}
@@ -367,6 +428,32 @@ function Checkpoint([bool]$quick=$false){
     Log "Checkpoint pushed: $msg";[Windows.Forms.MessageBox]::Show("Checkpoint pushed.`r`n$msg","Success")|Out-Null;Refresh
 }
 
+function Invoke-CorrectiveRun($kind){
+    switch($kind){'Tests'{RunTests}'Django'{SetM 'django' (DjCheck)}'Migrations'{SetM 'migrations' (Migrations)}'Missing'{SetM 'missing' (MissingMig)}'Branch'{SetM 'branch' (GitBranch)}'Sync'{SetM 'sync' (Sync)}'Database Backup'{BackupDB;SetM 'db' (DbBackup)}'Media Backup'{BackupMedia;SetM 'media' (MediaBackup)}'Server'{Refresh}'Python'{SetM 'python' (PythonVer)}'Secrets'{SetM 'secrets' (Secrets)}'Disk'{SetM 'disk' (Disk)}default{Refresh}}
+}
+function Show-StatusDetails($key){
+    $status=$last[$key];if(!$status-or$status.State-eq'green'){return};$info=Get-CorrectiveInfo $key $status
+    $dialog=New-Object Windows.Forms.Form;$dialog.Text='Status Details and Corrective Action';$dialog.Size=New-Object Drawing.Size(900,700);$dialog.MinimumSize=New-Object Drawing.Size(720,540);$dialog.StartPosition='CenterParent';$dialog.Font=New-Object Drawing.Font('Segoe UI',11);$dialog.KeyPreview=$true
+    $layout=New-Object Windows.Forms.TableLayoutPanel;$layout.Dock='Fill';$layout.Padding=New-Object Windows.Forms.Padding(16);$layout.ColumnCount=1;$layout.RowCount=3;$layout.RowStyles.Add((New-Object Windows.Forms.RowStyle('AutoSize')))|Out-Null;$layout.RowStyles.Add((New-Object Windows.Forms.RowStyle('Percent',100)))|Out-Null;$layout.RowStyles.Add((New-Object Windows.Forms.RowStyle('AutoSize')))|Out-Null;$dialog.Controls.Add($layout)
+    $heading=New-Object Windows.Forms.Label;$heading.AutoSize=$true;$heading.Font=New-Object Drawing.Font('Segoe UI Semibold',15);$heading.Text=$info.Name;$layout.Controls.Add($heading)
+    $body=New-Object Windows.Forms.TextBox;$body.Multiline=$true;$body.ReadOnly=$true;$body.ScrollBars='Both';$body.WordWrap=$true;$body.Dock='Fill';$body.Font=New-Object Drawing.Font('Segoe UI',11);$numbered=for($i=0;$i-lt$info.Actions.Count;$i++){"$($i+1). $($info.Actions[$i])"};$body.Text="Current status: $($info.Status)`r`nBlocks a checkpoint push: $(if($info.Blocks){'Yes'}else{'No'})`r`n`r`nExplanation`r`n$($info.Explanation)`r`n`r`nSupporting evidence`r`n$($info.Evidence)`r`n`r`nCorrective actions`r`n$($numbered-join"`r`n")";$layout.Controls.Add($body)
+    $buttons=New-Object Windows.Forms.FlowLayoutPanel;$buttons.AutoSize=$true;$buttons.Dock='Fill';$buttons.WrapContents=$true;$layout.Controls.Add($buttons)
+    function Add-DialogButton($text,$handler,[int]$width=145){$b=New-Object Windows.Forms.Button;$b.Text=$text;$b.Width=$width;$b.Height=40;$b.Margin=New-Object Windows.Forms.Padding(4);$b.Add_Click($handler);$buttons.Controls.Add($b)|Out-Null}
+    if($info.LogPath-and(Test-Path -LiteralPath $info.LogPath)){Add-DialogButton $(if($key-eq'tests'){'Open Test Log'}else{'Open Log'}) ({Start-Process notepad.exe -ArgumentList @($info.LogPath)}) 150}
+    Add-DialogButton 'Open Project Folder' ({Start-Process explorer.exe -ArgumentList @($ProjectRoot)}) 170
+    Add-DialogButton 'Copy Corrective Task' ({[Windows.Forms.Clipboard]::SetText($info.Task)}) 180
+    Add-DialogButton $(if($key-eq'tests'){'Run Tests Again'}else{'Run Again'}) ({Invoke-CorrectiveRun $info.Run;$dialog.Close()}) 150
+    Add-DialogButton 'Close' ({$dialog.Close()}) 100;$dialog.Add_KeyDown({param($sender,$e)if($e.KeyCode-eq'Escape'){$dialog.Close()}})
+    [void]$dialog.ShowDialog($form);$dialog.Dispose()
+}
+function Show-CheckpointBlockers($blockers){
+    $dialog=New-Object Windows.Forms.Form;$dialog.Text='Full Checkpoint Push Blocked';$dialog.Size=New-Object Drawing.Size(900,680);$dialog.MinimumSize=New-Object Drawing.Size(720,520);$dialog.StartPosition='CenterParent';$dialog.Font=New-Object Drawing.Font('Segoe UI',11)
+    $layout=New-Object Windows.Forms.TableLayoutPanel;$layout.Dock='Fill';$layout.Padding=New-Object Windows.Forms.Padding(16);$layout.RowCount=3;$layout.ColumnCount=1;$layout.RowStyles.Add((New-Object Windows.Forms.RowStyle('AutoSize')))|Out-Null;$layout.RowStyles.Add((New-Object Windows.Forms.RowStyle('Percent',100)))|Out-Null;$layout.RowStyles.Add((New-Object Windows.Forms.RowStyle('AutoSize')))|Out-Null;$dialog.Controls.Add($layout)
+    $label=New-Object Windows.Forms.Label;$label.AutoSize=$true;$label.Font=New-Object Drawing.Font('Segoe UI Semibold',15);$label.Text="Checkpoint push blocked by $($blockers.Count) condition(s)";$layout.Controls.Add($label)
+    $body=New-Object Windows.Forms.TextBox;$body.Multiline=$true;$body.ReadOnly=$true;$body.ScrollBars='Both';$body.WordWrap=$true;$body.Dock='Fill';$blockerLines=for($i=0;$i-lt$blockers.Count;$i++){"$($i+1). $($blockers[$i].Name): $($blockers[$i].Status)`r`n$($blockers[$i].Explanation)`r`nCorrective action: $($blockers[$i].Actions[0])"};$body.Text=$blockerLines-join"`r`n`r`n";$layout.Controls.Add($body)
+    $buttons=New-Object Windows.Forms.FlowLayoutPanel;$buttons.AutoSize=$true;$buttons.Dock='Fill';$buttons.WrapContents=$true;foreach($item in $blockers){$b=New-Object Windows.Forms.Button;$b.Text="Open $($item.Name) Details";$b.AutoSize=$true;$b.MinimumSize=New-Object Drawing.Size(160,40);$tileKey=$item.Key;$b.Add_Click({Show-StatusDetails $tileKey}.GetNewClosure());$buttons.Controls.Add($b)|Out-Null};$close=New-Object Windows.Forms.Button;$close.Text='Close';$close.MinimumSize=New-Object Drawing.Size(100,40);$close.Add_Click({$dialog.Close()});$buttons.Controls.Add($close)|Out-Null;$layout.Controls.Add($buttons);[void]$dialog.ShowDialog($form);$dialog.Dispose()
+}
+
 $form=New-Object Windows.Forms.Form
 $form.Text="Radio Outdoors Project Manager";$form.Size=New-Object Drawing.Size(1180,800);$form.StartPosition="CenterScreen";$form.Font=New-Object Drawing.Font("Segoe UI",10)
 $title=New-Object Windows.Forms.Label;$title.Text="RADIO OUTDOORS - DEVELOPMENT CONTROL PANEL";$title.Font=New-Object Drawing.Font("Segoe UI Semibold",16);$title.AutoSize=$true;$title.Location=New-Object Drawing.Point(18,12);$form.Controls.Add($title)
@@ -377,13 +464,14 @@ $grid=New-Object Windows.Forms.TableLayoutPanel;$grid.Location=New-Object Drawin
 0..3|%{$grid.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("Percent",25)))}
 0..4|%{$grid.RowStyles.Add((New-Object Windows.Forms.RowStyle("Percent",20)))}
 $form.Controls.Add($grid)
-$labels=@{};$details=@{};$last=@{}
+$labels=@{};$details=@{};$panels=@{};$last=@{};$script:TileNames=@{}
 function Card($key,$name,$col,$row){
     $p=New-Object Windows.Forms.Panel;$p.Dock="Fill";$p.Margin=New-Object Windows.Forms.Padding(5);$p.BorderStyle="FixedSingle";$p.BackColor="White"
     $h=New-Object Windows.Forms.Label;$h.Text=$name;$h.AutoSize=$true;$h.ForeColor="DimGray";$h.Location=New-Object Drawing.Point(8,7);$p.Controls.Add($h)
     $v=New-Object Windows.Forms.Label;$v.Text="...";$v.Font=New-Object Drawing.Font("Segoe UI Semibold",11);$v.AutoSize=$true;$v.Location=New-Object Drawing.Point(8,30);$p.Controls.Add($v)
     $d=New-Object Windows.Forms.Label;$d.Text="";$d.AutoEllipsis=$true;$d.Size=New-Object Drawing.Size(250,18);$d.Location=New-Object Drawing.Point(8,56);$d.ForeColor="Gray";$p.Controls.Add($d)
-    $labels[$key]=$v;$details[$key]=$d;$grid.Controls.Add($p,$col,$row)
+    $tileKey=$key;$openTile={if($last[$tileKey]-and$last[$tileKey].State-in@('red','yellow')){Show-StatusDetails $tileKey}}.GetNewClosure();$p.Add_Click($openTile);$h.Add_Click($openTile);$v.Add_Click($openTile);$d.Add_Click($openTile)
+    $labels[$key]=$v;$details[$key]=$d;$panels[$key]=$p;$script:TileNames[$key]=$name;$grid.Controls.Add($p,$col,$row)
 }
 $defs=@(
 @("branch","Git branch",0,0),@("tree","Working tree",1,0),@("sync","GitHub sync",2,0),@("commit","Last commit",3,0),
@@ -409,7 +497,7 @@ Btn "Logs" {Start-Process explorer.exe $LogDir} 90
 
 $detail=New-Object Windows.Forms.TextBox;$detail.Location=New-Object Drawing.Point(18,657);$detail.Size=New-Object Drawing.Size(1130,90);$detail.Multiline=$true;$detail.ReadOnly=$true;$detail.ScrollBars="Vertical";$detail.Font=New-Object Drawing.Font("Consolas",9);$form.Controls.Add($detail)
 
-function SetM($k,$s){$last[$k]=$s;$labels[$k].Text=$s.Text;$details[$k].Text=(($s.Detail -split"`r?`n")[0]);$labels[$k].ForeColor=switch($s.State){"green"{"DarkGreen"}"yellow"{"DarkOrange"}"red"{"Firebrick"}default{"Black"}}}
+function SetM($k,$s){$last[$k]=$s;$labels[$k].Text=$s.Text;$details[$k].Text=(($s.Detail -split"`r?`n")[0]);$labels[$k].ForeColor=switch($s.State){"green"{"DarkGreen"}"yellow"{"DarkOrange"}"red"{"Firebrick"}default{"Black"}};$cursor=if($s.State-in@('red','yellow')){[Windows.Forms.Cursors]::Hand}else{[Windows.Forms.Cursors]::Default};$panels[$k].Cursor=$cursor;$labels[$k].Cursor=$cursor;$details[$k].Cursor=$cursor}
 function Refresh(){
     $form.Cursor="WaitCursor"
     try{
@@ -420,7 +508,7 @@ function Refresh(){
         SetM "repo" (Status "green" (Split-Path $ProjectRoot -Leaf) $ProjectRoot)
         SetM "venv" (Status ($(if(Py){"green"}else{"red"})) ($(if(Py){".venv found"}else{".venv missing"})) (Py))
         SetM "logs" (Status "green" "Available" $LogDir)
-        $blocked=($last["secrets"].State-eq"red" -or $last["django"].State-eq"red" -or $last["missing"].State-eq"red")
+        $blocked=@($last.GetEnumerator()|?{Test-StatusBlocksPush $_.Key $_.Value}).Count-gt0
         SetM "safe" (Status ($(if($blocked){"red"}elseif($last["tree"].State-eq"yellow"){"yellow"}else{"green"})) ($(if($blocked){"Blocked"}elseif($last["tree"].State-eq"yellow"){"Changes ready"}else{"Safe / clean"})) "")
         $reds=@($last.Values|?{$_.State-eq"red"}).Count;$y=@($last.Values|?{$_.State-eq"yellow"}).Count
         $overall.Text=if($reds){"DO NOT PUSH - $reds blocking issue(s)"}elseif($y){"ATTENTION REQUIRED - $y item(s)"}else{"READY"}

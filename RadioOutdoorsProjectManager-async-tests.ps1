@@ -170,7 +170,7 @@ function Checkpoint([bool]$quick=$false){
         elseif($path-match'(?i)(^|/)(__pycache__|\.pytest_cache|\.mypy_cache|htmlcov|tmp|temp)(/|$)'-or$leaf-match'(?i)\.(pyc|pyo|tmp|temp|swp)$'){$reason='cache or temporary/generated file'}
         elseif($leaf-match'(?i)^\.env($|\.)'-or$leaf-match'(?i)(api[-_]?key|secret|credential|password).*\.(txt|key|pem|json)$'){$reason='secret or API-key file'}
         $rootGitIgnore=[string]::Equals($path,'.gitignore',[StringComparison]::OrdinalIgnoreCase)
-        $approved=($rootGitIgnore-or$leaf-in@('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')-or($path-match'^(adventures|backend|core|static|templates|docs|tools)/'-and$leaf-match'(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$'))
+        $approved=($rootGitIgnore-or$leaf-in@('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','RadioOutdoorsProjectManager-corrective-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')-or($path-match'^(adventures|backend|core|static|templates|docs|tools)/'-and$leaf-match'(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$'))
         if(!$reason-and!$approved){$reason='not an approved source/config/migration/test/template/static path'}
         $item=[pscustomobject]@{Status=$line.Substring(0,[Math]::Min(2,$line.Length));Path=$path;Reason=$reason};if($reason){$excluded+=$item}else{$intentional+=$item}
     }

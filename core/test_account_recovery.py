@@ -62,23 +62,20 @@ class AccountRecoveryTests(TestCase):
 
     def test_login_page_links_to_recovery(self):
         response = self.client.get(reverse("login"))
-        self.assertContains(response, "Forgot callsign or password?")
+        self.assertContains(response, "Forgot password?")
         self.assertContains(response, reverse("account_recovery"))
 
     def test_login_page_links_to_member_registration(self):
         response = self.client.get(reverse("login"))
-        self.assertContains(response, "New to Radio Outdoors?")
         self.assertContains(response, "Create New Account")
         self.assertContains(
             response,
             f'href="{reverse("register")}"',
         )
-        self.assertContains(response, "verified Radio Outdoors Member account")
         self.assertNotContains(response, "Follower account")
 
         self.client.force_login(self.user)
         signed_in = self.client.get(reverse("login"))
-        self.assertNotContains(signed_in, "New to Radio Outdoors?")
         self.assertNotContains(signed_in, "Create New Account")
 
     def test_known_and_unknown_submissions_show_identical_response(self):

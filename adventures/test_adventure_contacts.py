@@ -58,6 +58,84 @@ class AdventureContactHubTests(TestCase):
         hub = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
         self.assertContains(hub, "No contacts have been recorded for this Adventure.")
 
+    def test_contacts_hub_uses_compact_watermark_table_layout(self):
+        entry = self.add_entry("Layout Journal")
+        contact = self.add_contact(entry, "K1LAYOUT", "layout-contact")
+        contact.band = "20m"
+        contact.mode = "SSB"
+        contact.state = "Minnesota"
+        contact.country = "United States"
+        contact.save(update_fields=["band", "mode", "state", "country"])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
+
+        self.assertContains(response, 'class="contacts-summary-panel"')
+        self.assertContains(response, "Associated Adventure")
+        self.assertContains(response, "Adventure ID")
+        self.assertContains(response, "Total Contacts")
+        self.assertContains(response, reverse("journal_contact_map", args=[entry.pk]))
+        self.assertContains(response, reverse("add_journal_contact", args=[entry.pk]))
+        self.assertContains(response, reverse("adventure_import_contacts", args=[self.adventure.slug]))
+        self.assertContains(response, "Import Contacts", count=1)
+        self.assertNotContains(response, "CONTACT GEOGRAPHY")
+        self.assertNotContains(response, "Contact geography")
+        self.assertNotContains(response, "Contacts From This Adventure")
+        self.assertNotContains(response, "Import into a specific Journal")
+        self.assertNotContains(response, "A Location pin is required before contact paths can be mapped.")
+        self.assertContains(response, 'id="contacts-search"')
+        self.assertContains(response, 'id="contacts-band"')
+        self.assertContains(response, 'id="contacts-mode"')
+        self.assertContains(
+            response,
+            '<thead><tr><th scope="col">Date</th><th scope="col">Callsign</th><th scope="col">Band</th><th scope="col">Mode</th><th scope="col">State</th><th scope="col">Country</th></tr></thead>',
+            html=True,
+        )
+        self.assertContains(response, 'data-scroll-up')
+        self.assertContains(response, 'data-scroll-thumb')
+        self.assertContains(response, 'data-scroll-down')
+
+        css = Path("static/css/style.css").read_text(encoding="utf-8")
+        self.assertIn('url("../images/contacts-pencil-background.png")', css)
+        self.assertIn("background: rgba(255, 248, 235, .43);", css)
+        self.assertIn("background: rgba(255, 248, 235, .90);", css)
+        self.assertIn("background: rgba(255, 248, 235, .55);", css)
+        self.assertIn("background: rgba(255, 248, 235, .56);", css)
+        self.assertTrue(Path("static/images/contacts-pencil-background.png").is_file())
+
+    def test_contacts_hub_filters_only_the_authorized_table_rows(self):
+        entry = self.add_entry("Filter Journal")
+        alpha = self.add_contact(entry, "K1ALPHA", "filter-alpha")
+        alpha.band, alpha.mode, alpha.state, alpha.country = "20m", "SSB", "Minnesota", "USA"
+        alpha.save(update_fields=["band", "mode", "state", "country"])
+        bravo = self.add_contact(entry, "K2BRAVO", "filter-bravo")
+        bravo.band, bravo.mode, bravo.state, bravo.country = "40m", "CW", "Wisconsin", "USA"
+        bravo.save(update_fields=["band", "mode", "state", "country"])
+
+        response = self.client.get(
+            reverse("adventure_contacts", args=[self.adventure.slug]),
+            {"q": "alpha", "band": "20m", "mode": "SSB"},
+        )
+
+        self.assertEqual(response.context["contact_count"], 2)
+        self.assertEqual(response.context["filtered_contact_count"], 1)
+        self.assertEqual([contact.callsign for contact in response.context["contacts"]], ["K1ALPHA"])
+        self.assertNotIn("contact_map", response.context)
+        self.assertContains(response, '<option value="20m" selected>20m</option>', html=True)
+        self.assertContains(response, '<option value="SSB" selected>SSB</option>', html=True)
+
+    def test_contacts_hub_keeps_mutation_actions_owner_only(self):
+        entry = self.add_entry("Permissions Journal")
+        visitor = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
+        self.assertNotContains(visitor, reverse("add_journal_contact", args=[entry.pk]))
+        self.assertNotContains(visitor, reverse("adventure_import_contacts", args=[self.adventure.slug]))
+        self.assertContains(visitor, reverse("journal_contact_map", args=[entry.pk]))
+
+        self.client.force_login(self.owner)
+        owner = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
+        self.assertContains(owner, reverse("add_journal_contact", args=[entry.pk]))
+        self.assertContains(owner, reverse("adventure_import_contacts", args=[self.adventure.slug]))
+
     def test_hub_aggregates_all_visible_journals_and_identifies_source(self):
         first = self.add_entry("Morning Journal")
         second = self.add_entry("Evening Journal")
@@ -486,7 +564,7 @@ class AdventureContactHubTests(TestCase):
         self.assertNotContains(owner, "41.123456")
         self.assertContains(owner, "K1SECRET")
 
-    def test_contact_map_is_on_detail_and_hub_with_filters(self):
+    def test_contact_map_panel_is_removed_from_hub_and_journal_map_route_is_preserved(self):
         location = Location.objects.create(
             name="Origin", created_by=self.owner,
             latitude="44.000000", longitude="-93.000000",
@@ -498,16 +576,16 @@ class AdventureContactHubTests(TestCase):
         contact.grid_square = "EN34"
         contact.band = "20m"
         contact.save()
-        dashboard = self.client.get(self.adventure.get_absolute_url())
-        self.assertContains(dashboard, "QSO’s and Contacts")
-        self.assertContains(dashboard, "K1MAP")
-        self.assertNotContains(dashboard, 'data-contact-filter="lines"')
-
         hub = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
-        self.assertContains(hub, "Contacts From This Adventure")
-        self.assertContains(hub, 'data-contact-filter="journal"')
-        self.assertContains(hub, 'data-contact-filter="lines"')
-        self.assertContains(hub, "Grid-square center")
+        self.assertNotContains(hub, "Contacts From This Adventure")
+        self.assertNotContains(hub, 'data-contact-filter="journal"')
+        self.assertNotContains(hub, 'data-contact-filter="lines"')
+        self.assertNotContains(hub, "Grid-square center")
+        self.assertContains(hub, reverse("journal_contact_map", args=[entry.pk]))
+
+        journal_map = self.client.get(reverse("journal_contact_map", args=[entry.pk]))
+        self.assertEqual(journal_map.status_code, 200)
+        self.assertContains(journal_map, "Contacts From This Journal")
 
     def test_parser_preserves_radio_and_direct_coordinate_fields(self):
         parsed = parse_adif_text(
@@ -593,11 +671,12 @@ class AdventureContactHubTests(TestCase):
             css,
         )
         self.assertIn(
-            ".adventure-dashboard-scroll { max-height: 214px; overflow: auto;",
+            ".adventure-dashboard-scroll { max-height: 214px; overflow: auto; scrollbar-width: none; }",
             css,
         )
         self.assertIn(".adventure-photo-strip", css)
         self.assertIn("overflow-x: auto; overflow-y: hidden;", css)
+        self.assertIn(".adventure-photo-strip::-webkit-scrollbar { display: none; }", css)
 
         viewer_js = (
             settings.BASE_DIR / "static" / "js" / "journal-photo-viewer.js"

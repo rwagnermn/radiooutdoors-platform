@@ -156,7 +156,7 @@ class PublicReadOnlyPermissionMatrixTests(TestCase):
             "K1PUBLIC",
             "Approved public photo",
             "View Contacts",
-            "Show All Journals",
+            "View All Journals",
         ):
             self.assertContains(detail, text)
         for text in (

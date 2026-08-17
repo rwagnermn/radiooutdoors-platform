@@ -555,26 +555,46 @@ def adventure_detail(request, slug):
 
 def adventure_contacts(request, slug):
     adventure = get_object_or_404(
-        Adventure.objects.select_related("owner", "location"),
+        Adventure.objects.select_related("owner"),
         slug=slug,
     )
     can_manage_adventure = _can_manage_adventure(request.user, adventure)
     if not adventure.is_public and not can_manage_adventure:
         raise Http404("Adventure not found.")
 
-    journal_entries = adventure.journal_entries.annotate(
-        aggregated_contact_count=Count("contacts")
-    ).order_by("-entry_at", "-pk")
+    journal_entries = adventure.journal_entries.order_by("-entry_at", "-pk")
     if not can_manage_adventure:
         journal_entries = journal_entries.filter(is_public=True)
 
-    contacts = list(JournalContact.objects.filter(
+    authorized_contacts = list(JournalContact.objects.filter(
         Q(journal_entry__in=journal_entries)
         | Q(adventure=adventure, journal_entry__isnull=True),
-    ).distinct().select_related("journal_entry", "resolved_location").order_by(
+    ).distinct().select_related("journal_entry").order_by(
         "-qso_date", "-time_on", "callsign"
     ))
-    contact_map = build_contact_map(adventure, contacts, request.user)
+    search_query = request.GET.get("q", "").strip()[:100]
+    selected_band = request.GET.get("band", "").strip()[:24]
+    selected_mode = request.GET.get("mode", "").strip()[:32]
+
+    def matches_table_filters(contact):
+        if selected_band and contact.band != selected_band:
+            return False
+        if selected_mode and contact.mode != selected_mode:
+            return False
+        if search_query:
+            searchable = " ".join((
+                contact.callsign,
+                contact.name,
+                contact.state,
+                contact.country,
+                contact.pota_park_reference,
+                contact.pota_park_name,
+            )).casefold()
+            if search_query.casefold() not in searchable:
+                return False
+        return True
+
+    contacts = [contact for contact in authorized_contacts if matches_table_filters(contact)]
     return render(
         request,
         "adventures/adventure_contacts.html",
@@ -582,10 +602,19 @@ def adventure_contacts(request, slug):
             "adventure": adventure,
             "journal_entries": journal_entries,
             "contacts": contacts,
-            "contact_count": len(contacts),
-            "contact_map": contact_map,
-            "contact_map_dom_id": "contact-hub-map",
-            "contact_map_data_id": "contact-hub-map-data",
+            "contact_count": len(authorized_contacts),
+            "filtered_contact_count": len(contacts),
+            "contact_band_options": sorted(
+                {contact.band for contact in authorized_contacts if contact.band},
+                key=str.casefold,
+            ),
+            "contact_mode_options": sorted(
+                {contact.mode for contact in authorized_contacts if contact.mode},
+                key=str.casefold,
+            ),
+            "contact_search_query": search_query,
+            "selected_contact_band": selected_band,
+            "selected_contact_mode": selected_mode,
             "can_manage_adventure": can_manage_adventure,
         },
     )

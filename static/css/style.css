@@ -4665,22 +4665,23 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 .adventure-dashboard-actions { display: flex; align-items: center; gap: 12px; }
 .adventure-dashboard-actions .ro-action-menu-panel { right: 42px; left: auto; }
 .adventure-dashboard-card { border: 1px solid rgba(87, 75, 57, .25); border-radius: 10px; background: rgba(255, 252, 246, .92); box-shadow: 0 2px 8px rgba(55, 43, 27, .06); }
-.adventure-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); grid-template-areas: "intro cover" "footer footer"; gap: 18px; padding: 14px 16px; }
+.adventure-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); grid-template-areas: "intro cover"; gap: 16px; padding: 12px 16px; }
 .adventure-dashboard-intro { grid-area: intro; min-width: 0; }
 .adventure-dashboard-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .adventure-dashboard h1 { margin: 0; color: #163d2d; font-size: clamp(1.65rem, 2.4vw, 2.25rem); line-height: 1.1; }
 .adventure-dashboard h2 { margin: 0; color: #173c2e; font-size: 1.32rem; line-height: 1.2; }
 .adventure-dashboard-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 14px 0 10px; font-size: 1.05rem; }
-.adventure-dashboard-reference { margin: 0 0 10px; font-size: 1rem; line-height: 1.45; overflow-wrap: anywhere; }
-.adventure-dashboard-reference a { color: #8f3512; }
-.adventure-dashboard-hero-footer { grid-area: footer; margin: 0; padding: 9px 2px 0; border-top: 1px solid rgba(87, 75, 57, .2); color: #59625b; font-size: .94rem; line-height: 1.4; }
+.adventure-dashboard-reference { margin: 0 0 3px; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.adventure-dashboard-reference a { color: #0645ad; text-decoration: underline; text-underline-offset: 2px; }
+.adventure-dashboard-hero-note { margin: 0; color: #59625b; font-size: .94rem; line-height: 1.35; }
 .adventure-summary-text { display: -webkit-box; overflow: hidden; font-size: 1.08rem; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .adventure-summary-clamp.is-expanded .adventure-summary-text { display: block; overflow: visible; }
 .adventure-summary-toggle { min-height: 40px; margin-top: 2px; padding: 5px 10px; border: 0; background: transparent; color: #b94712; font: inherit; font-weight: 800; cursor: pointer; }
-.adventure-dashboard-cover { grid-area: cover; height: 230px; margin: 0; overflow: hidden; border-radius: 8px; background: #e8e2d7; }
-.adventure-dashboard-cover img { width: 100%; height: 100%; object-fit: cover; }
+.adventure-dashboard .adventure-dashboard-cover { grid-area: cover; width: 100%; height: 182px; min-height: 0; max-height: none; margin: 0; padding: 8px; overflow: hidden; border-radius: 8px; background: #e8e2d7; }
+.adventure-dashboard .adventure-dashboard-cover .adventure-cover-image { width: 100%; height: 100%; max-height: none; object-fit: contain; }
 .adventure-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px; margin-top: 8px; }
 .adventure-dashboard-grid > section { min-width: 0; height: auto; padding: 12px 14px; overflow: visible; align-self: start; }
+.adventure-dashboard-journals, .adventure-dashboard-photos { grid-column: 1 / -1; }
 .adventure-pota-rollup { display:flex; flex-wrap:wrap; gap:5px clamp(12px,1.4vw,18px); margin:8px 0 0; padding:7px 10px 5px; align-items:baseline; justify-content:flex-start; border-top:1px solid #d4c6af; border-bottom:1px solid #d4c6af; background:#f8f3e9; color:#173c2e; font-size:.96rem; }
 .adventure-pota-rollup div { display:flex; flex:0 0 max-content; min-width:0; align-items:baseline; justify-content:flex-start; gap:6px; white-space:nowrap; }
 .adventure-pota-rollup .adventure-pota-rollup-title { color:#a44916; }
@@ -4693,28 +4694,62 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 .adventure-dashboard-section-heading a { color: #bd4615; font-weight: 800; }
 .adventure-dashboard-section-heading h2 small { color:#5d655f; font-size:.72em; font-weight:650; }
 .adventure-dashboard-panel-link { display:inline-flex; margin-top:8px; color:#bd4615; font-weight:800; }
-.adventure-dashboard-map { width: 100%; height: 215px; margin-top: 8px; border-radius: 7px; }
+.adventure-dashboard-map { width: 100%; height: 240px; min-height: 240px; margin-top: 8px; border-radius: 7px; }
 .adventure-dashboard-map-card { position: relative; }
-.adventure-dashboard-map-card.adventure-dashboard-card { display:block; }
+.adventure-dashboard-map-card.adventure-dashboard-card { display: flex; flex-direction: column; }
+.adventure-dashboard-grid > .adventure-dashboard-map-card, .adventure-dashboard-grid > .adventure-dashboard-contacts { box-sizing: border-box; height: 240px; align-self: stretch !important; }
+.adventure-dashboard-map-card .adventure-dashboard-map { height: auto; min-height: 0; flex: 1 1 auto; }
+.adventure-dashboard-contacts { display: flex; flex-direction: column; }
+.adventure-dashboard-contacts .adventure-scroll-shell { min-height: 0; flex: 1 1 auto; }
+.adventure-dashboard-contacts .adventure-dashboard-scroll { max-height: none; }
 .adventure-map-full-link { position: absolute; right: 22px; bottom: 18px; z-index: 2; min-height: 40px; padding: 8px 11px; border: 1px solid #b8b1a5; border-radius: 6px; background: rgba(255,255,255,.94); color: #173c2e; font-weight: 800; text-decoration: none; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
 .adventure-map-full-link:hover, .adventure-map-full-link:focus-visible { background: #fff; outline: 3px solid #dc6b27; outline-offset: 2px; }
-.adventure-dashboard-scroll { max-height: 214px; overflow: auto; scrollbar-gutter: stable; }
+.adventure-scroll-shell { display: grid; grid-template-columns: minmax(0, 1fr) 26px; min-height: 0; }
+.adventure-dashboard-scroll { max-height: 214px; overflow: auto; scrollbar-width: none; }
+.adventure-dashboard-scroll::-webkit-scrollbar { display: none; }
+.adventure-scroll-controls { display: flex; min-height: 0; flex-direction: column; align-items: stretch; border-left: 1px solid #cfc5b8; background: #eee7dc; }
+.adventure-scroll-controls button { width: 25px; min-width: 25px; height: 27px; min-height: 27px; padding: 0; border: 0; border-radius: 0; background: #244a39; color: #fff; font-size: .68rem; line-height: 1; cursor: pointer; }
+.adventure-scroll-controls button:hover, .adventure-scroll-controls button:focus-visible { background: #173c2e; outline: 2px solid #dc6b27; outline-offset: -2px; }
+.adventure-scroll-controls button:disabled { background: #7f8a84; cursor: default; opacity: .68; }
+.adventure-scroll-controls input[type="range"] { width: 25px; min-height: 65px; flex: 1 1 auto; margin: 2px 0; padding: 0 8px; accent-color: #315f49; cursor: ns-resize; direction: rtl; writing-mode: vertical-lr; }
+.adventure-scroll-controls input[type="range"]:disabled { cursor: default; opacity: .55; }
 .adventure-dashboard-contacts table { width: 100%; border-collapse: collapse; font-size: 1rem; }
 .adventure-dashboard-contacts th { position: sticky; top: 0; z-index: 1; background: #fffaf2; text-align: left; }
-.adventure-dashboard-contacts th, .adventure-dashboard-contacts td { padding: 7px 6px; border-bottom: 1px solid #ddd4c7; white-space: nowrap; }
-.adventure-dashboard-journal-scroll { margin-top: 5px; }
-.adventure-journal-card-list { display: grid; gap: 7px; }
-.adventure-journal-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 10px; border: 1px solid #ddd4c7; border-radius: 8px; background: rgba(255,255,255,.68); }
-.adventure-journal-row-main { min-width: 0; }
-.adventure-journal-row-title { display: block; overflow: hidden; color: #173c2e; font-size: 1.08rem; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
-.adventure-journal-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 4px; color: #48554d; font-size: .95rem; }
-.adventure-journal-row-counts { display: flex; gap: 12px; margin: 0; text-align: center; }
-.adventure-journal-row-counts div { min-width: 58px; }
-.adventure-journal-row-counts dt { color: #59635d; font-size: .8rem; font-weight: 700; }
-.adventure-journal-row-counts dd { margin: 0; color: #173c2e; font-size: 1.1rem; font-weight: 850; }
-.adventure-journal-row-menu .ro-action-menu-panel { right: 42px; left: auto; }
-.adventure-photo-strip { display: flex; gap: 9px; height: 215px; margin-top: 7px; padding-bottom: 9px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; }
-.adventure-photo-strip .journal-photo { flex: 0 0 180px; height: 190px; margin: 0; overflow: hidden; scroll-snap-align: start; }
+.adventure-dashboard-contacts th, .adventure-dashboard-contacts td { padding: 3px 6px; border-bottom: 1px solid #ddd4c7; line-height: 1.15; white-space: nowrap; }
+.adventure-dashboard-journals { padding: 0 !important; overflow: hidden !important; }
+.adventure-dashboard-journal-scroll { max-height: 142px; }
+.adventure-journal-scroll-shell { height: 142px; }
+.adventure-journal-card-list { width: 100%; min-width: 0; }
+.adventure-journal-column-headings, .adventure-journal-row { display: grid; grid-template-columns: 88px minmax(150px,1.15fr) minmax(100px,1.8fr) 58px 66px 110px 32px; align-items: center; gap: 8px; }
+.adventure-journal-column-headings { position: sticky; top: 0; z-index: 2; box-sizing: border-box; min-height: 34px; padding: 3px 5px 3px 9px; background: #173c2e; color: #fff; font-size: .78rem; font-weight: 850; }
+.adventure-journal-column-headings > span { grid-row: 1; }
+.adventure-journal-column-headings > span:nth-child(1) { grid-column: 1; }
+.adventure-journal-column-headings > span:nth-child(2) { grid-column: 2; }
+.adventure-journal-column-headings > span:nth-child(3) { grid-column: 3; }
+.adventure-journal-column-headings > span:nth-child(4) { grid-column: 4; }
+.adventure-journal-column-headings > span:nth-child(5) { grid-column: 5; }
+.adventure-journal-column-headings > span:nth-child(6) { grid-column: 6; }
+.adventure-journal-column-headings > span:nth-child(4), .adventure-journal-column-headings > span:nth-child(5), .adventure-journal-row-count { text-align: center; }
+.adventure-journal-column-headings .adventure-dashboard-view-all { width: 108px; min-height: 28px; box-sizing: border-box; grid-column: 6 / 8; grid-row: 1; justify-self: end; padding: 4px 5px; border: 1px solid rgba(255,255,255,.72); border-radius: 5px; background: #f7f2e8; color: #173c2e; font-size: .72rem; line-height: 1.15; text-align: center; text-decoration: none; white-space: nowrap; }
+.adventure-journal-column-headings .adventure-dashboard-view-all:hover, .adventure-journal-column-headings .adventure-dashboard-view-all:focus-visible { background: #fff; outline: 2px solid #dc6b27; outline-offset: -2px; }
+.adventure-journal-row { box-sizing: border-box; height: 36px; min-height: 0; padding: 3px 9px; border-bottom: 1px solid #ddd4c7; background: rgba(255,255,255,.72); line-height: 1.15; cursor: pointer; }
+.adventure-journal-row:hover { background: #fff8ea; }
+.adventure-journal-row:has(.adventure-journal-row-title:focus-visible) { outline: 3px solid #dc6b27; outline-offset: -3px; }
+.adventure-journal-row-date, .adventure-journal-row-location { color: #48554d; font-size: .88rem; }
+.adventure-journal-row-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adventure-journal-row-title { display: block; overflow: hidden; color: #173c2e; font-size: 1rem; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.adventure-journal-row-count { color: #253c30; font-size: .9rem; font-variant-numeric: tabular-nums; font-weight: 800; }
+.adventure-journal-row-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.adventure-journal-row-chevron { display: grid; width: 28px; height: 28px; align-items: center; justify-self: end; color: #315f49; font-size: 1.3rem; font-weight: 500; line-height: 1; text-align: center; text-decoration: none; }
+.adventure-journal-row-chevron:hover, .adventure-journal-row-chevron:focus-visible { color: #b94712; outline: 2px solid #dc6b27; outline-offset: -2px; }
+.adventure-dashboard-journals .journal-status-badge { padding: 3px 10px; font-size: 15px; line-height: 1.05; }
+.adventure-photo-carousel { position: relative; display: grid; grid-template-columns: 32px minmax(0,1fr) 32px; align-items: stretch; gap: 5px; margin-top: 7px; }
+.adventure-photo-carousel-control { min-width: 32px; min-height: 100%; padding: 0; border: 1px solid #bdb3a5; border-radius: 6px; background: #244a39; color: #fff; font-size: 1.75rem; line-height: 1; cursor: pointer; }
+.adventure-photo-carousel-control:hover, .adventure-photo-carousel-control:focus-visible { background: #173c2e; outline: 3px solid #dc6b27; outline-offset: 1px; }
+.adventure-photo-carousel-control:disabled { background: #87938c; cursor: default; opacity: .52; }
+.adventure-photo-strip { display: flex; gap: 7px; height: 208px; overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.adventure-photo-strip::-webkit-scrollbar { display: none; }
+.adventure-photo-strip .journal-photo { flex: 0 0 calc((100% - 28px) / 5); min-width: 108px; height: 198px; margin: 0; overflow: hidden; scroll-snap-align: start; }
 .adventure-photo-strip .journal-photo-viewer-trigger { width: 100%; height: 135px; }
 .adventure-photo-strip img { width: 100%; height: 100%; object-fit: cover; }
 .adventure-photo-strip figcaption { overflow: hidden; padding: 3px 6px; text-overflow: ellipsis; white-space: nowrap; }
@@ -4732,14 +4767,25 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     .adventure-dashboard-page main { background-image: none; }
     body.adventure-dashboard-page .content.adventure-dashboard { width: calc(100% - 24px); padding-inline: 12px; }
     .adventure-dashboard-toolbar { align-items: flex-start; }
-    .adventure-dashboard-hero { grid-template-columns: 1fr; grid-template-areas: "intro" "cover" "footer"; }
+    .adventure-dashboard-hero { grid-template-columns: 1fr; grid-template-areas: "intro" "cover"; }
     .adventure-dashboard-grid { grid-template-columns: 1fr; }
-    .adventure-dashboard-cover { height: min(55vw, 340px); }
+    .adventure-dashboard .adventure-dashboard-cover { height: min(48vw, 260px); min-height: 0; }
     .adventure-dashboard-grid > section { height: auto; }
+    .adventure-dashboard-grid > .adventure-dashboard-map-card, .adventure-dashboard-grid > .adventure-dashboard-contacts { height: auto; }
+    .adventure-dashboard-map-card .adventure-dashboard-map { height: 300px; min-height: 300px; flex: none; }
+    .adventure-dashboard-contacts .adventure-dashboard-scroll { max-height: 330px; }
     .adventure-dashboard-scroll { max-height: 330px; }
+    .adventure-journal-scroll-shell { height: auto; }
     .adventure-dashboard-map { height: 300px; }
-    .adventure-journal-row { grid-template-columns: minmax(0,1fr) auto; }
-    .adventure-journal-row-counts { grid-column: 1; justify-content: flex-start; }
+    .adventure-journal-column-headings { min-height: 58px; grid-template-columns: 54px minmax(64px,1fr) minmax(18px,.7fr) 38px 46px 76px 20px; grid-template-rows: 28px 24px; gap: 0 3px; padding: 3px 5px; font-size: .66rem; }
+    .adventure-journal-column-headings > span { grid-row: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adventure-journal-column-headings .adventure-dashboard-view-all { position: absolute; top: 3px; right: 5px; width: auto; min-height: 26px; padding: 3px 6px; }
+    .adventure-journal-row { width: 100%; height: 36px; min-height: 0; grid-template-columns: 54px minmax(64px,1fr) minmax(18px,.7fr) 38px 46px 76px 20px; gap: 3px; padding: 3px 5px; }
+    .adventure-journal-row-date, .adventure-journal-row-title, .adventure-journal-row-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adventure-journal-row-date, .adventure-journal-row-location, .adventure-journal-row-count { font-size: .72rem; }
+    .adventure-journal-row-title { font-size: .8rem; }
+    .adventure-journal-row-chevron { width: 20px; height: 28px; }
+    .adventure-photo-strip .journal-photo { flex-basis: calc((100% - 14px) / 3); }
 }
 .pota-organization-options { display:grid; gap:12px; margin:20px 0; padding:16px; border:1px solid #bdb5a8; border-radius:8px; }
 .pota-organization-options > label { display:block; }
@@ -4765,8 +4811,229 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     .adventure-dashboard-actions { width: 100%; justify-content: flex-end; }
     .adventure-dashboard-meta { display: grid; }
     .adventure-dashboard-contacts { overflow-x: auto !important; }
-    .adventure-journal-row { grid-template-columns: minmax(0,1fr) auto; align-items: start; }
-    .adventure-journal-row-meta { display: grid; }
+    .adventure-journal-column-headings { grid-template-columns: 40px minmax(42px,1fr) minmax(0,.5fr) 34px 40px 72px 16px; gap: 0 2px; padding-inline: 5px; font-size: .62rem; }
+    .adventure-journal-column-headings .adventure-dashboard-view-all { padding-inline: 5px; font-size: .7rem; }
+    .adventure-journal-row { grid-template-columns: 40px minmax(42px,1fr) minmax(0,.5fr) 34px 40px 72px 16px; gap: 2px; padding-inline: 5px; }
+    .adventure-journal-row-chevron { width: 16px; }
+    .adventure-photo-strip .journal-photo { flex-basis: calc((100% - 7px) / 2); }
+}
+
+/* RO-20260816-LOGIN-GLOBE: isolated full-bleed login presentation. */
+body.login-page {
+    min-width: 0;
+    overflow: visible;
+    background: #071729;
+}
+body.login-page > .site-header,
+body.login-page > .site-footer {
+    display: none;
+}
+body.login-page > main {
+    min-height: 100svh;
+    background-color: #071729;
+    background-image: url('/static/images/login-global-background.png');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+}
+.login-page .login-page-shell {
+    display: grid;
+    width: 100%;
+    min-height: 100svh;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
+    align-items: start;
+    padding: clamp(42px, 7vh, 72px) clamp(36px, 8vw, 136px) clamp(240px, 30vh, 300px);
+}
+.login-page .login-panel {
+    grid-column: 2;
+    width: 100%;
+    box-sizing: border-box;
+    justify-self: end;
+    padding: 22px 28px 24px;
+    border: 1px solid #a98a57;
+    border-radius: 14px;
+    background: rgba(255, 249, 237, .91);
+    box-shadow: 0 16px 38px rgba(2, 12, 22, .38);
+    color: #1b211e;
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+.login-page .login-brand {
+    display: flex;
+    width: 100%;
+    height: 68px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 9px;
+    background: #173f2e;
+}
+.login-page .login-brand img {
+    display: block;
+    width: 245px;
+    height: 92px;
+    object-fit: contain;
+    transform: scale(2.65);
+}
+.login-page .login-introduction {
+    margin: 17px 0 16px;
+}
+.login-page .login-introduction h1 {
+    margin: 0 0 3px;
+    color: #19231e;
+    font-size: 30px;
+    line-height: 1.15;
+}
+.login-page .login-introduction p,
+.login-page .auth-help {
+    margin: 0;
+    color: #3f4642;
+    font-size: 17px;
+    line-height: 1.35;
+}
+.login-page .auth-help {
+    margin: -6px 0 12px;
+}
+.login-page .login-form-error {
+    margin: 0 0 13px;
+    padding: 9px 11px;
+    border: 1px solid #a82e2e;
+    border-radius: 6px;
+    background: #fff1f0;
+    color: #7b1818;
+    font-weight: 700;
+    line-height: 1.35;
+}
+.login-page .auth-field {
+    margin: 0 0 12px;
+}
+.login-page .auth-field label {
+    display: block;
+    margin: 0 0 5px;
+    color: #202823;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.login-page .auth-field input {
+    width: 100%;
+    min-height: 46px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 9px 12px;
+    border: 1px solid #9f875f;
+    border-radius: 6px;
+    background: rgba(255, 253, 248, .94);
+    color: #151a17;
+    font-size: 18px;
+}
+.login-page .password-visibility-field {
+    margin-bottom: 0;
+}
+.login-page .password-visibility-toggle {
+    width: 42px;
+    height: 42px;
+    border-radius: 5px;
+}
+.login-page .login-support-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: -1px 0 13px;
+    font-size: 16px;
+}
+.login-page .login-support-row a,
+.login-page .login-new-member a {
+    color: #075ca8;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.login-page .login-submit {
+    width: 100%;
+    min-height: 47px;
+    border-color: #bf4f0a;
+    background: #d45b0b;
+    font-size: 19px;
+}
+.login-page .login-new-member {
+    margin: 13px 0 0;
+    padding: 0;
+    border: 0;
+    text-align: center;
+}
+.login-page .login-new-member .auth-create-account-action {
+    display: inline;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.login-page a:focus-visible,
+.login-page button:focus-visible,
+.login-page input:focus-visible {
+    outline: 3px solid #0877d1;
+    outline-offset: 3px;
+}
+@media (min-width: 1051px) {
+    .login-page .login-page-shell {
+        padding-top: clamp(72px, 13.15vh, 120px);
+        padding-right: clamp(36px, calc(42.1vw - 441px), 367px);
+        padding-left: clamp(36px, calc(42.1vw - 441px), 367px);
+    }
+}
+@media (max-width: 1050px) {
+    body.login-page > main {
+        background-position: 44% center;
+    }
+    .login-page .login-page-shell {
+        grid-template-columns: minmax(0, 1fr) minmax(350px, 42vw);
+        padding: 36px 32px 230px;
+    }
+    .login-page .login-panel {
+        padding-right: 22px;
+        padding-left: 22px;
+    }
+}
+@media (max-width: 700px) {
+    body.login-page > main {
+        background-position: 31% top;
+        background-size: auto 100svh;
+    }
+    .login-page .login-page-shell {
+        display: block;
+        min-height: 100svh;
+        padding: 49svh 12px 28px;
+    }
+    .login-page .login-panel {
+        width: min(100%, 440px);
+        margin: 0 auto;
+        padding: 18px 18px 21px;
+        background: rgba(255, 249, 237, .94);
+    }
+    .login-page .login-brand {
+        height: 60px;
+    }
+    .login-page .login-brand img {
+        width: 220px;
+        height: 82px;
+    }
+    .login-page .login-introduction {
+        margin: 14px 0 13px;
+    }
+    .login-page .login-introduction h1 {
+        font-size: 27px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .login-page *,
+    .login-page *::before,
+    .login-page *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+    }
 }
 @media (prefers-reduced-motion: reduce) {
     .adventure-dashboard-page main { background-attachment: scroll; background-position: center top; }
@@ -6512,4 +6779,156 @@ body.adventure-book-page .content.adventure-book-content {
     .adventure-story-page .adventure-photo-masonry .journal-photo{max-width:100%}
     .journal-story-page .journal-view-photos .journal-photo img,
     .adventure-story-page .adventure-photo-masonry .journal-photo img{max-width:100%;max-height:none}
+}
+
+/* Contacts page: compact table over one continuous antenna-array watermark. */
+body.contacts-page main {
+    min-height: calc(100vh - 120px);
+    background-color: #e8e0d3;
+    background-image: url("../images/contacts-pencil-background.png");
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-attachment: fixed;
+}
+body.contacts-page .adventure-contacts-page {
+    box-sizing: border-box;
+    width: min(1180px, calc(100% - 28px));
+    max-width: none;
+    margin: 18px auto 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.contacts-page .contacts-summary-panel {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 12px 16px;
+    border: 1px solid rgba(69, 59, 46, .38);
+    border-radius: 10px 10px 0 0;
+    background: rgba(255, 248, 235, .43);
+    color: #17251e;
+}
+.contacts-page .contacts-summary-panel h1 { margin: 0; color: #173c2e; font-size: clamp(1.7rem, 3vw, 2.25rem); line-height: 1.05; }
+.contacts-page .contacts-summary-panel .section-kicker { margin: 0 0 2px; }
+.contacts-page .contacts-summary-meta { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 7px 0 0; }
+.contacts-page .contacts-summary-meta div { display: flex; align-items: baseline; gap: 6px; }
+.contacts-page .contacts-summary-meta dt { color: #33483d; font-size: .82rem; font-weight: 800; }
+.contacts-page .contacts-summary-meta dd { margin: 0; color: #17251e; font-weight: 750; }
+.contacts-page .contacts-summary-meta a { color: #0645ad; text-decoration: underline; text-underline-offset: 2px; }
+.contacts-page .contacts-summary-panel .back-link-button { flex: 0 0 auto; margin: 2px 0 0; }
+.contacts-page .contacts-action-bar {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 42px;
+    padding: 5px 12px;
+    border-inline: 1px solid rgba(69, 59, 46, .38);
+    border-top: 1px solid rgba(69, 59, 46, .25);
+    background: rgba(255, 248, 235, .90);
+}
+.contacts-page .contacts-action-bar > a,
+.contacts-page .contacts-action-disabled,
+.contacts-page .contacts-add-menu > summary {
+    display: inline-flex;
+    min-height: 32px;
+    box-sizing: border-box;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: #173c2e;
+    font-weight: 850;
+    line-height: 1.1;
+    text-decoration: none;
+    cursor: pointer;
+}
+.contacts-page .contacts-action-disabled { cursor: not-allowed; opacity: .62; }
+.contacts-page .contacts-action-bar > a:hover,
+.contacts-page .contacts-action-bar > a:focus-visible,
+.contacts-page .contacts-add-menu > summary:hover,
+.contacts-page .contacts-add-menu > summary:focus-visible { background: #fff; outline: 2px solid #dc6b27; outline-offset: -2px; }
+.contacts-page .contacts-add-menu { position: relative; }
+.contacts-page .contacts-add-menu > summary { list-style: none; }
+.contacts-page .contacts-add-menu > summary::-webkit-details-marker { display: none; }
+.contacts-page .contacts-add-menu > summary::after { margin-left: 6px; content: "▾"; font-size: .75em; }
+.contacts-page .contacts-add-menu-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: min(330px, calc(100vw - 48px));
+    padding: 9px;
+    border: 1px solid #8f887d;
+    border-radius: 7px;
+    background: #fffaf0;
+    box-shadow: 0 8px 22px rgba(32, 27, 21, .22);
+}
+.contacts-page .contacts-add-menu-panel p { margin: 0 0 6px; font-size: .82rem; }
+.contacts-page .contacts-add-menu-panel a { display: flex; justify-content: space-between; gap: 12px; padding: 6px 7px; color: #173c2e; font-weight: 750; text-decoration: none; }
+.contacts-page .contacts-add-menu-panel a:hover,
+.contacts-page .contacts-add-menu-panel a:focus-visible { background: #ece4d5; outline: 2px solid #dc6b27; }
+.contacts-page .contacts-filter-panel {
+    display: grid;
+    grid-template-columns: minmax(260px, 2fr) minmax(125px, .7fr) minmax(125px, .7fr) auto auto 1fr;
+    align-items: end;
+    gap: 8px;
+    padding: 8px 12px;
+    border-inline: 1px solid rgba(69, 59, 46, .38);
+    border-top: 1px solid rgba(69, 59, 46, .25);
+    background: rgba(255, 248, 235, .55);
+}
+.contacts-page .contacts-filter-panel label { display: grid; gap: 2px; margin: 0; color: #17251e; font-size: .78rem; font-weight: 850; line-height: 1.1; }
+.contacts-page .contacts-filter-panel input,
+.contacts-page .contacts-filter-panel select { width: 100%; min-width: 0; min-height: 34px; box-sizing: border-box; padding: 4px 7px; background: #fff; color: #17251e; font-size: .92rem; }
+.contacts-page .contacts-filter-panel button { min-height: 34px; margin: 0; padding: 5px 11px; }
+.contacts-page .contacts-filter-clear { min-height: 34px; display: inline-flex; align-items: center; color: #173c2e; font-weight: 800; }
+.contacts-page .contacts-filter-count { align-self: center; justify-self: end; color: #263b30; font-size: .86rem; font-weight: 800; }
+.contacts-page .contacts-table-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 27px;
+    min-height: 0;
+    border: 1px solid rgba(69, 59, 46, .5);
+    border-radius: 0 0 9px 9px;
+    overflow: hidden;
+    background: transparent;
+}
+.contacts-page .contacts-table-scroll { max-height: min(52vh, 430px); overflow: auto; scrollbar-width: none; }
+.contacts-page .contacts-table-scroll::-webkit-scrollbar { display: none; }
+.contacts-page .contacts-compact-table { width: 100%; min-width: 700px; border-collapse: collapse; table-layout: fixed; color: #14231b; }
+.contacts-page .contacts-compact-table th { position: sticky; top: 0; z-index: 2; padding: 7px 10px; border-right: 1px solid rgba(255,255,255,.16); background: #173c2e; color: #fff; font-size: .84rem; line-height: 1.1; text-align: left; }
+.contacts-page .contacts-compact-table th:nth-child(1) { width: 120px; }
+.contacts-page .contacts-compact-table th:nth-child(2) { width: 150px; }
+.contacts-page .contacts-compact-table th:nth-child(3),
+.contacts-page .contacts-compact-table th:nth-child(4) { width: 90px; }
+.contacts-page .contacts-compact-table th:nth-child(5) { width: 145px; }
+.contacts-page .contacts-compact-table tbody tr { background: rgba(255, 248, 235, .56); }
+.contacts-page .contacts-compact-table tbody tr:hover,
+.contacts-page .contacts-compact-table tbody tr:focus-within { background: rgba(255, 252, 244, .84); }
+.contacts-page .contacts-compact-table td { height: 36px; box-sizing: border-box; padding: 3px 10px; border-bottom: 1px solid rgba(67, 59, 47, .38); overflow: hidden; font-size: .94rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.contacts-page .contacts-compact-table .contacts-table-empty { height: 54px; text-align: center; white-space: normal; }
+.contacts-page .contacts-table-scroll-controls { display: flex; min-height: 0; flex-direction: column; border-left: 1px solid #b8aea0; background: rgba(238, 231, 220, .94); }
+.contacts-page .contacts-table-scroll-controls button { width: 26px; min-width: 26px; height: 28px; min-height: 28px; padding: 0; border: 0; border-radius: 0; background: #244a39; color: #fff; font-size: .7rem; line-height: 1; cursor: pointer; }
+.contacts-page .contacts-table-scroll-controls button:hover,
+.contacts-page .contacts-table-scroll-controls button:focus-visible { background: #173c2e; outline: 2px solid #dc6b27; outline-offset: -2px; }
+.contacts-page .contacts-table-scroll-controls button:disabled { background: #7f8a84; cursor: default; opacity: .72; }
+.contacts-page .contacts-table-scroll-controls input[type="range"] { width: 26px; min-height: 70px; flex: 1 1 auto; margin: 2px 0; padding: 0 8px; accent-color: #315f49; cursor: ns-resize; direction: rtl; writing-mode: vertical-lr; }
+.contacts-page .contacts-table-scroll-controls input[type="range"]:disabled { cursor: default; opacity: .55; }
+@media (max-width: 800px) {
+    body.contacts-page main { background-attachment: scroll; }
+    .contacts-page .contacts-summary-panel { flex-direction: column; gap: 8px; }
+    .contacts-page .contacts-summary-meta { display: grid; gap: 3px; }
+    .contacts-page .contacts-filter-panel { grid-template-columns: minmax(0, 1fr) minmax(110px, .55fr); }
+    .contacts-page .contacts-filter-panel label:first-child { grid-column: 1 / -1; }
+    .contacts-page .contacts-filter-count { justify-self: start; }
+    .contacts-page .contacts-table-scroll { max-height: 420px; }
+}
+@media (max-width: 520px) {
+    body.contacts-page .adventure-contacts-page { width: calc(100% - 16px); margin-top: 8px; }
+    .contacts-page .contacts-action-bar { flex-wrap: wrap; }
+    .contacts-page .contacts-filter-panel { grid-template-columns: 1fr; }
+    .contacts-page .contacts-filter-panel label:first-child { grid-column: auto; }
 }

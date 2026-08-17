@@ -1207,8 +1207,8 @@ class MemberSignupDiscoverabilityTests(TestCase):
 
     def test_login_page_uses_consistent_primary_action(self):
         response = self.client.get(reverse("login"))
-        self.assertContains(response, "<h1>Log In</h1>")
-        self.assertContains(response, 'class="btn-ro-primary"')
+        self.assertContains(response, '<h1 id="login-heading">Sign In</h1>')
+        self.assertContains(response, 'class="btn-ro-primary login-submit"')
 
     def test_join_route_is_member_registration_not_follower_registration(self):
         response = self.client.get(reverse("register"))

@@ -360,7 +360,8 @@ class AddAdventureWorkflowTests(TestCase):
 
         detail = self.client.get(adventure.get_absolute_url())
         self.assertContains(detail, '/static/images/hero.jpg')
-        self.assertContains(detail, '<span>0 total</span>', html=True)
+        self.assertNotContains(detail, '<span>0 total</span>', html=True)
+        self.assertContains(detail, "View All Journals")
         self.assertContains(detail, "No contacts have been recorded")
         self.assertContains(detail, "No photos have been added")
         self.assertEqual(
@@ -830,14 +831,14 @@ class AddAdventureWorkflowTests(TestCase):
         self.assertNotContains(detail_response, long_body)
         self.assertContains(detail_response, "Keep Lessons Learned separate.")
         self.assertNotContains(detail_response, 'class="adventure-story-stats"')
-        self.assertContains(detail_response, "11 total")
-        self.assertContains(detail_response, "Show All Journals")
+        self.assertNotContains(detail_response, "11 total")
+        self.assertContains(detail_response, "View All Journals")
         self.assertContains(detail_response, reverse("adventure_journals", args=[adventure.slug]))
         self.assertContains(detail_response, "Photos are stored in Journals")
         self.assertNotContains(detail_response, "embedded-detail-map-layout adventure-journal-map-layout")
         self.assertContains(detail_response, "1 photo")
         self.assertContains(detail_response, 'class="adventure-photo-strip"')
-        self.assertContains(detail_response, "<dt>Photos</dt><dd>1</dd>", html=True)
+        self.assertNotContains(detail_response, "<dt>Photos</dt><dd>1</dd>", html=True)
 
         all_journals = self.client.get(reverse("adventure_journals", args=[adventure.slug]))
         self.assertContains(all_journals, "Journal title", count=10)

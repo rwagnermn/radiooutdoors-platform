@@ -2,21 +2,14 @@
 {% if dashboard_layout %}
 <div class="adventure-journal-card-list">
 {% for entry in journal_entries %}
-  <article class="adventure-journal-row">
-    <div class="adventure-journal-row-main">
-      <a class="adventure-journal-row-title" href="{% url 'journal_entry_detail' entry.pk %}">{{ entry.title|default:"Journal Entry" }}</a>
-      <div class="adventure-journal-row-meta">
-        <time datetime="{{ entry.entry_at|date:'Y-m-d' }}">{{ entry.entry_at|date:"M j, Y" }}</time>
-        <span>{% if entry.location and entry.can_view_location %}{{ entry.location.name }}{% elif entry.location %}Private Location{% else %}Location not specified{% endif %}</span>
-        <span class="journal-status-badge journal-status-{{ entry.display_status_key }}">{{ entry.display_status_label }}</span>
-        {% if entry.is_public %}<span class="visibility-badge">Public</span>{% elif manage_journals %}<span class="visibility-badge">Private</span>{% endif %}
-      </div>
-    </div>
-    <dl class="adventure-journal-row-counts">
-      <div><dt>Contacts</dt><dd>{{ entry.dashboard_contact_count }}</dd></div>
-      <div><dt>Photos</dt><dd>{{ entry.dashboard_photo_count }}</dd></div>
-    </dl>
-    {% if manage_journals %}<details class="ro-action-menu adventure-journal-row-menu"><summary aria-label="Actions for {{ entry.title|default:'Journal Entry' }}" aria-expanded="false">•••</summary><div class="ro-action-menu-panel"><a href="{% url 'edit_journal_entry' entry.pk %}">Edit Journal</a><form method="post" action="{% url 'delete_journal_entry' entry.pk %}" onsubmit="return confirm('Delete this Journal Entry, its photos, and imported contacts?');">{% csrf_token %}<button type="submit" class="danger-menu-item">Delete Journal</button></form></div></details>{% endif %}
+  <article class="adventure-journal-row" data-journal-url="{% url 'journal_entry_detail' entry.pk %}">
+    <time class="adventure-journal-row-date" datetime="{{ entry.entry_at|date:'Y-m-d' }}">{{ entry.entry_at|date:"M j, Y" }}</time>
+    <a class="adventure-journal-row-title" href="{% url 'journal_entry_detail' entry.pk %}">{{ entry.title|default:"Journal Entry" }}</a>
+    <span class="adventure-journal-row-location">{% if entry.location and entry.can_view_location %}{{ entry.location.name }}{% elif entry.location %}Private Location{% else %}—{% endif %}</span>
+    <span class="adventure-journal-row-count adventure-journal-row-photos">{{ entry.dashboard_photo_count|default:0 }}</span>
+    <span class="adventure-journal-row-count adventure-journal-row-contacts">{{ entry.dashboard_contact_count|default:0 }}</span>
+    <span class="adventure-journal-row-status"><span class="journal-status-badge journal-status-{{ entry.display_status_key }}">{{ entry.display_status_label }}</span></span>
+    <a class="adventure-journal-row-chevron" href="{% url 'journal_entry_detail' entry.pk %}" aria-label="Open {{ entry.title|default:'Journal Entry' }}"><span aria-hidden="true">›</span></a>
   </article>
 {% endfor %}
 </div>

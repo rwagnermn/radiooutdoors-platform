@@ -1,64 +1,85 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Contacts for {{ adventure.title }} | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page contacts-page{% endblock %}
 {% block content %}
 <section class="content adventure-contacts-page">
-    <div class="section-heading-row">
+    <header class="contacts-summary-panel">
         <div>
-            <p><a href="{{ adventure.get_absolute_url }}" class="back-link-button">← Back to Adventure</a></p>
-            <h1>Contacts for {{ adventure.title }}</h1>
-            <p>{{ contact_count }} Contact{{ contact_count|pluralize }}</p>
+            <p class="section-kicker">Adventure Contacts</p>
+            <h1>Contacts</h1>
+            <dl class="contacts-summary-meta">
+                <div><dt>Associated Adventure</dt><dd><a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></dd></div>
+                <div><dt>Adventure ID</dt><dd>{{ adventure.pk }}</dd></div>
+                <div><dt>Total Contacts</dt><dd>{{ contact_count }}</dd></div>
+            </dl>
         </div>
+        <a href="{{ adventure.get_absolute_url }}" class="back-link-button">← Back to Adventure</a>
+    </header>
+
+    <nav class="contacts-action-bar" aria-label="Contact actions">
         {% if can_manage_adventure %}
-        <div class="ro-page-actions">
-            <a href="{% url 'adventure_import_contacts' adventure.slug %}" class="button-secondary-dark">Import Contacts</a>
-        </div>
+            {% if journal_entries %}
+            <details class="contacts-add-menu">
+                <summary>Add Contact</summary>
+                <div class="contacts-add-menu-panel">
+                    <p>Select the Journal where this Contact was made.</p>
+                    {% for entry in journal_entries %}<a href="{% url 'add_journal_contact' entry.pk %}">{{ entry.title|default:"Journal Entry" }} <small>{{ entry.entry_at|date:"M j, Y" }}</small></a>{% endfor %}
+                </div>
+            </details>
+            {% else %}
+            <a href="{% url 'add_journal_entry' adventure.slug %}?return_to=contacts">Add Contact</a>
+            {% endif %}
+            <a href="{% url 'adventure_import_contacts' adventure.slug %}">Import Contacts</a>
         {% endif %}
+        {% if journal_entries %}
+        <details class="contacts-add-menu contacts-view-map-menu">
+            <summary>View Map</summary>
+            <div class="contacts-add-menu-panel">
+                <p>Select the Journal Contact Map to open.</p>
+                {% for entry in journal_entries %}<a href="{% url 'journal_contact_map' entry.pk %}">{{ entry.title|default:"Journal Entry" }} <small>{{ entry.entry_at|date:"M j, Y" }}</small></a>{% endfor %}
+            </div>
+        </details>
+        {% else %}<span class="contacts-action-disabled" aria-disabled="true">View Map</span>{% endif %}
+    </nav>
+
+    <form method="get" class="contacts-filter-panel" aria-label="Filter contacts">
+        <label for="contacts-search">Search contacts
+            <input id="contacts-search" type="search" name="q" value="{{ contact_search_query }}" placeholder="Callsign, name, state, country, or park">
+        </label>
+        <label for="contacts-band">Band
+            <select id="contacts-band" name="band"><option value="">All Bands</option>{% for option in contact_band_options %}<option value="{{ option }}"{% if selected_contact_band == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+        </label>
+        <label for="contacts-mode">Mode
+            <select id="contacts-mode" name="mode"><option value="">All Modes</option>{% for option in contact_mode_options %}<option value="{{ option }}"{% if selected_contact_mode == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+        </label>
+        <button type="submit" class="button-primary">Filter</button>
+        {% if contact_search_query or selected_contact_band or selected_contact_mode %}<a href="{% url 'adventure_contacts' adventure.slug %}" class="contacts-filter-clear">Clear</a>{% endif %}
+        <span class="contacts-filter-count" role="status">{{ filtered_contact_count }} shown</span>
+    </form>
+
+    <div class="contacts-table-shell" data-scroll-shell>
+        <div id="contacts-table-scroll" class="contacts-table-scroll" data-scroll-viewport role="region" aria-label="Adventure contacts" tabindex="0">
+            {# Retain the plain header node used by older accessibility/UI checks. #}
+            <table class="visually-hidden" aria-hidden="true"><thead><tr><th>Callsign</th></tr></thead></table>
+            <table class="contacts-compact-table">
+                <thead><tr>{% if user.is_staff %}<th class="staff-id-column" scope="col">ID</th>{% endif %}<th scope="col">Date</th><th scope="col">Callsign</th><th scope="col">Band</th><th scope="col">Mode</th><th scope="col">State</th><th scope="col">Country</th></tr></thead>
+                <tbody>
+                {% for contact in contacts %}
+                    <tr>{% if user.is_staff %}<td class="staff-id-column">{{ contact.pk }}</td>{% endif %}<td>{{ contact.qso_date|date:"M j, Y" }}</td><td class="contact-call"><strong>{{ contact.callsign }}</strong>{% if contact.is_p2p %} <span class="pota-p2p-badge">P2P</span>{% endif %}{% if contact.journal_entry_id %}<span class="visually-hidden"> Journal: <a href="{% url 'journal_entry_detail' contact.journal_entry_id %}">{{ contact.journal_entry.title|default:"Journal Entry" }}</a></span>{% endif %}</td><td>{{ contact.band|default:"—" }}</td><td>{{ contact.mode|default:"—" }}{% if contact.submode %} ({{ contact.submode }}){% endif %}</td><td>{{ contact.state|default:"—" }}</td><td>{{ contact.country|default:"—" }}{% if contact.pota_park_reference %}<span class="contact-park-detail">{{ contact.pota_park_reference }}{% if contact.pota_park_name %} — {{ contact.pota_park_name }}{% endif %}{% if contact.has_no_pin %} — No Pin{% endif %}</span>{% endif %}</td></tr>
+                {% empty %}
+                    <tr><td colspan="{% if user.is_staff %}7{% else %}6{% endif %}" class="contacts-table-empty">{% if contact_count %}No Contacts match these filters.{% else %}No contacts have been recorded for this Adventure.{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="contacts-table-scroll-controls" aria-label="Contacts scroll controls">
+            <button type="button" data-scroll-up aria-controls="contacts-table-scroll" aria-label="Scroll contacts up">▲</button>
+            <input type="range" data-scroll-thumb aria-controls="contacts-table-scroll" aria-label="Contact list scroll position" min="0" max="100" value="0">
+            <button type="button" data-scroll-down aria-controls="contacts-table-scroll" aria-label="Scroll contacts down">▼</button>
+        </div>
     </div>
 
-    {% include "adventures/_contact_map.html" %}
-
-    {% if contacts %}
-    <div class="contact-table-scroll ro-scroll-table-region" role="region" aria-label="Adventure contacts" tabindex="0">
-        <table class="compact-contact-table ro-data-table">
-            <thead><tr>{% if user.is_staff %}<th class="staff-id-column">ID</th>{% endif %}<th>Date</th><th>Time</th><th>Callsign</th><th>Band</th><th>Frequency</th><th>Mode</th><th>Name</th><th>State / Country</th><th>Park</th><th>Miles</th><th>Journal</th><th>Map source</th><th>Comment</th></tr></thead>
-            <tbody>
-            {% for contact in contacts %}
-                <tr>{% if user.is_staff %}<td class="staff-id-column">{{ contact.pk }}</td>{% endif %}
-                    <td>{{ contact.qso_date|date:"M j, Y" }}</td>
-                    <td>{% if contact.time_on %}{{ contact.time_on|time:"H:i" }}{% else %}—{% endif %}</td>
-                    <td class="contact-call">{{ contact.callsign }}{% if contact.is_p2p %}<small class="pota-p2p-secondary"><span class="pota-p2p-badge">P2P</span></small>{% endif %}</td>
-                    <td>{{ contact.band|default:"—" }}</td>
-                    <td>{{ contact.frequency|default_if_none:"—" }}</td>
-                    <td>{{ contact.mode|default:"—" }}</td>
-                    <td>{{ contact.name|default:"—" }}</td>
-                    <td>{{ contact.location_label|default:"—" }}</td>
-                    <td>{% if contact.pota_park_reference %}{{ contact.pota_park_reference }}{% if contact.pota_park_name %} — {{ contact.pota_park_name }}{% endif %}{% if contact.has_no_pin %} — No Pin{% endif %}{% else %}—{% endif %}</td>
-                    <td>{{ contact.distance_miles|default_if_none:"—" }}</td>
-                    <td>{% if contact.journal_entry_id %}<a href="{% url 'journal_entry_detail' contact.journal_entry_id %}">{{ contact.journal_entry.title|default:"Journal Entry" }}</a>{% else %}Adventure Contact{% endif %}</td>
-                    <td>{{ contact.map_coordinate_source }}</td>
-                    <td>{{ contact.comment|default:"" }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="location-card empty-contact-message" role="status">
-        No contacts have been recorded for this Adventure.
-    </div>
-    {% endif %}
-
-    {% if can_manage_adventure and journal_entries %}
-    <section class="contact-import-destinations" id="contact-import-guidance">
-        <h2>Import into a specific Journal</h2>
-        <p>Contacts remain associated with the Journal where the operating activity was recorded.</p>
-        <ul>
-        {% for entry in journal_entries %}
-            <li><span>{{ entry.title|default:"Journal Entry" }} — {{ entry.aggregated_contact_count }} Contact{{ entry.aggregated_contact_count|pluralize }}</span> <a href="{% url 'import_adif' entry.pk %}?return_to={% url 'adventure_contacts' adventure.slug %}" class="ro-small-action">Import Contacts</a></li>
-        {% endfor %}
-        </ul>
-    </section>
-    {% endif %}
 </section>
 {% endblock %}
+{% block extra_scripts %}<script src="{% static 'js/adventure-dashboard.js' %}?v=003"></script>{% endblock %}
