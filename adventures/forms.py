@@ -2,12 +2,16 @@ from django import forms
 from django.core.files.uploadedfile import UploadedFile
 from django.db.models import Q
 from django.db.models.functions import Lower
+from decimal import Decimal
 from PIL import Image, UnidentifiedImageError
 
 from core.models import Adventure, Comment, JournalContact, JournalEntry, Location, LocationType as LocationTypeRecord, OperatingLocation
 from core.profile_images import MAX_PROFILE_PHOTO_BYTES, optimize_location_photo
 from core.photo_moderation import validate_image_file
 from core.location_privacy import visible_locations
+
+from .adif_parser import normalize_maidenhead_grid
+from .contact_geography import verified_geography
 
 
 class AdventureLocationChoiceField(forms.ModelChoiceField):
@@ -553,26 +557,179 @@ class CommentForm(forms.ModelForm):
         }
 
 
+class RequiredHeadingSelect(forms.Select):
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        if value == "":
+            option["attrs"]["disabled"] = True
+        return option
+
+
+JOURNAL_CONTACT_BAND_CHOICES = (
+    ("", "Band"),
+    ("1.25M", "1.25 Meters"),
+    ("2M", "2 Meters"),
+    ("6M", "6 Meters"),
+    ("10M", "10 Meters"),
+    ("12M", "12 Meters"),
+    ("15M", "15 Meters"),
+    ("17M", "17 Meters"),
+    ("20M", "20 Meters"),
+    ("30M", "30 Meters"),
+    ("40M", "40 Meters"),
+    ("60M", "60 Meters"),
+    ("80M", "80 Meters"),
+    ("160M", "160 Meters"),
+    ("630M", "630 Meters"),
+    ("2200M", "2,200 Meters"),
+)
+
+JOURNAL_CONTACT_MODE_CHOICES = (
+    ("", "Mode"),
+    ("AM", "AM"),
+    ("FM", "FM"),
+    ("SSB", "SSB"),
+    ("CW", "CW"),
+    ("FT8", "FT8"),
+    ("FT4", "FT4"),
+    ("JS8", "JS8"),
+    ("RTTY", "RTTY"),
+    ("PSK31", "PSK31"),
+    ("APRS", "APRS"),
+    ("DMR", "DMR"),
+    ("D-STAR", "D-STAR"),
+    ("FUSION", "FUSION"),
+)
+
+
 class JournalContactForm(forms.ModelForm):
+    BAND_CHOICES = JOURNAL_CONTACT_BAND_CHOICES
+    MODE_CHOICES = JOURNAL_CONTACT_MODE_CHOICES
+
+    qso_date = forms.DateField(required=True, label="Date", widget=forms.DateInput(attrs={"type": "date"}))
+    time_on = forms.TimeField(required=True, label="Time", widget=forms.TimeInput(attrs={"type": "time"}))
+    band = forms.ChoiceField(required=True, choices=BAND_CHOICES, widget=RequiredHeadingSelect())
+    mode = forms.ChoiceField(required=True, choices=MODE_CHOICES, widget=RequiredHeadingSelect())
+    frequency = forms.DecimalField(required=True, max_digits=12, decimal_places=6)
+    signal_report = forms.RegexField(
+        required=False,
+        regex=r"^\d{1,2}$",
+        max_length=2,
+        label="Signal Report",
+        error_messages={"invalid": "Enter a signal report of one or two digits."},
+        widget=forms.TextInput(attrs={"maxlength": "2", "size": "2", "inputmode": "numeric", "pattern": "[0-9]{1,2}"}),
+    )
+
     class Meta:
         model = JournalContact
         fields = ["qso_date", "time_on", "callsign", "band", "mode", "frequency", "signal_report", "comment", "pota_park_reference", "pota_park_name"]
         labels = {
-            "qso_date": "Date", "time_on": "Time", "callsign": "Worked callsign",
+            "qso_date": "Date", "time_on": "Time", "callsign": "Callsign",
             "comment": "Notes", "pota_park_reference": "POTA park reference",
             "pota_park_name": "POTA park name",
         }
         widgets = {
-            "qso_date": forms.DateInput(attrs={"type": "date"}),
-            "time_on": forms.TimeInput(attrs={"type": "time"}),
-            "comment": forms.Textarea(attrs={"rows": 4}),
+            "comment": forms.Textarea(attrs={"rows": 1}),
+            "pota_park_reference": forms.HiddenInput(),
+            "pota_park_name": forms.HiddenInput(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["band"].choices[0] = ("", "Band")
+        self.fields["mode"].choices[0] = ("", "Mode")
+        self.fields["band"].widget.choices = self.fields["band"].choices
+        self.fields["mode"].widget.choices = self.fields["mode"].choices
 
     def clean_callsign(self):
         return self.cleaned_data["callsign"].strip().upper()
 
     def clean_pota_park_reference(self):
         return self.cleaned_data["pota_park_reference"].strip().upper()
+
+
+class BatchJournalContactForm(forms.Form):
+    qso_date = forms.DateField(required=True)
+    time_on = forms.TimeField(required=True)
+    callsign = forms.CharField(required=True, max_length=32)
+    band = forms.ChoiceField(required=True, choices=JOURNAL_CONTACT_BAND_CHOICES)
+    frequency = forms.RegexField(
+        required=True,
+        regex=r"^\d+(?:\.\d+)?$",
+        max_length=7,
+        error_messages={"invalid": "Enter a Frequency using no more than seven digits and one decimal point."},
+    )
+    mode = forms.ChoiceField(required=True, choices=JOURNAL_CONTACT_MODE_CHOICES)
+    signal_report = forms.RegexField(
+        required=False,
+        regex=r"^\d{1,2}$",
+        max_length=2,
+        error_messages={"invalid": "Enter a signal report of one or two digits."},
+    )
+    state = forms.CharField(required=False, max_length=2)
+    country = forms.CharField(required=False, max_length=120)
+    comment = forms.CharField(required=False, widget=forms.Textarea)
+    grid_square = forms.CharField(required=False, max_length=8)
+    latitude = forms.DecimalField(
+        required=False,
+        max_digits=9,
+        decimal_places=6,
+        min_value=Decimal("-90"),
+        max_value=Decimal("90"),
+    )
+    longitude = forms.DecimalField(
+        required=False,
+        max_digits=9,
+        decimal_places=6,
+        min_value=Decimal("-180"),
+        max_value=Decimal("180"),
+    )
+    geography_token = forms.CharField(required=False)
+
+    def clean_callsign(self):
+        return self.cleaned_data["callsign"].strip().upper()
+
+    def clean_grid_square(self):
+        value = self.cleaned_data["grid_square"].strip()
+        if not value:
+            return ""
+        normalized = normalize_maidenhead_grid(value)
+        if not normalized:
+            raise forms.ValidationError(
+                "Enter a valid four-, six-, or eight-character Maidenhead grid."
+            )
+        return normalized
+
+    def clean(self):
+        cleaned = super().clean()
+        grid_square = cleaned.get("grid_square", "")
+        latitude = cleaned.get("latitude")
+        longitude = cleaned.get("longitude")
+        token = cleaned.get("geography_token", "")
+        geography_supplied = bool(
+            grid_square or latitude is not None or longitude is not None or token
+        )
+        if not geography_supplied:
+            return cleaned
+        if (latitude is None) != (longitude is None):
+            raise forms.ValidationError(
+                "QRZ geography must include both latitude and longitude."
+            )
+        geography = verified_geography(
+            cleaned.get("callsign", ""),
+            grid_square,
+            latitude,
+            longitude,
+            token,
+        )
+        if geography is None:
+            raise forms.ValidationError(
+                "QRZ geography could not be verified. Leave and re-enter the Callsign to look it up again."
+            )
+        cleaned["grid_square"] = geography.grid_square
+        cleaned["latitude"] = geography.latitude
+        cleaned["longitude"] = geography.longitude
+        return cleaned
 
 
 class AdifImportForm(forms.Form):

@@ -1,3 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Add Contact | Radio Outdoors{% endblock %}
-{% block content %}<section class="content narrow-content"><p><a class="back-link-button" href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal</a></p><h1>Add Contact</h1><p>Add a Contact to <strong>{{ entry.title|default:"Journal Entry" }}</strong> in {{ adventure.title }}.</p><form method="post" class="stacked-form">{% csrf_token %}{{ form.as_p }}<button class="button-primary" type="submit">Add Contact</button> <a class="button-secondary-dark" href="{% url 'journal_entry_detail' entry.pk %}">Cancel</a></form></section>{% endblock %}
+{% load static %}
+{% block title %}Add Contacts | Radio Outdoors{% endblock %}
+{% block body_class %}add-contacts-batch-page{% endblock %}
+{% block site_header %}{% endblock %}
+{% block site_footer %}{% endblock %}
+{% block content %}
+<section class="add-contacts-batch-shell" data-batch-limit="{{ batch_limit }}" data-warning-at="{{ batch_warning_at }}" data-qrz-url="{% url 'qrz_contact_lookup' entry.pk %}" data-default-date="{{ batch_default_date }}" data-default-time="{{ batch_default_time }}">
+  <div class="add-contacts-batch-panel">
+    <header class="add-contacts-batch-heading">
+      <div><h1>Add Contacts</h1><p><strong>{{ adventure.title }} — {{ entry.title|default:"Journal Entry" }}</strong></p></div>
+      <div class="add-contacts-batch-heading-actions"><span data-contact-count>0 unsaved contacts</span><button type="button" class="button-primary add-contacts-save" data-save-all>Save All Contacts</button></div>
+    </header>
+    <p class="add-contacts-instructions"><em>Press Enter to add this row</em> <span aria-hidden="true">•</span> Click any cell below to edit</p>
+    {% if batch_errors %}<div class="add-contacts-errors" role="alert"><strong>Please correct the batch:</strong><ul>{% for error in batch_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+    <div class="add-contacts-errors" data-client-errors hidden role="alert"></div>
+    <form method="post" class="add-contacts-batch-form" data-batch-form>
+      {% csrf_token %}<input type="hidden" name="contacts_json" value="" data-contacts-json>
+      <div class="add-contacts-table-scroll"><table class="add-contacts-table">
+        <thead><tr><th>Date</th><th>Time</th><th>Callsign</th><th>Band</th><th>Frequency</th><th>Mode</th><th>Signal</th><th>State</th><th>Country</th><th>Notes</th></tr></thead>
+        <tbody data-contact-rows>
+          <tr class="add-contacts-active-row" data-active-row>
+            <td><input type="date" data-field="qso_date" required value="{{ batch_default_date }}" aria-label="Date"></td>
+            <td><input type="time" data-field="time_on" required value="{{ batch_default_time }}" aria-label="Time"></td>
+            <td><input type="text" data-field="callsign" maxlength="32" required autocomplete="off" aria-label="Callsign"></td>
+            <td><select data-field="band" required aria-label="Band">{% for value, label in batch_band_choices %}<option value="{{ value }}"{% if value == batch_default_band %} selected{% endif %}{% if not value %} disabled{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+            <td><input type="text" data-field="frequency" maxlength="7" required inputmode="decimal" pattern="[0-9]+(?:\.[0-9]+)?" value="{{ batch_default_frequency }}" aria-label="Frequency"></td>
+            <td><select data-field="mode" required aria-label="Mode">{% for value, label in batch_mode_choices %}<option value="{{ value }}"{% if value == batch_default_mode %} selected{% endif %}{% if not value %} disabled{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+            <td><input type="text" data-field="signal_report" maxlength="2" size="2" inputmode="numeric" pattern="[0-9]{1,2}" aria-label="Signal"></td>
+            <td><input type="text" data-field="state" maxlength="2" size="2" aria-label="State"></td>
+            <td><input type="text" data-field="country" maxlength="120" aria-label="Country"></td>
+            <td class="add-contacts-notes-cell"><input type="text" data-field="comment" aria-label="Notes"><span class="add-contacts-enter" aria-hidden="true">↵</span></td>
+          </tr>
+        </tbody>
+      </table></div>
+      <div class="add-contacts-limit-warning" data-limit-warning hidden role="status"><strong>⚠</strong><span><b>Table nearly full</b> — Save all added contacts now</span></div>
+      <footer class="add-contacts-batch-footer"><button type="button" class="button-primary add-contacts-save" data-save-all>Save All Contacts</button><button type="button" class="add-contacts-discard" data-discard>Discard Unsaved</button></footer>
+    </form>
+  </div>
+</section>
+{{ batch_rows|json_script:"initial-contact-rows" }}
+{% endblock %}
+{% block extra_scripts %}<script src="{% static 'js/add-contact-batch.js' %}?v=004"></script>{% endblock %}

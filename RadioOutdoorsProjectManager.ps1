@@ -35,6 +35,62 @@ function Django($djangoArgs,[int]$timeout=120){$p=Py;if(!$p){return @{Exit=9001;
 function Log($m){Add-Content (Join-Path $LogDir ("manager-"+(Get-Date -Format "yyyyMMdd")+".log")) "[$(Get-Date -Format "yyyy-MM-dd HH:mm:ss")] $m"}
 function Status($state,$text,$detail=""){[pscustomobject]@{State=$state;Text=$text;Detail=$detail}}
 
+function Format-CommandStream($value){
+    if([string]::IsNullOrEmpty([string]$value)){'(empty)'}else{[string]$value}
+}
+
+function Invoke-StagedDiffValidation($stagedPaths){
+    $validationCommand='git diff --cached --check'
+    $validation=Run-Cmd $validationCommand 60
+    if($validation.Exit-eq0){
+        return [pscustomobject]@{Passed=$true;ValidationCommand=$validationCommand;Validation=$validation;ResetCommand=$null;Reset=$null;DialogText=$null}
+    }
+
+    $paths=@($stagedPaths)
+    $validationOut=Format-CommandStream $validation.Out
+    $validationErr=Format-CommandStream $validation.Err
+    # A mixed reset replaces only the index with HEAD. It leaves tracked and
+    # untracked working-tree content untouched.
+    $resetCommand='git reset --mixed'
+    $reset=Run-Cmd $resetCommand 60
+    $resetOut=Format-CommandStream $reset.Out
+    $resetErr=Format-CommandStream $reset.Err
+    $pathText=if($paths.Count){$paths-join"`r`n"}else{'(none)'}
+    $logText=@"
+Staged diff validation failed.
+Validation command: $validationCommand
+Validation exit code: $($validation.Exit)
+Validation stdout:
+$validationOut
+Validation stderr:
+$validationErr
+Staged paths ($($paths.Count)):
+$pathText
+Reset command: $resetCommand
+Reset exit code: $($reset.Exit)
+Reset stdout:
+$resetOut
+Reset stderr:
+$resetErr
+"@
+    Log $logText.TrimEnd()
+    $dialogText=@"
+Command: $validationCommand
+Exit code: $($validation.Exit)
+
+STDOUT:
+$validationOut
+
+STDERR:
+$validationErr
+
+Reset command: $resetCommand
+Reset exit code: $($reset.Exit)
+The reset only unstages files; working-tree contents are unchanged.
+"@
+    [pscustomobject]@{Passed=$false;ValidationCommand=$validationCommand;Validation=$validation;ResetCommand=$resetCommand;Reset=$reset;DialogText=$dialogText.TrimEnd()}
+}
+
 function GitBranch(){ $r=Run-Cmd "git branch --show-current" 20; if($r.Exit-eq0){Status ($(if($r.Out-eq"main"){"green"}else{"yellow"})) $r.Out "Expected main"}else{Status "red" "Git failed" $r.Err}}
 function Tree(){ $r=Run-Cmd "git status --porcelain" 30;if($r.Exit-ne0){return Status "red" "Git failed" $r.Err};if(!$r.Out){return Status "green" "Clean" "No uncommitted changes"};$lines=@($r.Out -split "`r?`n"|?{$_});$conflicts=@($lines|?{$_ -match '^(DD|AU|UD|UA|DU|AA|UU) '});if($conflicts.Count){return Status "red" "$($conflicts.Count) merge conflict(s)" ($conflicts-join"`r`n")};Status "yellow" "$($lines.Count) changed/new" ($lines-join"`r`n")}
 function Sync(){ $f=Run-Cmd "git fetch --quiet origin" 45;if($f.Exit-ne0){return Status "yellow" "Fetch unavailable" $f.Err};$r=Run-Cmd "git rev-list --left-right --count HEAD...origin/main" 20;if($r.Exit-ne0){return Status "yellow" "Unknown" $r.Err};$x=$r.Out -split '\s+';$a=[int]$x[0];$b=[int]$x[1];$s=if($b-gt0){"red"}elseif($a-gt0){"yellow"}else{"green"};Status $s "Ahead $a / Behind $b" "origin/main"}
@@ -251,6 +307,7 @@ function Get-CheckpointPath($statusLine){
 function Get-CheckpointExclusionReason($path){
     $p=$path.Replace('\','/')
     $leaf=[IO.Path]::GetFileName($p)
+    if([IO.Path]::IsPathRooted($p) -or $p -match '(^|/)\.\.(/|$)'){return 'rooted path or path-traversal attempt'}
     if($leaf -match '(?i)\.bak$'){return 'backup file (*.bak)'}
     if($leaf -match '(?i)^RO-.*\.ps1$'){return 'local RO tool script'}
     if($leaf -match '(?i)^RO-.*\.zip$'){return 'local RO archive'}
@@ -272,7 +329,8 @@ function Test-IntentionalCheckpointPath($path){
     # This is intentionally an exact repository-relative match. Do not broaden
     # this to every dotfile or to nested .gitignore files.
     if([string]::Equals($p,'.gitignore',[StringComparison]::OrdinalIgnoreCase)){return $true}
-    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','RadioOutdoorsProjectManager-corrective-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
+    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','RadioOutdoorsProjectManager-corrective-tests.ps1','RadioOutdoorsProjectManager-staged-diff-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
+    if($p -match '^static/images/.+' -and $leaf -match '(?i)\.(png|jpg|jpeg|gif|webp|svg)$'){return $true}
     if($p -notmatch '^(adventures|backend|core|static|templates|docs|tools)/'){return $false}
     return ($leaf -match '(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$')
 }
@@ -421,7 +479,8 @@ function Checkpoint([bool]$quick=$false){
     }
     Log "Staged-set verification passed: $($verified.Staged.Count) paths exactly match the approved list"
     $sec=Secrets;if($sec.State-eq"red"){Run-Cmd "git reset" 30|Out-Null;[Windows.Forms.MessageBox]::Show($sec.Detail+"`r`n`r`nStaging reset.","DO NOT PUSH")|Out-Null;return}
-    $x=Run-Cmd "git diff --cached --check" 60;if($x.Exit-ne0){Run-Cmd "git reset" 30|Out-Null;[Windows.Forms.MessageBox]::Show("Staged diff check failed; staging reset.")|Out-Null;return}
+    $stagedDiff=Invoke-StagedDiffValidation $verified.Staged
+    if(!$stagedDiff.Passed){[Windows.Forms.MessageBox]::Show($stagedDiff.DialogText,"Staged Diff Check Failed")|Out-Null;return}
     $msg="Radio Outdoors checkpoint - "+(Get-Date -Format "yyyy-MM-dd HH:mm")
     $c=Run-Cmd "git commit -m `"$msg`"" 180;if($c.Exit-ne0){[Windows.Forms.MessageBox]::Show(($c.Out+"`r`n"+$c.Err),"Commit Failed")|Out-Null;return}
     $p=Run-Cmd "git push origin main" 300;if($p.Exit-ne0){[Windows.Forms.MessageBox]::Show(($p.Out+"`r`n"+$p.Err),"Push Failed")|Out-Null;return}

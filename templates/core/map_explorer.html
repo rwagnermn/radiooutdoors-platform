@@ -34,6 +34,11 @@
                 <input type="checkbox" id="show-open-pins" checked>
                 Active Adventures
             </label>
+
+            <label>
+                <input type="checkbox" id="show-contact-pins" checked>
+                Contacts
+            </label>
         </fieldset>
 
         <div class="radio-map-legend" aria-label="Map Legend">
@@ -42,6 +47,7 @@
                 <span><i class="map-legend-pin map-legend-pin-green" aria-hidden="true"><b>L</b></i>Location</span>
                 <span><i class="map-legend-pin map-legend-pin-red" aria-hidden="true"><b>!</b></i>Operating advisory</span>
                 <span><i class="map-legend-pin map-legend-pin-yellow" aria-hidden="true"><b>ACTIVE</b></i>Active Adventure</span>
+                <span><i class="map-legend-pin map-legend-pin-blue" aria-hidden="true"><b>C</b></i>Contact</span>
             </div>
             <p>Red advisory pins take precedence when an Active Adventure is also present.</p>
         </div>
@@ -101,6 +107,7 @@
     {% endif %}
 
     {{ map_points|json_script:"radio-outdoors-map-data" }}
+    {{ contact_points|json_script:"radio-outdoors-contact-map-data" }}
 
 </section>
 
@@ -191,6 +198,12 @@ async function initRadioOutdoorsMap() {
             "radio-outdoors-map-data"
         ).textContent
     );
+    const contactPoints = JSON.parse(
+        document.getElementById(
+            "radio-outdoors-contact-map-data"
+        ).textContent
+    );
+    const allPoints = points.concat(contactPoints);
 
     const map = new Map(
         document.getElementById("radio-outdoors-map"),
@@ -209,6 +222,9 @@ async function initRadioOutdoorsMap() {
     );
     const showOpen = document.getElementById(
         "show-open-pins"
+    );
+    const showContacts = document.getElementById(
+        "show-contact-pins"
     );
     const pointCount = document.querySelector(".map-point-count");
     const fitVisibleButton = document.getElementById(
@@ -229,6 +245,7 @@ async function initRadioOutdoorsMap() {
 
     const infoWindow = new InfoWindow();
     const markerRecords = [];
+    const pathRecords = [];
     const nearestAddressCache = new globalThis.Map();
     const nearestAddressRequestTimes = new globalThis.Map();
     const geocoder = new google.maps.Geocoder();
@@ -310,6 +327,26 @@ async function initRadioOutdoorsMap() {
     );
 
     function popupHtml(point) {
+        if (point.marker_type === "contact") {
+            const details = [point.date, point.time, point.band, point.frequency, point.mode, point.grid_square, point.state, point.country].filter(Boolean);
+            const journalLink = point.journal_url
+                ? "<a href='" + escapeMapText(point.journal_url) + "'>Open Journal</a>"
+                : "";
+            return (
+                "<article class='radio-map-popup-card radio-map-contact-popup'>"
+                + "<div class='radio-map-popup-content'>"
+                + "<span class='radio-map-popup-type'>Contact</span>"
+                + "<h3>" + escapeMapText(point.callsign) + "</h3>"
+                + "<p>" + escapeMapText(details.join(" · ")) + "</p>"
+                + "<small>" + escapeMapText(point.coordinate_source) + "</small>"
+                + "<div class='radio-map-popup-latest'><span>From</span><strong>"
+                + escapeMapText(point.origin_name) + "</strong><small>"
+                + escapeMapText(point.adventure_title) + "</small></div>"
+                + "<div class='radio-map-popup-actions'>" + journalLink
+                + "<a href='" + escapeMapText(point.adventure_url) + "'>Open Adventure</a>"
+                + "</div></div></article>"
+            );
+        }
         const pinLabel = "Location";
         const privateBadge = point.is_private
             ? "<span class='private-location-badge'>🔒 Private</span>"
@@ -386,6 +423,9 @@ async function initRadioOutdoorsMap() {
     }
 
     function markerVisible(record) {
+        if (record.point.marker_type === "contact") {
+            return showContacts.checked;
+        }
         if (record.point.has_operating_advisory) {
             return true;
         }
@@ -402,8 +442,18 @@ async function initRadioOutdoorsMap() {
             record.marker.map = visible ? map : null;
             if (visible) visibleCount += 1;
         });
+        pathRecords.forEach(function (record) {
+            record.path.setMap(markerVisible(record) ? map : null);
+        });
         pointCount.textContent = visibleCount + " Map Pin"
             + (visibleCount === 1 ? "" : "s");
+        const mapElement = document.getElementById("radio-outdoors-map");
+        mapElement.dataset.contactMarkerCount = String(
+            markerRecords.filter(record => record.point.marker_type === "contact" && markerVisible(record)).length
+        );
+        mapElement.dataset.contactPathCount = String(
+            pathRecords.filter(markerVisible).length
+        );
     }
 
     function fitVisibleMarkers() {
@@ -427,10 +477,12 @@ async function initRadioOutdoorsMap() {
         }
     }
 
-    points.forEach(function (point) {
+    allPoints.forEach(function (point) {
         let background = "#277a45";
 
-        if (point.has_open_adventure) {
+        if (point.marker_type === "contact") {
+            background = "#2563a6";
+        } else if (point.has_open_adventure) {
             background = "#f0b429";
         }
 
@@ -442,14 +494,16 @@ async function initRadioOutdoorsMap() {
             background: background,
             borderColor: "#ffffff",
             glyphColor: "#ffffff",
-            glyph: point.has_operating_advisory
+            glyph: point.marker_type === "contact"
+                ? "C"
+                : point.has_operating_advisory
                 ? "!"
                 : (
                     point.has_open_adventure
                         ? "ACTIVE"
                         : (point.is_private ? "🔒" : "L")
                 ),
-            scale: point.has_open_adventure ? 1.32 : 1.10
+            scale: point.marker_type === "contact" ? 0.92 : (point.has_open_adventure ? 1.32 : 1.10)
         });
 
         const marker = new AdvancedMarkerElement({
@@ -475,11 +529,26 @@ async function initRadioOutdoorsMap() {
             marker: marker,
             point: point
         });
+        if (point.marker_type === "contact") {
+            const path = new google.maps.Polyline({
+                map: map,
+                path: [
+                    {lat: point.origin_latitude, lng: point.origin_longitude},
+                    {lat: point.latitude, lng: point.longitude}
+                ],
+                geodesic: true,
+                strokeColor: "#d86a1c",
+                strokeOpacity: 0.5,
+                strokeWeight: 1.5
+            });
+            pathRecords.push({path: path, point: point});
+        }
     });
 
     [
         showLocations,
-        showOpen
+        showOpen,
+        showContacts
     ].forEach(function (control) {
         control.addEventListener(
             "change",
@@ -495,6 +564,13 @@ async function initRadioOutdoorsMap() {
         "click",
         fitVisibleMarkers
     );
+
+    map.addListener("maptypeid_changed", function () {
+        pathRecords.forEach(function (record) {
+            record.path.setMap(markerVisible(record) ? map : null);
+        });
+        updateVisibleMarkers();
+    });
 
     if (addLocationPinButton) {
         addLocationPinButton.addEventListener(

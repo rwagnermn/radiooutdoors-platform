@@ -5,11 +5,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Radio Outdoors{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'css/style.css' %}?v=108">
+<link rel="stylesheet" href="{% static 'css/style.css' %}?v=110">
 <script src="{% static 'js/radiooutdoors-maps.js' %}?v=002"></script>
 </head>
 <body class="{% block body_class %}interior-page{% endblock %}">
-{% include "partials/header.html" %}
+{% block site_header %}{% include "partials/header.html" %}{% endblock %}
 <main>
 {% if messages %}
 <div class="flash-messages">
@@ -18,7 +18,7 @@
 {% endif %}
 {% block content %}{% endblock %}
 </main>
-{% include "partials/footer.html" %}
+{% block site_footer %}{% include "partials/footer.html" %}{% endblock %}
 <script src="{% static 'js/journal-photo-viewer.js' %}?v=001"></script>
 <script src="{% static 'js/header-menu.js' %}?v=003"></script>
 <script src="{% static 'js/adventure-status.js' %}?v=003"></script>

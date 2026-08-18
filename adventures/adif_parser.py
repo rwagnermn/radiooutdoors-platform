@@ -296,18 +296,21 @@ def _distance_miles(
     )
 
 
+MAIDENHEAD_GRID_RE = re.compile(
+    r"^[A-R]{2}\d{2}(?:[A-X]{2}(?:\d{2})?)?$",
+    re.IGNORECASE,
+)
+
+
+def normalize_maidenhead_grid(grid: str) -> str:
+    """Return a normalized 4-, 6-, or 8-character Maidenhead grid."""
+    normalized = str(grid or "").strip().upper()
+    return normalized if MAIDENHEAD_GRID_RE.fullmatch(normalized) else ""
+
+
 def maidenhead_to_latlon(grid: str) -> tuple[float, float] | None:
-    grid = grid.strip().upper()
-
-    if len(grid) < 4:
-        return None
-
-    if not (
-        "A" <= grid[0] <= "R"
-        and "A" <= grid[1] <= "R"
-        and grid[2].isdigit()
-        and grid[3].isdigit()
-    ):
+    grid = normalize_maidenhead_grid(grid)
+    if not grid:
         return None
 
     longitude = (ord(grid[0]) - ord("A")) * 20 - 180
@@ -318,13 +321,13 @@ def maidenhead_to_latlon(grid: str) -> tuple[float, float] | None:
     longitude_size = 2.0
     latitude_size = 1.0
 
-    if len(grid) >= 6 and grid[4].isalpha() and grid[5].isalpha():
+    if len(grid) >= 6:
         longitude += (ord(grid[4]) - ord("A")) * (5 / 60)
         latitude += (ord(grid[5]) - ord("A")) * (2.5 / 60)
         longitude_size = 5 / 60
         latitude_size = 2.5 / 60
 
-    if len(grid) >= 8 and grid[6].isdigit() and grid[7].isdigit():
+    if len(grid) == 8:
         longitude += int(grid[6]) * (0.5 / 60)
         latitude += int(grid[7]) * (0.25 / 60)
         longitude_size = 0.5 / 60

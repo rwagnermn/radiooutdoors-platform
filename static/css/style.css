@@ -6932,3 +6932,258 @@ body.contacts-page .adventure-contacts-page {
     .contacts-page .contacts-filter-panel { grid-template-columns: 1fr; }
     .contacts-page .contacts-filter-panel label:first-child { grid-column: auto; }
 }
+.add-contact-content {
+    max-width: 1280px;
+}
+
+.add-contact-form {
+    margin-top: 1rem;
+}
+
+.add-contact-row {
+    display: grid;
+    grid-template-columns: 9rem 7rem 8.5rem 10rem 6rem 9rem 7rem minmax(12rem, 1fr);
+    gap: 0.55rem;
+    align-items: start;
+    width: 100%;
+}
+
+.add-contact-field {
+    min-width: 0;
+}
+
+.add-contact-field label {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.add-contact-field input,
+.add-contact-field select,
+.add-contact-field textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.35rem;
+    padding: 0.35rem 0.45rem;
+}
+
+.add-contact-field textarea {
+    min-height: 2.35rem;
+    resize: vertical;
+}
+
+.add-contact-field-signal_report input {
+    max-width: 4rem;
+}
+
+.add-contact-field .errorlist {
+    margin: 0.25rem 0 0;
+    padding-left: 1rem;
+    font-size: 0.8rem;
+}
+
+.add-contact-actions {
+    display: flex;
+    gap: 0.65rem;
+    align-items: center;
+    margin-top: 0.8rem;
+}
+
+@media (max-width: 1100px) {
+    .add-contact-row {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .add-contact-field-qso_date { flex: 0 1 9rem; }
+    .add-contact-field-time_on { flex: 0 1 7rem; }
+    .add-contact-field-callsign { flex: 0 1 9rem; }
+    .add-contact-field-band { flex: 0 1 10rem; }
+    .add-contact-field-mode { flex: 0 1 6rem; }
+    .add-contact-field-frequency { flex: 0 1 9rem; }
+    .add-contact-field-signal_report { flex: 0 1 7rem; }
+    .add-contact-field-comment { flex: 1 1 18rem; }
+}
+
+body.add-contacts-batch-page {
+    min-height: 100vh;
+    overflow-x: hidden;
+    color: #183c25;
+    background: #292929 url("../images/contacts-radio-telescope-background.png") center center / cover fixed no-repeat;
+}
+
+body.add-contacts-batch-page main {
+    min-height: 100vh;
+}
+
+.add-contacts-batch-shell {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 100vh;
+    padding: clamp(2rem, 9vh, 5.5rem) clamp(0.5rem, 2vw, 2rem);
+}
+
+.add-contacts-batch-panel {
+    box-sizing: border-box;
+    width: min(1420px, 100%);
+    margin: 0 auto;
+    padding: 1.65rem 1rem 1.3rem;
+    border: 1px solid rgba(34, 76, 47, 0.38);
+    border-radius: 10px;
+    background: rgba(250, 247, 238, 0.76);
+    box-shadow: 0 8px 28px rgba(48, 43, 29, 0.1);
+    backdrop-filter: blur(1.5px);
+}
+
+.add-contacts-batch-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 2rem;
+    align-items: center;
+}
+
+.add-contacts-batch-heading h1 {
+    margin: 0;
+    color: #174828;
+    font: 700 clamp(2rem, 3vw, 2.7rem)/1.05 Georgia, serif;
+}
+
+.add-contacts-batch-heading p {
+    margin: 0.35rem 0 0;
+}
+
+.add-contacts-batch-heading-actions,
+.add-contacts-batch-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1.25rem;
+}
+
+.add-contacts-save.button-primary {
+    min-height: 2.7rem;
+    padding: 0.6rem 1.2rem;
+    border-color: #c85200;
+    background: #d55a00;
+    box-shadow: 0 3px 7px rgba(94, 42, 5, 0.2);
+    font-weight: 700;
+}
+
+.add-contacts-instructions {
+    margin: 1.55rem 0 0.85rem;
+    color: #244830;
+}
+
+.add-contacts-table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: 7px;
+}
+
+.add-contacts-table {
+    width: 100%;
+    min-width: 930px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: rgba(250, 247, 238, 0.46);
+}
+
+.add-contacts-table th {
+    padding: 0.72rem 0.18rem;
+    border-right: 1px solid rgba(238, 242, 229, 0.38);
+    color: #fff;
+    background: #194d2c;
+    text-align: center;
+}
+
+.add-contacts-table th:nth-child(1) { width: 11.5%; }
+.add-contacts-table th:nth-child(2) { width: 8.5%; }
+.add-contacts-table th:nth-child(3) { width: 12%; }
+.add-contacts-table th:nth-child(4) { width: 9.5%; }
+.add-contacts-table th:nth-child(5) { width: 9%; }
+.add-contacts-table th:nth-child(6) { width: 8.5%; }
+.add-contacts-table th:nth-child(7) { width: 6%; }
+.add-contacts-table th:nth-child(8) { width: 6%; }
+.add-contacts-table th:nth-child(9) { width: 12%; }
+.add-contacts-table th:nth-child(10) { width: 17%; }
+
+.add-contacts-table td {
+    padding: 0.45rem 0.42rem;
+    border: 1px solid rgba(35, 73, 46, 0.18);
+}
+
+.add-contacts-table td input,
+.add-contacts-table td select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.4rem;
+    padding: 0.35rem 0.3rem;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: #173923;
+    background: transparent;
+    font: inherit;
+    text-align: center;
+}
+
+.add-contacts-table td:last-child input { text-align: left; }
+.add-contacts-table tr[data-unsaved-row] input:hover,
+.add-contacts-table tr[data-unsaved-row] input:focus,
+.add-contacts-table tr[data-unsaved-row] select:hover,
+.add-contacts-table tr[data-unsaved-row] select:focus {
+    border-color: #799879;
+    background: rgba(255, 253, 244, 0.75);
+    outline: none;
+}
+
+.add-contacts-active-row {
+    outline: 2px solid #f06a00;
+    outline-offset: -2px;
+}
+
+.add-contacts-active-row td input,
+.add-contacts-active-row td select {
+    border-color: #9ab294;
+    background: rgba(255, 253, 239, 0.72);
+}
+
+.add-contacts-active-row td input:focus,
+.add-contacts-active-row td select:focus {
+    border-color: #174828;
+    box-shadow: 0 0 0 2px rgba(23, 72, 40, 0.12);
+    outline: none;
+}
+
+.add-contacts-row-error { outline: 3px solid #b42318; outline-offset: -3px; }
+.add-contacts-field-error { border-color: #b42318 !important; box-shadow: 0 0 0 1px #b42318; }
+.add-contacts-notes-cell { position: relative; padding-right: 2.4rem !important; }
+.add-contacts-enter { position: absolute; right: 0.7rem; top: 50%; translate: 0 -50%; font-size: 1.55rem; font-weight: 700; }
+
+.add-contacts-errors,
+.add-contacts-limit-warning {
+    margin-top: 1rem;
+    border: 1px solid #e7a21c;
+    border-radius: 6px;
+    color: #814300;
+    background: rgba(255, 246, 222, 0.86);
+}
+
+.add-contacts-errors { padding: 0.7rem 1rem; }
+.add-contacts-errors ul { margin: 0.35rem 0 0; }
+.add-contacts-limit-warning { display: flex; gap: 0.8rem; align-items: center; padding: 0.8rem 1rem; font-size: 1.05rem; }
+.add-contacts-limit-warning[hidden] { display: none; }
+.add-contacts-limit-warning > strong { color: #f39a00; font-size: 1.6rem; }
+
+.add-contacts-batch-footer { margin-top: 1rem; }
+.add-contacts-discard { border: 0; color: #263e2c; background: transparent; text-decoration: underline; font: inherit; cursor: pointer; }
+
+@media (max-width: 760px) {
+    .add-contacts-batch-shell { padding: 1rem 0.55rem; }
+    .add-contacts-batch-panel { padding: 1rem 0.7rem; }
+    .add-contacts-batch-heading { align-items: flex-start; flex-direction: column; gap: 0.8rem; }
+    .add-contacts-batch-heading-actions { width: 100%; justify-content: space-between; }
+    .add-contacts-batch-footer { flex-wrap: wrap; }
+}

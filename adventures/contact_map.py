@@ -30,7 +30,7 @@ PRIVATE_JOURNAL_ORIGIN_MESSAGE = (
 LINE_LIMIT = 250
 
 
-def _coordinate_pair(latitude, longitude):
+def coordinate_pair(latitude, longitude):
     try:
         latitude = float(Decimal(str(latitude)))
         longitude = float(Decimal(str(longitude)))
@@ -43,8 +43,8 @@ def _coordinate_pair(latitude, longitude):
     return latitude, longitude
 
 
-def _contact_coordinates(contact: JournalContact, user):
-    direct = _coordinate_pair(contact.latitude, contact.longitude)
+def contact_coordinates(contact: JournalContact, user):
+    direct = coordinate_pair(contact.latitude, contact.longitude)
     if direct is not None:
         return direct, "Exact coordinates", False
     grid = maidenhead_to_latlon(contact.grid_square)
@@ -52,7 +52,7 @@ def _contact_coordinates(contact: JournalContact, user):
         return grid, "Grid-square center", True
     resolved = contact.resolved_location
     if resolved is not None and can_view_location(user, resolved):
-        coordinates = _coordinate_pair(resolved.latitude, resolved.longitude)
+        coordinates = coordinate_pair(resolved.latitude, resolved.longitude)
         if coordinates is not None:
             return coordinates, "Approximate resolved park location", True
     return None, "Unavailable", False
@@ -86,9 +86,9 @@ def build_contact_map(
         }
 
     if journal_entry is not None:
-        origin = _coordinate_pair(journal_entry.latitude, journal_entry.longitude)
+        origin = coordinate_pair(journal_entry.latitude, journal_entry.longitude)
     else:
-        origin = None if location is None else _coordinate_pair(
+        origin = None if location is None else coordinate_pair(
             location.latitude, location.longitude
         )
     if origin is None and journal_entry is None:
@@ -112,7 +112,7 @@ def build_contact_map(
     modes = set()
     for contact in contacts:
         journal_title = contact.journal_entry.title or "Journal Entry" if contact.journal_entry_id else "Adventure Contact"
-        coordinates, source, approximate = _contact_coordinates(contact, user)
+        coordinates, source, approximate = contact_coordinates(contact, user)
         contact.map_coordinate_source = source
         contact.is_mappable = coordinates is not None
         if coordinates is None:

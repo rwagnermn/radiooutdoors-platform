@@ -43,6 +43,8 @@ class QRZResult:
     state: str = ""
     country: str = ""
     grid: str = ""
+    latitude: str = ""
+    longitude: str = ""
     license_class: str = ""
     expires: str = ""
     record_type: str = ""
@@ -258,6 +260,8 @@ def lookup_callsign(callsign):
         state=_text(call, "state"),
         country=_text(call, "country") or _text(call, "land"),
         grid=_text(call, "grid"),
+        latitude=_text(call, "lat"),
+        longitude=_text(call, "lon"),
         license_class=_text(call, "class"),
         expires=_text(call, "expdate"),
         record_type=_text(call, "type"),

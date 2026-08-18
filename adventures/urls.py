@@ -64,6 +64,7 @@ from .contact_log_views import (
     my_contact_log,
     pota_hunter_contact_result,
     preview_pota_hunter_contacts,
+    qrz_contact_lookup,
 )
 
 urlpatterns = [
@@ -74,6 +75,7 @@ urlpatterns = [
     path("contacts/", my_contact_log, name="my_contact_log"),
     path("contacts/delete-selected/", bulk_delete_contacts, name="bulk_delete_contacts"),
     path("journal/<int:entry_id>/contacts/add/", add_journal_contact, name="add_journal_contact"),
+    path("journal/<int:entry_id>/contacts/qrz/", qrz_contact_lookup, name="qrz_contact_lookup"),
     path("journal/<int:entry_id>/contacts/map/", journal_contact_map, name="journal_contact_map"),
     path("journal/<int:entry_id>/contacts/<int:contact_id>/delete/", delete_journal_contact, name="delete_journal_contact"),
     path("contacts/import/pota-hunter/", import_pota_hunter_contacts, name="import_pota_hunter_log"),

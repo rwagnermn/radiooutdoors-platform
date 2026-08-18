@@ -1,25 +1,34 @@
 from datetime import date, time
 import hashlib
+import json
 from uuid import uuid4
 
 from django.contrib import messages
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.shortcuts import get_object_or_404
-from django.views.decorators.http import require_POST
+from django.utils import timezone
+from django.views.decorators.http import require_GET, require_POST
 
 from core.auth import verified_member_or_staff_required, verified_member_required
 from core.location_privacy import visible_locations
 from core.models import Adventure, JournalContact, JournalEntry, Location, LocationType
 from .adif_parser import haversine_miles
-from .forms import JournalContactForm
+from .contact_geography import sanitize_qrz_geography, sign_geography
+from .forms import BatchJournalContactForm, JournalContactForm
 from .pota_geocoding import entity_region
 from .pota_import import clean_pota_park_name, parse_pota_hunter_log
 from .pota_parks import normalize_pota_reference
 from .pota_views import _matching_pota_location, _unique_parks
+from core.qrz_service import QRZError, lookup_callsign
+
+
+CONTACT_BATCH_LIMIT = 50
+CONTACT_BATCH_WARNING_AT = 45
 
 
 def _hunter_key(token):
@@ -287,26 +296,184 @@ def pota_hunter_contact_result(request):
     return redirect("my_contact_log")
 
 
+def _manual_contact_defaults(request):
+    now = timezone.localtime()
+    defaults = {"qso_date": timezone.localdate(), "time_on": now.strftime("%H:%M")}
+    saved = request.session.get(f"journal_contact_last_used:{request.user.pk}", {})
+    if not isinstance(saved, dict):
+        return defaults
+    validators = {
+        "qso_date": JournalContactForm.base_fields["qso_date"],
+        "time_on": JournalContactForm.base_fields["time_on"],
+        "band": BatchJournalContactForm.base_fields["band"],
+        "mode": BatchJournalContactForm.base_fields["mode"],
+        "frequency": BatchJournalContactForm.base_fields["frequency"],
+    }
+    for field_name, field in validators.items():
+        value = saved.get(field_name)
+        if value in (None, ""):
+            continue
+        try:
+            defaults[field_name] = field.clean(value)
+        except ValidationError:
+            continue
+    return defaults
+
+
+def _populate_manual_contact(contact, entry):
+    contact.owner = entry.adventure.owner
+    contact.adventure = entry.adventure
+    contact.journal_entry = entry
+    contact.source = JournalContact.Source.MANUAL
+    contact.station_callsign = entry.operating_callsign or entry.adventure.operating_callsign
+    contact.operator_callsign = entry.operating_callsign or entry.adventure.operating_callsign
+    contact.fingerprint = hashlib.sha256(f"manual|{entry.pk}|{uuid4().hex}".encode()).hexdigest()
+    return contact
+
+
+def _qrz_geography_response(*, state="", country="", callsign="", geography=None):
+    geography = geography or sanitize_qrz_geography()
+    return {
+        "state": str(state or "").strip(),
+        "country": str(country or "").strip(),
+        "grid_square": geography.grid_square,
+        "latitude": (
+            float(geography.latitude) if geography.latitude is not None else None
+        ),
+        "longitude": (
+            float(geography.longitude) if geography.longitude is not None else None
+        ),
+        "geography_token": sign_geography(callsign, geography),
+    }
+
+
+@verified_member_or_staff_required
+@require_GET
+def qrz_contact_lookup(request, entry_id):
+    entry = get_object_or_404(JournalEntry.objects.select_related("adventure__owner"), pk=entry_id)
+    if request.user != entry.adventure.owner and not request.user.is_staff:
+        return JsonResponse(_qrz_geography_response(), status=403)
+    callsign = request.GET.get("callsign", "").strip().upper()
+    if not callsign:
+        return JsonResponse(_qrz_geography_response())
+    try:
+        result = lookup_callsign(callsign)
+    except QRZError:
+        return JsonResponse(_qrz_geography_response())
+    geography = sanitize_qrz_geography(
+        grid=result.grid,
+        latitude=result.latitude,
+        longitude=result.longitude,
+    )
+    return JsonResponse(
+        _qrz_geography_response(
+            state=result.state,
+            country=result.country,
+            callsign=callsign,
+            geography=geography,
+        )
+    )
+
+
 @verified_member_or_staff_required
 def add_journal_contact(request, entry_id):
     entry = get_object_or_404(JournalEntry.objects.select_related("adventure__owner"), pk=entry_id)
     if request.user != entry.adventure.owner and not request.user.is_staff:
         return HttpResponseForbidden("Only the Adventure owner or staff can add Contacts to this Journal.")
-    if request.method == "POST":
+    defaults = _manual_contact_defaults(request)
+    batch_rows = []
+    batch_errors = []
+    if request.method == "POST" and "contacts_json" in request.POST:
+        try:
+            submitted = json.loads(request.POST.get("contacts_json", "[]"))
+            if not isinstance(submitted, list):
+                raise ValueError
+        except (json.JSONDecodeError, ValueError):
+            submitted = []
+            batch_errors = ["The contact batch could not be read. Please review the rows and try again."]
+        batch_rows = [row if isinstance(row, dict) else {} for row in submitted[:CONTACT_BATCH_LIMIT]] if isinstance(submitted, list) else []
+        if any(not isinstance(row, dict) for row in submitted):
+            batch_errors.append("Every batch item must be a Contact row.")
+        if len(submitted) > CONTACT_BATCH_LIMIT:
+            batch_errors = [f"A batch can contain at most {CONTACT_BATCH_LIMIT} Contacts."]
+        forms_for_rows = [BatchJournalContactForm(row) for row in batch_rows]
+        seen = set()
+        for index, row_form in enumerate(forms_for_rows):
+            if not row_form.is_valid():
+                for field_name, errors in row_form.errors.items():
+                    label = {
+                        "qso_date": "Date", "time_on": "Time", "callsign": "Callsign",
+                        "band": "Band", "frequency": "Frequency", "mode": "Mode",
+                        "signal_report": "Signal", "state": "State",
+                        "country": "Country", "comment": "Notes",
+                        "grid_square": "Grid", "latitude": "Latitude",
+                        "longitude": "Longitude", "geography_token": "Geography",
+                        "__all__": "Geography",
+                    }.get(field_name, field_name.replace("_", " ").title())
+                    batch_errors.append(f"Row {index + 1}, {label}: " + "; ".join(errors))
+                continue
+            cleaned = row_form.cleaned_data
+            duplicate_key = (cleaned["qso_date"], cleaned["time_on"], cleaned["callsign"])
+            exists = entry.contacts.filter(
+                qso_date=cleaned["qso_date"], time_on=cleaned["time_on"], callsign__iexact=cleaned["callsign"]
+            ).exists()
+            if duplicate_key in seen or exists:
+                batch_errors.append(f"Row {index + 1}: This Contact duplicates another Contact for the same Date, Time, and Callsign.")
+            seen.add(duplicate_key)
+        if not batch_rows and not batch_errors:
+            batch_errors = ["Add at least one Contact before saving."]
+        if not batch_errors:
+            with transaction.atomic():
+                for row_form in forms_for_rows:
+                    cleaned = row_form.cleaned_data
+                    _populate_manual_contact(JournalContact(
+                        qso_date=cleaned["qso_date"], time_on=cleaned["time_on"], callsign=cleaned["callsign"],
+                        band=cleaned["band"], frequency=cleaned["frequency"], mode=cleaned["mode"],
+                        signal_report=cleaned["signal_report"], state=cleaned["state"], country=cleaned["country"],
+                        grid_square=cleaned["grid_square"], latitude=cleaned["latitude"],
+                        longitude=cleaned["longitude"],
+                        comment=cleaned["comment"],
+                    ), entry).save()
+                entry.adventure.save(update_fields=["updated_at"])
+            prior = request.session.get(f"journal_contact_last_used:{request.user.pk}", {})
+            prior = prior if isinstance(prior, dict) else {}
+            final = forms_for_rows[-1].cleaned_data
+            prior.update({
+                "qso_date": final["qso_date"].isoformat(), "time_on": final["time_on"].strftime("%H:%M"),
+                "band": final["band"], "frequency": final["frequency"], "mode": final["mode"],
+            })
+            request.session[f"journal_contact_last_used:{request.user.pk}"] = prior
+            messages.success(request, f"{len(forms_for_rows)} Contact{'s' if len(forms_for_rows) != 1 else ''} added to this Journal.")
+            return redirect("journal_entry_detail", entry_id=entry.pk)
+        form = JournalContactForm(initial=defaults)
+    elif request.method == "POST":
         form = JournalContactForm(request.POST)
         if form.is_valid():
-            contact = form.save(commit=False)
-            contact.owner = entry.adventure.owner
-            contact.adventure = entry.adventure
-            contact.journal_entry = entry
-            contact.source = JournalContact.Source.MANUAL
-            contact.station_callsign = entry.operating_callsign or entry.adventure.operating_callsign
-            contact.operator_callsign = entry.operating_callsign or entry.adventure.operating_callsign
-            contact.fingerprint = hashlib.sha256(f"manual|{entry.pk}|{uuid4().hex}".encode()).hexdigest()
-            contact.save()
+            _populate_manual_contact(form.save(commit=False), entry).save()
+            prior = request.session.get(f"journal_contact_last_used:{request.user.pk}", {})
+            prior = prior if isinstance(prior, dict) else {}
+            prior.update({
+                "qso_date": form.cleaned_data["qso_date"].isoformat(),
+                "time_on": form.cleaned_data["time_on"].strftime("%H:%M"),
+                "band": form.cleaned_data["band"],
+                "mode": form.cleaned_data["mode"],
+                "frequency": str(form.cleaned_data["frequency"]),
+            })
+            request.session[f"journal_contact_last_used:{request.user.pk}"] = prior
             entry.adventure.save(update_fields=["updated_at"])
             messages.success(request, "Contact added to this Journal.")
             return redirect("journal_entry_detail", entry_id=entry.pk)
     else:
-        form = JournalContactForm(initial={"qso_date": entry.entry_at.date()})
-    return render(request, "adventures/add_journal_contact.html", {"entry": entry, "adventure": entry.adventure, "form": form})
+        form = JournalContactForm(initial=defaults)
+    return render(request, "adventures/add_journal_contact.html", {
+        "entry": entry, "adventure": entry.adventure, "form": form,
+        "batch_rows": batch_rows, "batch_errors": batch_errors,
+        "batch_limit": CONTACT_BATCH_LIMIT, "batch_warning_at": CONTACT_BATCH_WARNING_AT,
+        "batch_default_date": defaults["qso_date"].isoformat(),
+        "batch_default_time": defaults["time_on"].strftime("%H:%M") if hasattr(defaults["time_on"], "strftime") else defaults["time_on"],
+        "batch_default_band": defaults.get("band", ""),
+        "batch_default_frequency": defaults.get("frequency", ""),
+        "batch_default_mode": defaults.get("mode", ""),
+        "batch_band_choices": BatchJournalContactForm.base_fields["band"].choices,
+        "batch_mode_choices": BatchJournalContactForm.base_fields["mode"].choices,
+    })
