@@ -67,6 +67,7 @@ class PublicReadOnlyPermissionMatrixTests(TestCase):
             body="Visible public Journal notes.",
             operating_callsign="W0OWNER",
             is_public=True,
+            pota=True,
         )
         self.masked_location_journal = JournalEntry.objects.create(
             adventure=self.adventure,
@@ -85,6 +86,7 @@ class PublicReadOnlyPermissionMatrixTests(TestCase):
             title="Hidden Private Journal",
             body="Hidden private Journal notes.",
             is_public=False,
+            pota=True,
         )
         self.public_contact = JournalContact.objects.create(
             journal_entry=self.public_journal,

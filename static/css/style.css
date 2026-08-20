@@ -7187,3 +7187,182 @@ body.add-contacts-batch-page main {
     .add-contacts-batch-heading-actions { width: 100%; justify-content: space-between; }
     .add-contacts-batch-footer { flex-wrap: wrap; }
 }
+
+/* Adventure Journal bulk selection and explicit deletion confirmation. */
+.adventure-journals-page .journal-bulk-selection-form { margin: 0; }
+.adventure-journals-page .journal-bulk-selection-toolbar {
+    display: flex;
+    align-items: end;
+    gap: 10px 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--ro-color-border, #9ca8a0);
+    border-radius: 10px;
+    background: var(--ro-color-surface, #fff);
+}
+.adventure-journals-page .journal-bulk-selection-toolbar label { display: block; font-weight: 800; }
+.adventure-journals-page .journal-bulk-selection-toolbar select,
+.adventure-journals-page .journal-bulk-selection-toolbar input { min-height: 44px; margin: 0; }
+.adventure-journals-page .journal-bulk-selection-toolbar select { width: min(270px, 100%); }
+.adventure-journals-page .journal-random-number-control { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+.adventure-journals-page .journal-random-number-control[hidden] { display: none; }
+.adventure-journals-page .journal-random-number-control input { width: 130px; }
+.adventure-journals-page .journal-selection-scope { flex: 1 1 320px; margin: 0; color: var(--ro-color-muted, #526458); }
+.adventure-journals-page .journal-selection-count { margin: 0; font-weight: 900; white-space: nowrap; }
+.adventure-journals-page .journal-selection-error { flex-basis: 100%; margin: 0; color: #8b2d2d; font-weight: 800; }
+.adventure-journals-page .journal-list-select-column { width: 76px; text-align: center; }
+.adventure-journals-page .journal-list-select-column input { width: 22px; height: 22px; margin: 0; accent-color: var(--ro-forest, #173f2e); }
+.adventure-journals-page .journal-bulk-delete-confirmation { max-width: 760px; margin-inline: auto; }
+.adventure-journals-page .journal-bulk-confirmation-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+.adventure-journals-page .journal-bulk-confirmation-actions button { width: auto; }
+@media (max-width: 700px) {
+    .adventure-journals-page .journal-bulk-selection-toolbar { align-items: stretch; }
+    .adventure-journals-page .journal-bulk-selection-toolbar > div,
+    .adventure-journals-page .journal-bulk-selection-toolbar select { width: 100%; }
+}
+
+/* Locations page: compact directory over the approved treasure-map artwork. */
+body.locations-page main {
+    min-height: calc(100vh - 120px);
+    background-color: #eee2c8;
+    background-image: url("../images/locations-treasure-map-background.png");
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: 100% auto;
+    background-attachment: fixed;
+}
+
+body.locations-page .content {
+    box-sizing: border-box;
+    width: min(1160px, calc(100% - 32px));
+    max-width: 1160px;
+    margin: 18px auto 30px;
+    padding: 0;
+    background: transparent;
+}
+
+.locations-page .locations-controls-panel {
+    margin-bottom: 14px;
+    padding: 14px 18px 16px;
+    border: 1px solid rgba(77, 63, 40, 0.34);
+    border-radius: 10px;
+    color: #1a3024;
+    background: rgba(255, 255, 255, 0.58);
+    box-shadow: 0 7px 22px rgba(67, 51, 28, 0.11);
+    backdrop-filter: none;
+}
+
+.locations-page .locations-controls-panel .section-heading-row {
+    margin-bottom: 10px;
+}
+
+.locations-page .locations-controls-panel .adventure-book-search-instruction {
+    margin: 12px 0 9px;
+}
+
+.locations-page .locations-controls-panel .location-filter-form {
+    margin-bottom: 0;
+}
+
+.locations-page .locations-controls-panel input,
+.locations-page .locations-controls-panel select {
+    background-color: rgba(255, 255, 249, 0.94);
+}
+
+.locations-page .location-table-wrap {
+    border-color: rgba(72, 62, 43, 0.42);
+    background: transparent;
+    box-shadow: 0 8px 24px rgba(67, 51, 28, 0.13);
+    backdrop-filter: none;
+}
+
+.locations-page .location-table {
+    min-width: 980px;
+    background: transparent;
+}
+
+.locations-page .location-table thead,
+.locations-page .location-table thead tr,
+.locations-page .location-table tbody,
+.locations-page .location-table tbody tr {
+    background: transparent;
+}
+
+.locations-page .location-table thead th {
+    border-bottom-color: rgba(216, 106, 28, 0.88);
+    color: #173f2e;
+    background: rgba(255, 255, 255, 0.68);
+}
+
+.locations-page .location-table tbody td {
+    border-bottom-color: rgba(77, 63, 40, 0.36);
+    background: rgba(255, 255, 255, 0.46);
+}
+
+.locations-page .location-table tbody tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.42);
+}
+
+.locations-page .location-table tbody tr[onclick]:hover,
+.locations-page .location-table tbody tr[onclick]:focus-visible {
+    background: transparent;
+}
+
+.locations-page .location-table tbody tr[onclick]:hover td,
+.locations-page .location-table tbody tr[onclick]:focus-visible td,
+.locations-page .location-table tbody tr[aria-selected="true"] td {
+    background: rgba(255, 255, 255, 0.70);
+}
+
+.locations-page .content::before,
+.locations-page .content::after,
+.locations-page .locations-controls-panel::before,
+.locations-page .locations-controls-panel::after,
+.locations-page .location-table-wrap::before,
+.locations-page .location-table-wrap::after,
+.locations-page .location-table::before,
+.locations-page .location-table::after {
+    content: none;
+    background: transparent;
+}
+
+.locations-page .location-table th:nth-last-child(1) { width: 64px; }
+.locations-page .location-table th:nth-last-child(2) { width: 78px; }
+.locations-page .location-table th:nth-last-child(3) { width: 130px; }
+.locations-page .location-table th:nth-last-child(4) { width: 150px; }
+.locations-page .location-table th:nth-last-child(5) { min-width: 300px; }
+.locations-page .location-table th:nth-last-child(6) { width: 76px; }
+.locations-page .location-table .staff-id-column { width: 56px; }
+
+@media (max-width: 900px) {
+    body.locations-page main {
+        background-position: center top;
+        background-size: auto 760px;
+        background-attachment: scroll;
+    }
+
+    body.locations-page .content {
+        width: min(1160px, calc(100% - 20px));
+        margin-top: 10px;
+    }
+
+    .locations-page .locations-controls-panel {
+        padding: 12px;
+    }
+
+    .locations-page .location-table {
+        min-width: 900px;
+    }
+}
+
+@media (max-width: 700px) {
+    .locations-page .locations-controls-panel .section-heading-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+.pota-leaderboard-page .pota-leaderboard-rank-gold > td { background-color: rgba(255, 224, 102, 0.38); }
+.pota-leaderboard-page .pota-leaderboard-rank-silver > td { background-color: rgba(210, 215, 220, 0.42); }
+.pota-leaderboard-page .pota-leaderboard-rank-bronze > td { background-color: rgba(205, 127, 50, 0.25); }

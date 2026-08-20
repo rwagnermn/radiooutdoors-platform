@@ -7,6 +7,7 @@
 {% block content %}
 <section class="content">
 
+    <div class="locations-controls-panel">
     <div class="section-heading-row">
         <div>
             <h1>Locations</h1>
@@ -74,6 +75,7 @@
             </a>
         </div>
     </form>
+    </div>
 
     <div class="location-table-wrap ro-scroll-table-region" role="region" aria-label="Location results" tabindex="0">
         <table class="location-table ro-record-table">
@@ -84,7 +86,7 @@
                     <th>Type</th>
                     <th>City</th>
                     <th>State</th>
-                    <th class="text-center">Adventures</th>
+                    <th class="text-center">Uses</th>
                 </tr>
             </thead>
 
@@ -135,7 +137,7 @@
 
 
                         <td class="text-center">
-                            {{ location.adventure_count }}
+                            {{ location.journal_use_count }}
                         </td>
                     </tr>
                 {% empty %}

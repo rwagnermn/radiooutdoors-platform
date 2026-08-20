@@ -34,7 +34,11 @@ class AdventurePotaRollupTests(TestCase):
     def journal(self, title, counts=None, adventure=None):
         adventure = adventure or self.adventure
         journal = JournalEntry.objects.create(
-            adventure=adventure, title=title, body="Journal", is_public=True
+            adventure=adventure,
+            title=title,
+            body="Journal",
+            is_public=True,
+            pota=True,
         )
         if counts is not None:
             index = PotaActivationImport.objects.count() + 1

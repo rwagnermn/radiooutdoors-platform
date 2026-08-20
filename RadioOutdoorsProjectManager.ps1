@@ -329,7 +329,7 @@ function Test-IntentionalCheckpointPath($path){
     # This is intentionally an exact repository-relative match. Do not broaden
     # this to every dotfile or to nested .gitignore files.
     if([string]::Equals($p,'.gitignore',[StringComparison]::OrdinalIgnoreCase)){return $true}
-    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','RadioOutdoorsProjectManager-corrective-tests.ps1','RadioOutdoorsProjectManager-staged-diff-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
+    if($leaf -in @('manage.py','requirements.txt','README.txt','RadioOutdoorsProjectManager.ps1','RadioOutdoorsProjectManager-async-tests.ps1','RadioOutdoorsProjectManager-classification-tests.ps1','RadioOutdoorsProjectManager-corrective-tests.ps1','RadioOutdoorsProjectManager-staged-diff-tests.ps1','RadioOutdoorsProjectManager-staging-verification-tests.ps1','Start-Project-Manager.bat','Start-RadioOutdoors-Project-Manager.bat')){return $true}
     if($p -match '^static/images/.+' -and $leaf -match '(?i)\.(png|jpg|jpeg|gif|webp|svg)$'){return $true}
     if($p -notmatch '^(adventures|backend|core|static|templates|docs|tools)/'){return $false}
     return ($leaf -match '(?i)\.(py|html|css|js|json|md|txt|bat|ps1|yml|yaml|toml)$')
@@ -349,9 +349,20 @@ function ConvertTo-CheckpointClassification($statusLines){
 }
 
 function Get-CheckpointClassification(){
-    $status=Run-Cmd 'git status --short --untracked-files=all' 30
+    # NUL framing is required here: it preserves every Git path exactly and
+    # avoids newline/quote decoding ambiguities at the checkpoint boundary.
+    $status=Run-Cmd 'git status --porcelain=v1 -z --untracked-files=all' 30
     if($status.Exit-ne0){return [pscustomobject]@{Error=($status.Out+"`r`n"+$status.Err).Trim();Intentional=@();Excluded=@()}}
-    $classified=ConvertTo-CheckpointClassification ($status.Out -split "`r?`n")
+    $lines=@();$fields=@($status.Out -split "`0")
+    for($i=0;$i-lt$fields.Count;$i++){
+        $field=$fields[$i];if(!$field){continue}
+        if($field.Length-lt3){continue}
+        $lines+=$field
+        # In porcelain -z format a rename/copy has a second NUL-delimited
+        # source path. The first field is the destination we authorize/stage.
+        if($field.Substring(0,2)-match '[RC]' -and $i+1-lt$fields.Count){$i++}
+    }
+    $classified=ConvertTo-CheckpointClassification $lines
     [pscustomobject]@{Error=$null;Intentional=$classified.Intentional;Excluded=$classified.Excluded}
 }
 
@@ -441,14 +452,85 @@ function Get-StagedCheckpointPaths(){
     [pscustomobject]@{Error=$null;Paths=@($result.Out -split "`r?`n"|Where-Object{$_}|ForEach-Object{$_.Replace('\','/')})}
 }
 
-function Test-StagedCheckpointSet($approvedItems){
+function Get-CheckpointPathFingerprint($path){
+    $full=Join-Path $ProjectRoot $path
+    if(!(Test-Path -LiteralPath $full -PathType Leaf)){return '[missing]'}
+    $hash=Run-Cmd "git hash-object -- `"$path`"" 30
+    if($hash.Exit-ne0){return "[hash-error:$($hash.Exit):$($hash.Err)]"}
+    return $hash.Out
+}
+
+function Get-CheckpointSnapshot($items){
+    $snapshot=@{}
+    foreach($item in @($items)){$snapshot[$item.Path]=Get-CheckpointPathFingerprint $item.Path}
+    return $snapshot
+}
+
+function Get-CheckpointPathDiagnostic($path){
+    $status=Run-Cmd "git status --porcelain=v1 -z --untracked-files=all -- `"$path`"" 30
+    $statusText=if($status.Exit-eq0){($status.Out-replace"`0",'').TrimEnd()}else{"status failed (exit $($status.Exit)): $($status.Err)"}
+    $diff=Run-Cmd "git diff --no-ext-diff HEAD -- `"$path`"" 60
+    $attributes=Run-Cmd "git check-attr -a -- `"$path`"" 30
+    $flags=Run-Cmd "git ls-files -v -- `"$path`"" 30
+    $untracked=($statusText-match'^\?\? ')
+    $differs=($untracked-or$diff.Out.Length-gt0)
+    [pscustomobject]@{
+        Path=$path;Status=$(if($statusText){$statusText}else{'(clean)'})
+        DiffersFromHead=$differs;Diff=$diff.Out;DiffError=$diff.Err
+        Attributes=$(if($attributes.Out){$attributes.Out}else{'(none)'})
+        IndexFlags=$(if($flags.Out){$flags.Out}else{'(untracked or absent)'})
+    }
+}
+
+function Test-StagedCheckpointSet($approvedItems,$addResult=$null,$beforeSnapshot=$null){
     $approved=@($approvedItems|ForEach-Object{$_.Path.Replace('\','/')}|Sort-Object -Unique)
     $staged=Get-StagedCheckpointPaths
-    if($staged.Error){return [pscustomobject]@{Matches=$false;Error=$staged.Error;Missing=@();Unexpected=@();Staged=@()}}
+    if($staged.Error){return [pscustomobject]@{Matches=$false;Error=$staged.Error;Missing=@();Unexpected=@();NoStageableDifference=@();ChangedDuringStaging=@();Diagnostics=@();Staged=@()}}
     $actual=@($staged.Paths|Sort-Object -Unique)
-    $missing=@(Compare-Object $approved $actual -PassThru|Where-Object{$_.SideIndicator-eq'<='})
-    $unexpected=@(Compare-Object $approved $actual -PassThru|Where-Object{$_.SideIndicator-eq'=>'})
-    [pscustomobject]@{Matches=(!$missing.Count-and!$unexpected.Count);Error=$null;Missing=$missing;Unexpected=$unexpected;Staged=$actual}
+    $candidates=@(Compare-Object $approved $actual -PassThru|Where-Object{$_.SideIndicator-eq'<='})
+    $diagnostics=@($candidates|ForEach-Object{Get-CheckpointPathDiagnostic $_})
+    $noStageable=@($diagnostics|Where-Object{!$_.DiffersFromHead}|ForEach-Object{$_.Path})
+    $missing=@($diagnostics|Where-Object{$_.DiffersFromHead}|ForEach-Object{$_.Path})
+    $expected=@($approved|Where-Object{$_-notin$noStageable})
+    $unexpected=@(Compare-Object $expected $actual -PassThru|Where-Object{$_.SideIndicator-eq'=>'})
+    $changed=@()
+    if($beforeSnapshot){foreach($path in $approved){if($beforeSnapshot[$path] -ne (Get-CheckpointPathFingerprint $path)){$changed+=$path}}}
+    [pscustomobject]@{Matches=(!$missing.Count-and!$unexpected.Count-and!$changed.Count);Error=$null;Missing=$missing;Unexpected=$unexpected;NoStageableDifference=$noStageable;ChangedDuringStaging=$changed;Diagnostics=$diagnostics;Expected=$expected;Staged=$actual;Add=$addResult}
+}
+
+function Format-StagingVerificationDiagnostics($verified){
+    $parts=@()
+    foreach($item in @($verified.Diagnostics)){
+        $parts+=@"
+Path: $($item.Path)
+Current Git status: $($item.Status)
+Differs from HEAD: $($item.DiffersFromHead)
+Index flags: $($item.IndexFlags)
+Attributes: $($item.Attributes)
+Working-tree/HEAD diff:
+$(Format-CommandStream $item.Diff)
+Diff stderr:
+$(Format-CommandStream $item.DiffError)
+"@
+    }
+    if($verified.NoStageableDifference.Count){$parts+="Git normalization/no-op explanation: no stageable difference remains after Git normalization for: $($verified.NoStageableDifference-join', '). These paths were excluded from the expected staged set."}
+    return ($parts-join"`r`n").TrimEnd()
+}
+
+function Reset-StagingAfterFailure($reason){
+    $command='git reset --mixed';$reset=Run-Cmd $command 60
+    $text=@"
+$reason
+Reset command: $command
+Reset exit code: $($reset.Exit)
+Reset stdout:
+$(Format-CommandStream $reset.Out)
+Reset stderr:
+$(Format-CommandStream $reset.Err)
+The mixed reset only clears the index; working-tree contents are unchanged.
+"@.TrimEnd()
+    Log $text
+    [pscustomobject]@{Command=$command;Result=$reset;Text=$text}
 }
 
 function Checkpoint([bool]$quick=$false){
@@ -463,19 +545,42 @@ function Checkpoint([bool]$quick=$false){
     $files=Get-CheckpointClassification
     if($files.Error){[Windows.Forms.MessageBox]::Show($files.Error,"Git Status Failed")|Out-Null;return}
     if(!$files.Intentional.Count){[Windows.Forms.MessageBox]::Show("No intentional source, configuration, migration, test, template, or static files remain after exclusions. No commit was created.","Nothing to Checkpoint")|Out-Null;return}
+    $approvedSnapshot=Get-CheckpointSnapshot $files.Intentional
     if(!(Show-CheckpointConfirmation $files)){return}
-    $reset=Run-Cmd "git reset" 30;if($reset.Exit-ne0){[Windows.Forms.MessageBox]::Show(($reset.Out+"`r`n"+$reset.Err),"Could Not Prepare Staging")|Out-Null;return}
-    $a=Stage-CheckpointPaths $files.Intentional
+    $reset=Run-Cmd 'git reset --mixed' 30;if($reset.Exit-ne0){[Windows.Forms.MessageBox]::Show(($reset.Out+"`r`n"+$reset.Err),"Could Not Prepare Staging")|Out-Null;return}
+    # Refresh from current NUL-delimited status immediately before staging. The
+    # confirmed list remains the authorization boundary: refresh may remove
+    # stale/no-op paths, but it can never silently authorize a new path.
+    $current=Get-CheckpointClassification
+    if($current.Error){[Windows.Forms.MessageBox]::Show($current.Error,'Git Status Refresh Failed')|Out-Null;return}
+    $confirmedPaths=@($files.Intentional.Path|Sort-Object -Unique)
+    $currentPaths=@($current.Intentional.Path|Sort-Object -Unique)
+    $newPaths=@($currentPaths|Where-Object{$_-notin$confirmedPaths})
+    $changedBefore=@($currentPaths|Where-Object{$_-in$confirmedPaths-and$approvedSnapshot[$_] -ne (Get-CheckpointPathFingerprint $_)})
+    if($newPaths.Count-or$changedBefore.Count){
+        $reason="Approved set changed after confirmation; commit blocked. New paths: $($newPaths-join', '); changed paths: $($changedBefore-join', ')"
+        $reconcile=Reset-StagingAfterFailure $reason
+        [Windows.Forms.MessageBox]::Show("$reason`r`n`r`n$($reconcile.Text)",'Staging Verification Failed')|Out-Null;return
+    }
+    $stageItems=@($current.Intentional|Where-Object{$_.Path-in$confirmedPaths})
+    $removed=@($confirmedPaths|Where-Object{$_-notin$currentPaths})
+    foreach($path in $removed){Log "Approved path excluded before staging: $path - no stageable difference in refreshed Git status"}
+    $beforeStage=Get-CheckpointSnapshot $stageItems
+    $a=Stage-CheckpointPaths $stageItems
+    Log "git add complete output: exit=$($a.Exit); stdout=$(Format-CommandStream $a.Out); stderr=$(Format-CommandStream $a.Err)"
     if($a.Exit-ne0){
         $staged=Get-StagedCheckpointPaths;$stagedText=if($staged.Paths.Count){$staged.Paths-join"`r`n"}else{'(none)'}
-        Log "Staging failed: command=$($a.Command); exit=$($a.Exit); affected paths=$($a.Paths-join', '); staged before failure=$($staged.Paths-join', '); error=$($a.Err)"
-        [Windows.Forms.MessageBox]::Show("Command: $($a.Command)`r`nAffected paths: all $($a.Paths.Count) approved paths (listed in the Project Manager log).`r`n`r`nStaged before failure:`r`n$stagedText`r`n`r`nLock cleanup: $($a.LockCleanup)`r`n`r`n$($a.Out)`r`n$($a.Err)`r`n`r`nCommit and push were blocked.","Staging Failed")|Out-Null;return
+        $reason="Staging failed; commit blocked.`r`nCommand: $($a.Command)`r`nExit code: $($a.Exit)`r`nAffected paths: $($a.Paths-join', ')`r`nStaged before failure:`r`n$stagedText`r`nLock cleanup: $($a.LockCleanup)`r`nSTDOUT:`r`n$(Format-CommandStream $a.Out)`r`nSTDERR:`r`n$(Format-CommandStream $a.Err)"
+        $reconcile=Reset-StagingAfterFailure $reason
+        [Windows.Forms.MessageBox]::Show($reconcile.Text,"Staging Failed")|Out-Null;return
     }
-    $verified=Test-StagedCheckpointSet $files.Intentional
+    $verified=Test-StagedCheckpointSet $stageItems $a $beforeStage
+    foreach($path in $verified.NoStageableDifference){Log "Approved path excluded from expected staged set: $path - no stageable difference after Git normalization"}
     if(!$verified.Matches){
-        Log "Staged-set mismatch; commit blocked. Missing=$($verified.Missing-join', '); unexpected=$($verified.Unexpected-join', '); error=$($verified.Error)"
-        $reconcile=Run-Cmd 'git reset' 60;Log "Index reconciled after staged-set mismatch: git reset exit=$($reconcile.Exit); working-tree content preserved"
-        [Windows.Forms.MessageBox]::Show("The staged files do not exactly match the approved list. Commit and push were blocked, and the index was cleared without changing working-tree files.`r`n`r`nMissing:`r`n$($verified.Missing-join"`r`n")`r`n`r`nUnexpected:`r`n$($verified.Unexpected-join"`r`n")`r`n`r`n$($verified.Error)","Staging Verification Failed")|Out-Null;return
+        $diagnostics=Format-StagingVerificationDiagnostics $verified
+        $reason="Staged-set mismatch; commit blocked.`r`nMissing: $($verified.Missing-join', ')`r`nUnexpected: $($verified.Unexpected-join', ')`r`nChanged during staging: $($verified.ChangedDuringStaging-join', ')`r`ngit add exit code: $($a.Exit)`r`ngit add stdout:`r`n$(Format-CommandStream $a.Out)`r`ngit add stderr:`r`n$(Format-CommandStream $a.Err)`r`n`r`n$diagnostics"
+        $reconcile=Reset-StagingAfterFailure $reason
+        [Windows.Forms.MessageBox]::Show($reconcile.Text,"Staging Verification Failed")|Out-Null;return
     }
     Log "Staged-set verification passed: $($verified.Staged.Count) paths exactly match the approved list"
     $sec=Secrets;if($sec.State-eq"red"){Run-Cmd "git reset" 30|Out-Null;[Windows.Forms.MessageBox]::Show($sec.Detail+"`r`n`r`nStaging reset.","DO NOT PUSH")|Out-Null;return}

@@ -3,7 +3,15 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from core.views import about, home, learn, location_detail, location_list, map_explorer
+from core.views import (
+    about,
+    home,
+    learn,
+    location_detail,
+    location_list,
+    map_explorer,
+    pota_leaderboard,
+)
 from core.recovery_views import (
     RadioOutdoorsPasswordResetCompleteView,
     RadioOutdoorsPasswordResetConfirmView,
@@ -19,6 +27,7 @@ urlpatterns = [
     path("media/<path:path>", serve_moderated_media, name="moderated_media"),
     path("", include("core.identity_urls")),
     path("", home, name="home"),
+    path("pota/leaderboard/", pota_leaderboard, name="pota_leaderboard"),
 
     path("locations/", location_list, name="locations"),
     path("locations/<int:location_id>/", location_detail, name="location_detail"),

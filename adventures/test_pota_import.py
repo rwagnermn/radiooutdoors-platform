@@ -13,7 +13,7 @@ from django.urls import reverse
 from core.models import Adventure, JournalEntry, Location, MemberProfile, PotaActivationImport, PotaImportBatch
 from .pota_import import parse_pota_history
 from .pota_geocoding import geocode_pota_park
-from .pota_views import _park_key
+from .pota_views import POTA_PENDING_SESSION_KEY, _key, _park_key
 
 SAMPLE = "My Activations\n2024-06-01\tW5TEST\tUS-1234\tPike Lake\tUS-MN\t4\t1\t5\t10\nCopyright POTA"
 SUPPLIED_SAMPLE = """2025-06-04 W5RIK US-12388 Caribou Falls Unique Area US-MN 0 0 15 15
@@ -134,6 +134,32 @@ class PotaImportEntryPointTests(TestCase):
         self.assertEqual(importer_response.status_code, 200)
         self.assertContains(importer_response, "Copy the activation table from POTA My Activations")
 
+    def test_source_is_editable_before_acceptance_and_locked_afterward(self):
+        self.client.force_login(self.user)
+        initial = self.client.get(reverse("import_pota_history"))
+        self.assertContains(initial, 'id="pota-history" name="pota_history"')
+        self.assertNotContains(initial, 'id="pota-history" name="pota_history" readonly')
+
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": SAMPLE}
+        )
+        token = start.url.rstrip("/").split("/")[-1]
+        preview = self.client.get(start.url)
+        self.assertContains(preview, "Accepted source data")
+        self.assertContains(
+            preview,
+            'id="pota-history-accepted" rows="14" readonly aria-readonly="true"',
+        )
+        self.assertContains(preview, SAMPLE)
+        self.assertNotContains(preview, 'name="pota_history"')
+        self.assertNotContains(preview, "pota-history-correction")
+        self.assertContains(
+            preview,
+            f'href="{reverse("abort_pota_history", args=[token])}"',
+        )
+        self.assertContains(preview, ">Abort Import</a>")
+        self.assertNotContains(preview, ">Abort Import</button>")
+
     def test_visitor_does_not_see_entry_and_direct_access_requires_login(self):
         home_response = self.client.get(reverse("home"))
         self.assertNotContains(home_response, "Import POTA History")
@@ -207,7 +233,8 @@ class PotaImportEntryPointTests(TestCase):
         self.assertContains(preview, "US-IA, + 1")
         self.assertContains(preview, "single entity where the activation occurred")
         self.assertContains(preview, "other states associated with the park")
-        self.assertContains(preview, "Correct the preserved pasted data")
+        self.assertContains(preview, "abort this import and paste corrected source data into a new import")
+        self.assertNotContains(preview, "Correct the preserved pasted data")
         self.assertContains(preview, pasted)
         self.assertContains(preview, 'class="pota-activation-selector"', count=1)
         self.assertContains(preview, 'name="selected_rows"', count=1)
@@ -355,6 +382,7 @@ class PotaImportEntryPointTests(TestCase):
                 "entity": "US-XX",
                 "cw": "999",
                 "total": "999",
+                "pota_history": "1900-01-01 N0EVIL US-9999 Crafted Park US-XX 999 0 0 999",
             },
         )
         self.assertRedirects(confirmed, reverse("pota_history_result"))
@@ -365,6 +393,47 @@ class PotaImportEntryPointTests(TestCase):
         self.assertEqual(imported.entity, "US-MN")
         self.assertEqual(imported.cw_contacts, 1)
         self.assertEqual(imported.total_contacts, 15)
+
+    def test_abort_clears_pending_state_without_activation_changes(self):
+        self.client.force_login(self.user)
+        start = self.client.post(
+            reverse("import_pota_history"), {"pota_history": SAMPLE}
+        )
+        token = start.url.rstrip("/").split("/")[-1]
+        self.assertEqual(self.client.session[POTA_PENDING_SESSION_KEY], token)
+        self.assertIsNotNone(cache.get(_key(token)))
+        session = self.client.session
+        session["pota_import_result"] = {"created": 99}
+        session.save()
+        before = {
+            "adventures": Adventure.objects.count(),
+            "journals": JournalEntry.objects.count(),
+            "locations": Location.objects.count(),
+            "batches": PotaImportBatch.objects.count(),
+            "activations": PotaActivationImport.objects.count(),
+        }
+
+        self.client.get(start.url)
+        self.client.get(start.url)
+        aborted = self.client.get(reverse("abort_pota_history", args=[token]))
+        self.assertRedirects(aborted, reverse("my_adventures"))
+        self.assertNotIn(POTA_PENDING_SESSION_KEY, self.client.session)
+        self.assertNotIn("pota_import_result", self.client.session)
+        self.assertIsNone(cache.get(_key(token)))
+        after = {
+            "adventures": Adventure.objects.count(),
+            "journals": JournalEntry.objects.count(),
+            "locations": Location.objects.count(),
+            "batches": PotaImportBatch.objects.count(),
+            "activations": PotaActivationImport.objects.count(),
+        }
+        self.assertEqual(after, before)
+
+        repeated_abort = self.client.get(
+            reverse("abort_pota_history", args=[token])
+        )
+        self.assertRedirects(repeated_abort, reverse("my_adventures"))
+        self.assertEqual(PotaActivationImport.objects.count(), 0)
 
     def test_review_token_is_owner_scoped_and_missing_token_is_readable(self):
         self.client.force_login(self.user)
@@ -573,7 +642,28 @@ class PotaImportEntryPointTests(TestCase):
         self.assertEqual(str(location.longitude), "-92.654321")
         self.assertEqual(set(Adventure.objects.values_list("location_id", flat=True)), {location.pk})
         self.assertEqual(Adventure.objects.count(), 2)
-        self.client.post(reverse("confirm_pota_history", args=[token]), post)
+        self.assertNotIn(POTA_PENDING_SESSION_KEY, self.client.session)
+        counts_after_import = {
+            "adventures": Adventure.objects.count(),
+            "journals": JournalEntry.objects.count(),
+            "locations": Location.objects.count(),
+            "batches": PotaImportBatch.objects.count(),
+            "activations": PotaActivationImport.objects.count(),
+        }
+        duplicate_submission = self.client.post(
+            reverse("confirm_pota_history", args=[token]), post
+        )
+        self.assertRedirects(duplicate_submission, reverse("import_pota_history"))
+        self.assertEqual(
+            {
+                "adventures": Adventure.objects.count(),
+                "journals": JournalEntry.objects.count(),
+                "locations": Location.objects.count(),
+                "batches": PotaImportBatch.objects.count(),
+                "activations": PotaActivationImport.objects.count(),
+            },
+            counts_after_import,
+        )
         self.assertEqual(Location.objects.filter(reference_code="US-9999").count(), 1)
 
     def test_preview_selection_posts_to_confirm_and_creates_adventure(self):
@@ -694,7 +784,9 @@ class PotaImportEntryPointTests(TestCase):
         })
 
         other = Adventure.objects.create(owner=self.user, title="Other POTA Counts")
-        other_journal = JournalEntry.objects.create(adventure=other, title="Other")
+        other_journal = JournalEntry.objects.create(
+            adventure=other, title="Other", pota=True
+        )
         batch = PotaImportBatch.objects.filter(owner=self.user).first()
         PotaActivationImport.objects.create(
             adventure=other, journal_entry=other_journal, batch=batch,
@@ -707,7 +799,9 @@ class PotaImportEntryPointTests(TestCase):
         page = self.client.get(reverse("adventure_journals", args=[adventure.slug]))
         self.assertEqual(page.context["journal_count_totals"]["total"], 25)
 
-        added = JournalEntry.objects.create(adventure=adventure, title="Added Journal")
+        added = JournalEntry.objects.create(
+            adventure=adventure, title="Added Journal", pota=True
+        )
         PotaActivationImport.objects.create(
             adventure=adventure, journal_entry=added, batch=batch,
             activation_date="2024-06-04", callsign="W5TEST",

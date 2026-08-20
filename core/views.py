@@ -4,8 +4,15 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
 from adventures.contact_map import contact_coordinates, coordinate_pair
+from adventures.pota_aggregation import public_pota_leaders
 
-from .models import Adventure, JournalContact, Location, LocationType, OperatingLocation
+from .models import (
+    Adventure,
+    JournalContact,
+    Location,
+    LocationType,
+    OperatingLocation,
+)
 from .auth import is_verified_member
 from .pin_permissions import can_edit_location_pin, can_edit_operating_position_pin
 from .location_privacy import can_view_location, mark_adventure_location_visibility, visible_locations
@@ -15,6 +22,20 @@ def _visible_adventure_q(request, prefix=""):
     visibility = Q(**{f"{prefix}is_public": True})
     if request.user.is_authenticated:
         visibility |= Q(**{f"{prefix}owner": request.user})
+    return visibility
+
+
+def _visible_journal_q(request, prefix=""):
+    if request.user.is_staff:
+        return Q()
+    visibility = Q(
+        **{
+            f"{prefix}is_public": True,
+            f"{prefix}adventure__is_public": True,
+        }
+    )
+    if request.user.is_authenticated:
+        visibility |= Q(**{f"{prefix}adventure__owner": request.user})
     return visibility
 
 
@@ -38,6 +59,19 @@ def home(request):
     )
 
 
+def pota_leaderboard(request):
+    leaders = list(public_pota_leaders())
+    podium_classes = ("gold", "silver", "bronze")
+    for rank, leader in enumerate(leaders, start=1):
+        leader["rank"] = rank
+        leader["podium_class"] = podium_classes[rank - 1] if rank <= 3 else ""
+    return render(
+        request,
+        "core/pota_leaderboard.html",
+        {"leaders": leaders},
+    )
+
+
 def location_list(request):
     locations = (
         visible_locations(request.user).annotate(
@@ -45,9 +79,12 @@ def location_list(request):
                 "operating_locations",
                 distinct=True,
             ),
-            adventure_count=Count(
-                "adventures",
-                filter=_visible_adventure_q(request, "adventures__"),
+            journal_use_count=Count(
+                "journal_entries",
+                filter=Q(
+                    journal_entries__is_adventure_photo_collection=False,
+                )
+                & _visible_journal_q(request, "journal_entries__"),
                 distinct=True,
             ),
         )

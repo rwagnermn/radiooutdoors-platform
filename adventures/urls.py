@@ -15,6 +15,7 @@ from .views import (
     adventure_detail,
     adventure_contacts,
     adventure_journals,
+    bulk_delete_adventure_journals,
     adventure_import_contacts,
     all_adventures,
     cancel_adif_import,
@@ -45,9 +46,11 @@ from .views import (
     mark_adventure_in_progress,
     my_adventures,
     start_adventure_here,
+    select_adventure_journals,
     preview_adif_import,
 )
 from .pota_views import (
+    abort_pota_history,
     confirm_pota_history,
     import_pota_history,
     pota_history_result,
@@ -88,6 +91,11 @@ urlpatterns = [
         name="preview_pota_history",
     ),
     path(
+        "import/pota/abort/<str:token>/",
+        abort_pota_history,
+        name="abort_pota_history",
+    ),
+    path(
         "import/pota/confirm/<str:token>/",
         confirm_pota_history,
         name="confirm_pota_history",
@@ -125,6 +133,8 @@ urlpatterns = [
     path("<slug:slug>/comments/add/", add_comment, name="add_comment"),
     path("<slug:slug>/contacts/", adventure_contacts, name="adventure_contacts"),
     path("<slug:slug>/journals/", adventure_journals, name="adventure_journals"),
+    path("<slug:slug>/journals/select/", select_adventure_journals, name="select_adventure_journals"),
+    path("<slug:slug>/journals/delete-selected/", bulk_delete_adventure_journals, name="bulk_delete_adventure_journals"),
     path(
         "<slug:slug>/contacts/import/",
         adventure_import_contacts,

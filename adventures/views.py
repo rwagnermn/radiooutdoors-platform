@@ -3,12 +3,12 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
 from PIL import Image
@@ -16,6 +16,7 @@ from datetime import date, datetime, time
 import hashlib
 import json
 import logging
+import random
 from pathlib import Path
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -39,6 +40,7 @@ from core.auth import (
 
 from .adif_parser import parse_adif_bytes_with_counts
 from .contact_map import build_contact_map
+from .pota_aggregation import aggregate_pota_journals
 
 from .forms import (
     AdifImportForm,
@@ -51,6 +53,9 @@ from .forms import (
 
 
 logger = logging.getLogger(__name__)
+
+
+PENDING_JOURNAL_BULK_DELETE_SESSION_KEY = "pending_journal_bulk_delete"
 
 
 def _safe_external_reference_url(value):
@@ -459,13 +464,7 @@ def adventure_detail(request, slug):
         seen_contacts.add(identity)
         contacts.append(contact)
     contact_count = len(contacts)
-    pota_rollup = journal_entries.aggregate(
-        cw=Sum("pota_import__cw_contacts"),
-        data=Sum("pota_import__data_contacts"),
-        phone=Sum("pota_import__phone_contacts"),
-        total=Sum("pota_import__total_contacts"),
-    )
-    pota_rollup = {key: value or 0 for key, value in pota_rollup.items()}
+    pota_rollup = aggregate_pota_journals(journal_entries)
     contact_map = build_contact_map(adventure, contacts, request.user)
     can_manage_journals = can_manage_adventure
     photo_upload_entry = journal_entries.first() if can_manage_journals else None
@@ -628,15 +627,7 @@ def adventure_journals(request, slug):
     journals = adventure.journal_entries.all()
     if not can_manage_adventure:
         journals = journals.filter(is_public=True)
-    journal_count_totals = journals.aggregate(
-        cw=Sum("pota_import__cw_contacts"),
-        data=Sum("pota_import__data_contacts"),
-        phone=Sum("pota_import__phone_contacts"),
-        total=Sum("pota_import__total_contacts"),
-    )
-    journal_count_totals = {
-        key: value or 0 for key, value in journal_count_totals.items()
-    }
+    journal_count_totals = aggregate_pota_journals(journals)
     visible_photo_filter = Q()
     if not can_manage_adventure:
         visible_photo_filter = Q(
@@ -656,7 +647,182 @@ def adventure_journals(request, slug):
         "journal_entries": journal_rows,
         "journal_count_totals": journal_count_totals,
         "can_manage_adventure": can_manage_adventure,
+        "eligible_journal_count": len(journal_rows) if can_manage_adventure else 0,
     })
+
+
+def _bulk_deletable_journals(user, adventure):
+    if not _can_manage_adventure(user, adventure):
+        return JournalEntry.objects.none()
+    return JournalEntry.objects.filter(adventure=adventure)
+
+
+def _validated_bulk_journal_ids(user, adventure, submitted_ids):
+    if not isinstance(submitted_ids, list) or not submitted_ids:
+        return None, "Select at least one Journal."
+    normalized_ids = []
+    for value in submitted_ids:
+        try:
+            normalized_id = int(value)
+        except (TypeError, ValueError, OverflowError):
+            return None, "The selected Journal list is invalid."
+        if (
+            isinstance(value, bool)
+            or normalized_id < 1
+            or str(value).strip() != str(normalized_id)
+        ):
+            return None, "The selected Journal list is invalid."
+        normalized_ids.append(normalized_id)
+    if len(normalized_ids) != len(set(normalized_ids)):
+        return None, "The selected Journal list contains duplicate IDs."
+    eligible_ids = set(
+        _bulk_deletable_journals(user, adventure)
+        .filter(pk__in=normalized_ids)
+        .values_list("pk", flat=True)
+    )
+    if eligible_ids != set(normalized_ids):
+        return None, "One or more selected Journals do not belong to this Adventure or are not authorized."
+    return normalized_ids, None
+
+
+@verified_member_or_staff_required
+@require_GET
+def select_adventure_journals(request, slug):
+    adventure = get_object_or_404(Adventure.objects.select_related("owner"), slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or authorized staff can select Journals."
+        )
+    eligible_ids = list(
+        _bulk_deletable_journals(request.user, adventure)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    mode = request.GET.get("mode", "")
+    if mode == "all":
+        selected_ids = eligible_ids
+    elif mode == "none":
+        selected_ids = []
+    elif mode == "random":
+        raw_count = request.GET.get("count", "")
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError, OverflowError):
+            count = 0
+        if count < 1 or raw_count.strip() != str(count):
+            return JsonResponse(
+                {"error": "Enter a whole number of Journals from 1 through the eligible count.", "eligible_count": len(eligible_ids)},
+                status=400,
+            )
+        if count > len(eligible_ids):
+            return JsonResponse(
+                {"error": f"Only {len(eligible_ids)} Journals are eligible in this Adventure.", "eligible_count": len(eligible_ids)},
+                status=400,
+            )
+        selected_ids = random.sample(eligible_ids, count)
+    else:
+        return JsonResponse({"error": "Choose a valid Journal selection option."}, status=400)
+    response = JsonResponse(
+        {"journal_ids": selected_ids, "selected_count": len(selected_ids), "eligible_count": len(eligible_ids)}
+    )
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def _posted_bulk_journal_ids(request):
+    try:
+        submitted_ids = json.loads(request.POST.get("selected_journal_ids", ""))
+    except (TypeError, ValueError):
+        return None, "The selected Journal list is invalid."
+    return submitted_ids, None
+
+
+@verified_member_or_staff_required
+@require_POST
+def bulk_delete_adventure_journals(request, slug):
+    adventure = get_object_or_404(Adventure.objects.select_related("owner"), slug=slug)
+    if not _can_manage_adventure(request.user, adventure):
+        return HttpResponseForbidden(
+            "Only the Adventure owner or authorized staff can delete Journals."
+        )
+    decision = request.POST.get("decision", "review")
+    if decision == "review":
+        submitted_ids, parse_error = _posted_bulk_journal_ids(request)
+        if parse_error:
+            return HttpResponseBadRequest(parse_error)
+        journal_ids, validation_error = _validated_bulk_journal_ids(
+            request.user, adventure, submitted_ids
+        )
+        if validation_error:
+            return HttpResponseBadRequest(validation_error)
+        confirmation_token = uuid4().hex
+        request.session[PENDING_JOURNAL_BULK_DELETE_SESSION_KEY] = {
+            "token": confirmation_token,
+            "user_id": request.user.pk,
+            "adventure_id": adventure.pk,
+            "journal_ids": journal_ids,
+        }
+        return render(request, "adventures/confirm_bulk_journal_delete.html", {
+            "adventure": adventure,
+            "journal_count": len(journal_ids),
+            "confirmation_token": confirmation_token,
+        })
+    if decision not in {"confirm", "cancel"}:
+        return HttpResponseBadRequest("Choose Confirm Delete or Cancel.")
+    pending = request.session.get(PENDING_JOURNAL_BULK_DELETE_SESSION_KEY)
+    token = request.POST.get("confirmation_token", "")
+    if (
+        not pending
+        or not token
+        or pending.get("token") != token
+        or pending.get("user_id") != request.user.pk
+        or pending.get("adventure_id") != adventure.pk
+    ):
+        return HttpResponseBadRequest("That Journal deletion confirmation is missing or expired.")
+    if decision == "cancel":
+        request.session.pop(PENDING_JOURNAL_BULK_DELETE_SESSION_KEY, None)
+        messages.info(request, "Journal deletion canceled. No Journals were deleted.")
+        return redirect("adventure_journals", slug=adventure.slug)
+    journal_ids, validation_error = _validated_bulk_journal_ids(
+        request.user, adventure, pending.get("journal_ids")
+    )
+    if validation_error:
+        return HttpResponseBadRequest(validation_error)
+    with transaction.atomic():
+        locked_adventure = Adventure.objects.select_for_update().get(pk=adventure.pk)
+        if not _can_manage_adventure(request.user, locked_adventure):
+            return HttpResponseForbidden(
+                "Only the Adventure owner or authorized staff can delete Journals."
+            )
+        selected_journals = JournalEntry.objects.select_for_update().filter(
+            adventure=locked_adventure,
+            pk__in=journal_ids,
+        )
+        if set(selected_journals.values_list("pk", flat=True)) != set(journal_ids):
+            return HttpResponseBadRequest(
+                "The selected Journals changed before confirmation. Nothing was deleted."
+            )
+        deleting_cover = bool(
+            locked_adventure.cover_photo_id
+            and selected_journals.filter(
+                photos__pk=locked_adventure.cover_photo_id
+            ).exists()
+        )
+        deleted_count = selected_journals.count()
+        selected_journals.delete()
+        if deleting_cover:
+            Adventure.objects.filter(pk=locked_adventure.pk).update(
+                cover_photo=None,
+                cover_photo_is_explicit=False,
+                updated_at=timezone.now(),
+            )
+        locked_adventure.refresh_status_from_journals()
+    request.session.pop(PENDING_JOURNAL_BULK_DELETE_SESSION_KEY, None)
+    messages.success(
+        request,
+        f"Deleted {deleted_count} Journals from {adventure.title} (Adventure ID {adventure.pk}).",
+    )
+    return redirect("adventure_journals", slug=adventure.slug)
 
 
 @verified_member_or_staff_required

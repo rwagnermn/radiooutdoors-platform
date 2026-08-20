@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Confirm Journal Deletion | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page adventure-journals-page{% endblock %}
+{% block content %}
+<section class="content narrow-content">
+  <div class="location-card journal-bulk-delete-confirmation" role="alert" aria-labelledby="bulk-delete-heading">
+    <h1 id="bulk-delete-heading">Confirm Journal Deletion</h1>
+    <p><strong>You are about to permanently delete {{ journal_count }} Journal{{ journal_count|pluralize }} from {{ adventure.title }} (Adventure ID {{ adventure.pk }}).</strong></p>
+    <p>Only the selected Journals and records normally associated with those Journals will be deleted. The Adventure itself will remain.</p>
+    <form method="post" action="{% url 'bulk_delete_adventure_journals' adventure.slug %}">
+      {% csrf_token %}
+      <input type="hidden" name="confirmation_token" value="{{ confirmation_token }}">
+      <div class="journal-bulk-confirmation-actions">
+        <button type="submit" name="decision" value="confirm" class="danger-button">Confirm Delete {{ journal_count }} Journal{{ journal_count|pluralize }}</button>
+        <button type="submit" name="decision" value="cancel" class="button-secondary-dark">Cancel</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

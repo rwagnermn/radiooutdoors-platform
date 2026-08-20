@@ -22,8 +22,23 @@ from .pota_parks import lookup_pota_park, normalize_pota_reference
 from .pota_geocoding import entity_region, geocode_pota_park
 
 ATTESTATION = "I confirm that I was authorized to use each listed former or alternate callsign for these activations."
+POTA_PENDING_SESSION_KEY = "pota_import_pending_token"
 
 def _key(token): return f"pota-import:{token}"
+
+
+def _remember_pending_import(request, token):
+    previous_token = request.session.get(POTA_PENDING_SESSION_KEY)
+    if previous_token and previous_token != token:
+        previous_payload = cache.get(_key(previous_token))
+        if previous_payload and previous_payload.get("owner") == request.user.pk:
+            cache.delete(_key(previous_token))
+    request.session[POTA_PENDING_SESSION_KEY] = token
+
+
+def _forget_pending_import(request, token):
+    if request.session.get(POTA_PENDING_SESSION_KEY) == token:
+        request.session.pop(POTA_PENDING_SESSION_KEY, None)
 
 def _preserve_preview_form(token, payload, request):
     payload["form_values"] = {
@@ -212,6 +227,7 @@ def import_pota_history(request):
             "invalid_rows": invalid,
             "submitted_text": pasted,
         }, 3600)
+        _remember_pending_import(request, token)
         return redirect("preview_pota_history", token=token)
     return render(request, "adventures/pota_history_import.html", {"submitted_text": ""})
 
@@ -230,6 +246,17 @@ def preview_pota_history(request, token):
         row["location_status"] = statuses.get(normalize_pota_reference(row["park_reference"]), "Pin pending")
     manageable_adventures = Adventure.objects.filter(owner=request.user)
     return render(request, "adventures/pota_history_preview.html", {"token": token, "rows": payload["rows"], "parks": parks, "ignored": payload["ignored"], "invalid_count": payload.get("invalid", 0), "invalid_rows": payload.get("invalid_rows", []), "submitted_text": payload.get("submitted_text", ""), "locations": locations, "manageable_adventures": manageable_adventures.order_by("title", "pk"), "form_values": payload.get("form_values", {}), "attestation": ATTESTATION, "needs_attestation": any(r["callsign_status"] == "attestation" and not r["errors"] and not r["duplicate"] for r in payload["rows"]), "lookup_unavailable": any(park["geocode_status"] == "unavailable" for park in parks), "existing_match_count": sum(bool(park["matched_location_id"]) for park in parks), "approximate_count": sum(bool(park["latitude"] and park["longitude"] and not park["matched_location_id"]) for park in parks), "pending_count": sum(not park["matched_location_id"] and not (park["latitude"] and park["longitude"]) for park in parks)})
+
+
+@verified_member_required
+def abort_pota_history(request, token):
+    payload = cache.get(_key(token))
+    if payload and payload.get("owner") == request.user.pk:
+        cache.delete(_key(token))
+    _forget_pending_import(request, token)
+    request.session.pop("pota_import_result", None)
+    messages.info(request, "POTA import aborted. No activations were imported.")
+    return redirect("my_adventures")
 
 
 @verified_member_required
@@ -407,6 +434,7 @@ def confirm_pota_history(request, token):
             needs_location += int(location is None or location.latitude is None or location.longitude is None)
         batch.confirmed_at = timezone.now(); batch.save(update_fields=["confirmed_at"])
     cache.delete(_key(token))
+    _forget_pending_import(request, token)
     result = {"created": created, "journals_created": journals_created, "contacts_imported": contacts_imported, "duplicate_contacts": duplicate_contacts, "duplicates": duplicates, "invalid": payload.get("invalid", 0), "needs_location": needs_location, "links": links, "destination_name": destination_adventure.title if organization == "grouped" else "", "source_label": "POTA Hunter Log" if is_hunter else "POTA Activation History"}
     request.session["pota_import_result"] = result
     if organization == "grouped":
