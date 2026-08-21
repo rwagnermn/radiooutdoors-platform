@@ -6,8 +6,8 @@
 <section class="content adventure-dashboard">
   <div class="adventure-dashboard-toolbar">
     {% if can_manage_adventure %}<a href="{% url 'my_adventures' %}" class="back-link-button">← Back to My Adventures</a>{% endif %}
+    <h1 class="adventure-page-type-heading">ADVENTURE</h1>
     <div class="adventure-dashboard-actions">
-      {% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary">+ Add Journal Entry</a>{% endif %}
       {% if can_manage_adventure %}<details class="ro-action-menu"><summary aria-label="Adventure actions" aria-expanded="false">•••</summary><div class="ro-action-menu-panel"><a href="{% url 'edit_adventure' adventure.slug %}">Edit Adventure</a>{% if contact_count %}<a href="{% url 'adventure_import_contacts' adventure.slug %}">Import Contacts</a>{% endif %}<form method="post" action="{% url 'delete_adventure' adventure.slug %}" onsubmit="return confirm('Delete this Adventure and all Journals, photos, contacts, and comments?');">{% csrf_token %}<button type="submit" class="danger-menu-item">Delete Adventure</button></form></div></details>{% endif %}
     </div>
   </div>
@@ -24,7 +24,6 @@
         <span><strong>Managed by:</strong> {{ adventure.owner.member_profile.callsign|default:adventure.owner.username }}</span>
       </div>
       {% if adventure_reference %}<p class="adventure-dashboard-reference"><strong>Event Website or Reference:</strong> {% if adventure_reference_url %}<a href="{{ adventure_reference_url }}" target="_blank" rel="noopener noreferrer">{{ adventure_reference }}</a>{% else %}<span>{{ adventure_reference }}</span>{% endif %}</p>{% endif %}
-      <p class="adventure-dashboard-hero-note">QSO’s and Contacts, Map Locations &amp; Photos are stored in Journals</p>
       {% if adventure.location and not can_view_adventure_location %}<p class="private-location-badge">Private Location</p><p>Contact paths are hidden because this Adventure uses a Private Location.</p>{% endif %}
       {% if adventure.summary %}<div class="adventure-summary-clamp" data-summary-clamp><div class="adventure-summary-text" data-summary-text>{{ adventure.summary|linebreaksbr }}</div><button type="button" class="adventure-summary-toggle" data-summary-toggle aria-expanded="false" hidden>More</button></div>{% endif %}
     </div>
@@ -48,7 +47,9 @@
     </section>
 
     <section id="journal-entries" class="adventure-dashboard-card adventure-dashboard-journals">
-      <div class="adventure-scroll-shell adventure-journal-scroll-shell" data-scroll-shell><div id="adventure-journal-scroll" class="adventure-dashboard-scroll adventure-dashboard-journal-scroll" data-scroll-viewport role="region" aria-label="Adventure Journals" tabindex="0"><div class="adventure-journal-column-headings"><span>Date</span><span>Journal Name</span><span>Location</span><span>Photos</span><span>Contacts</span><span>Status</span><a class="adventure-dashboard-view-all" href="{% url 'adventure_journals' adventure.slug %}">View All Journals</a></div>{% include "adventures/_journal_entry_list.html" with manage_journals=can_manage_adventure dashboard_layout=True %}</div><div class="adventure-scroll-controls" aria-label="Adventure Journals scroll controls"><button type="button" data-scroll-up aria-controls="adventure-journal-scroll" aria-label="Scroll Journals up">▲</button><input type="range" data-scroll-thumb aria-controls="adventure-journal-scroll" aria-label="Journal list scroll position" min="0" max="100" value="0"><button type="button" data-scroll-down aria-controls="adventure-journal-scroll" aria-label="Scroll Journals down">▼</button></div></div>
+      <div class="adventure-dashboard-section-heading adventure-journals-heading"><div class="adventure-journals-heading-main"><h2>Adventure Journals</h2>{% if can_manage_adventure %}<a href="{% url 'add_journal_entry' adventure.slug %}" class="button-primary adventure-journal-add-action">+ Add Journal Entry</a>{% endif %}</div><a class="adventure-dashboard-view-all" href="{% url 'adventure_journals' adventure.slug %}">View All Journals</a></div>
+      <p class="adventure-journal-storage-notice" data-journal-storage-notice role="status"><span class="adventure-journal-storage-notice-icon" aria-hidden="true">ⓘ</span><span>QSO’s and Contacts, Map Locations &amp; Photos are stored in Journals.</span></p>
+      <div class="adventure-scroll-shell adventure-journal-scroll-shell" data-scroll-shell><div id="adventure-journal-scroll" class="adventure-dashboard-scroll adventure-dashboard-journal-scroll" data-scroll-viewport role="region" aria-label="Adventure Journals" tabindex="0"><div class="adventure-journal-column-headings"><span>Date</span><span>Journal Name</span><span>Location</span><span>Photos</span><span>Contacts</span><span>Status</span></div>{% include "adventures/_journal_entry_list.html" with manage_journals=can_manage_adventure dashboard_layout=True %}</div><div class="adventure-scroll-controls" aria-label="Adventure Journals scroll controls"><button type="button" data-scroll-up aria-controls="adventure-journal-scroll" aria-label="Scroll Journals up">▲</button><input type="range" data-scroll-thumb aria-controls="adventure-journal-scroll" aria-label="Journal list scroll position" min="0" max="100" value="0"><button type="button" data-scroll-down aria-controls="adventure-journal-scroll" aria-label="Scroll Journals down">▼</button></div></div>
     </section>
 
     <section id="adventure-photos" class="adventure-dashboard-card adventure-dashboard-photos">
@@ -60,6 +61,6 @@
 </section>
 {% endblock %}
 {% block extra_scripts %}
-<script src="{% static 'js/adventure-dashboard.js' %}?v=002"></script>
+<script src="{% static 'js/adventure-dashboard.js' %}?v=004"></script>
 {% if journal_location_map_data %}<script src="{% static 'js/single-location-map.js' %}?v=002"></script>{% if google_maps_api_key %}<script>window.initAdventureMaps=function(){if(window.initAdventureJournalMap)window.initAdventureJournalMap();};</script><script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=marker&callback=initAdventureMaps"></script>{% endif %}{% endif %}
 {% endblock %}

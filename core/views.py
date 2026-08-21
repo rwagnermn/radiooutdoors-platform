@@ -1,14 +1,13 @@
 from django.db.models import Count, Q
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 from django.urls import reverse
 
-from adventures.contact_map import contact_coordinates, coordinate_pair
 from adventures.pota_aggregation import public_pota_leaders
 
 from .models import (
     Adventure,
-    JournalContact,
     Location,
     LocationType,
     OperatingLocation,
@@ -60,7 +59,15 @@ def home(request):
 
 
 def pota_leaderboard(request):
-    leaders = list(public_pota_leaders())
+    current_year = timezone.localdate().year
+    selected_period = (
+        "current" if request.GET.get("period") == "current" else "all"
+    )
+    leaders = list(
+        public_pota_leaders(
+            activation_year=current_year if selected_period == "current" else None
+        )
+    )
     podium_classes = ("gold", "silver", "bronze")
     for rank, leader in enumerate(leaders, start=1):
         leader["rank"] = rank
@@ -68,7 +75,14 @@ def pota_leaderboard(request):
     return render(
         request,
         "core/pota_leaderboard.html",
-        {"leaders": leaders},
+        {
+            "leaders": leaders,
+            "current_year": current_year,
+            "selected_period": selected_period,
+            "period_label": (
+                str(current_year) if selected_period == "current" else "All Time"
+            ),
+        },
     )
 
 
@@ -233,103 +247,6 @@ def about(request):
     return render(request, "core/about.html")
 
 
-def _global_contact_points(request):
-    public_contacts = (
-        Q(journal_entry__is_public=True, journal_entry__adventure__is_public=True)
-        | Q(journal_entry__isnull=True, adventure__is_public=True)
-    )
-    if request.user.is_staff:
-        access = Q(journal_entry__adventure__isnull=False) | Q(adventure__isnull=False)
-    elif request.user.is_authenticated:
-        access = (
-            public_contacts
-            | Q(journal_entry__adventure__owner=request.user)
-            | Q(journal_entry__isnull=True, adventure__owner=request.user)
-        )
-    else:
-        access = public_contacts
-
-    contacts = (
-        JournalContact.objects.filter(access)
-        .filter(
-            Q(latitude__isnull=False, longitude__isnull=False)
-            | ~Q(grid_square="")
-            | Q(resolved_location__isnull=False)
-        )
-        .select_related(
-            "adventure",
-            "adventure__location",
-            "journal_entry",
-            "journal_entry__adventure",
-            "journal_entry__location",
-            "resolved_location",
-        )
-        .order_by("qso_date", "time_on", "pk")
-    )
-
-    points = []
-    for contact in contacts:
-        journal = contact.journal_entry
-        adventure = journal.adventure if journal is not None else contact.adventure
-        if adventure is None:
-            continue
-        origin_location = journal.location if journal is not None else adventure.location
-        if origin_location is not None and not can_view_location(
-            request.user, origin_location
-        ):
-            continue
-        origin = (
-            coordinate_pair(journal.latitude, journal.longitude)
-            if journal is not None
-            else (
-                None
-                if origin_location is None
-                else coordinate_pair(
-                    origin_location.latitude, origin_location.longitude
-                )
-            )
-        )
-        destination, source, approximate = contact_coordinates(contact, request.user)
-        if origin is None or destination is None:
-            continue
-        points.append(
-            {
-                "marker_type": "contact",
-                "contact_id": contact.pk,
-                "callsign": contact.callsign,
-                "title": contact.callsign,
-                "date": contact.qso_date.isoformat(),
-                "time": contact.time_on.strftime("%H:%M") if contact.time_on else "",
-                "band": contact.band,
-                "frequency": str(contact.frequency) if contact.frequency is not None else "",
-                "mode": contact.mode,
-                "grid_square": contact.grid_square,
-                "state": contact.state,
-                "country": contact.country,
-                "latitude": destination[0],
-                "longitude": destination[1],
-                "coordinate_source": source,
-                "approximate": approximate,
-                "origin_latitude": origin[0],
-                "origin_longitude": origin[1],
-                "origin_name": (
-                    origin_location.name
-                    if origin_location is not None
-                    else journal.title or "Journal Location"
-                ),
-                "adventure_title": adventure.title,
-                "adventure_url": adventure.get_absolute_url(),
-                "journal_id": journal.pk if journal is not None else None,
-                "journal_title": journal.title if journal is not None else "",
-                "journal_url": (
-                    reverse("journal_entry_detail", args=[journal.pk])
-                    if journal is not None
-                    else ""
-                ),
-            }
-        )
-    return points
-
 def map_explorer(request):
     locations = (
         visible_locations(request.user).exclude(
@@ -448,13 +365,11 @@ def map_explorer(request):
                 }
             )
 
-    contact_points = _global_contact_points(request)
     return render(
         request,
         "core/map_explorer.html",
         {
             "map_points": map_points,
-            "contact_points": contact_points,
-            "point_count": len(map_points) + len(contact_points),
+            "point_count": len(map_points),
         },
     )

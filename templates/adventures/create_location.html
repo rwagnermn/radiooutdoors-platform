@@ -10,33 +10,6 @@
     <div class="location-card location-editor-card">
         <h1>{{ page_title }}</h1>
 
-        {% if location_form.errors or operating_form.errors %}
-        <div class="form-error-summary" role="alert">
-            <strong>The Location was not saved.</strong>
-            <p>Fix the following:</p>
-            <ul class="form-error-list">
-                {% for field in location_form %}
-                    {% for error in field.errors %}
-                        <li><strong>{{ field.label }}:</strong> {{ error }}</li>
-                    {% endfor %}
-                {% endfor %}
-                {% for error in location_form.non_field_errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-                {% if operating_form %}
-                    {% for field in operating_form %}
-                        {% for error in field.errors %}
-                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
-                        {% endfor %}
-                    {% endfor %}
-                    {% for error in operating_form.non_field_errors %}
-                        <li>{{ error }}</li>
-                    {% endfor %}
-                {% endif %}
-            </ul>
-        </div>
-        {% endif %}
-
         <form method="post" enctype="multipart/form-data" id="location-form" novalidate>
             {% csrf_token %}
             <input type="hidden" name="return_to" value="{{ return_to }}">

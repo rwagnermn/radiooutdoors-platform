@@ -230,11 +230,11 @@ class PublicReadOnlyPermissionMatrixTests(TestCase):
             "Change Journal visibility",
         ):
             self.assertNotContains(journal, text)
-        self.assertEqual(
-            self.client.get(
-                reverse("journal_contact_map", args=[self.public_journal.pk])
-            ).status_code,
-            200,
+        self.assertRedirects(
+            self.client.get(reverse("journal_contact_map", args=[self.public_journal.pk])),
+            reverse("adventure_contact_geography", args=[self.adventure.slug])
+            + f"?journal={self.public_journal.pk}",
+            fetch_redirect_response=False,
         )
         gallery = self.client.get(
             reverse("journal_photo_gallery", args=[self.public_journal.pk])

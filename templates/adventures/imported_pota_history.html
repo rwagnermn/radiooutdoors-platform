@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Imported POTA History | Radio Outdoors{% endblock %}
+{% block content %}
+<section class="content">
+  <p><a href="{% url 'journal_entry_detail' entry.pk %}">← Return to Journal</a></p>
+  <h1>Imported POTA History</h1>
+  <p><strong>Journal:</strong> {{ entry.title|default:"Journal Entry" }}<br><strong>Adventure:</strong> {{ adventure.title }}</p>
+
+  <form method="post" data-pota-history-form>
+    {% csrf_token %}
+    <fieldset>
+      <legend>Choose records to delete</legend>
+      <label><input type="radio" name="delete_scope" value="selected" checked> Selected records</label>
+      <label><input type="radio" name="delete_scope" value="batch"> Import batch</label>
+      <select name="batch_id" aria-label="Import batch number">
+        {% for batch_id in batch_ids %}<option value="{{ batch_id }}">Batch {{ batch_id }}</option>{% endfor %}
+      </select>
+      <label><input type="radio" name="delete_scope" value="all"> Delete All records in this Journal</label>
+    </fieldset>
+    <p><button type="button" data-select-all>Select All</button> <button type="button" data-select-none>Select None</button></p>
+    <p role="status" aria-live="polite"><strong data-delete-count>0</strong> record(s) will be deleted.</p>
+    <label data-bulk-confirm hidden><input type="checkbox" name="confirm_bulk" value="yes"> I confirm this batch or Delete All operation.</label>
+
+    <div class="ro-scroll-table-region" role="region" aria-label="Imported POTA History records" tabindex="0">
+      <table class="ro-record-table">
+        <thead><tr><th>Select</th><th>Activation date</th><th>Park/reference</th><th>Park name</th><th>CW</th><th>Data</th><th>Phone</th><th>Total</th><th>Import batch</th></tr></thead>
+        <tbody>
+        {% for item in imports %}
+          <tr><td><input type="checkbox" name="selected_records" value="{{ item.pk }}" aria-label="Select imported record {{ item.pk }}"></td><td>{{ item.activation_date|date:"M j, Y" }}</td><td>{{ item.park_reference }}</td><td>{{ item.park_name|default:"—" }}</td><td>{{ item.cw_contacts }}</td><td>{{ item.data_contacts }}</td><td>{{ item.phone_contacts }}</td><td>{{ item.cw_contacts|add:item.data_contacts|add:item.phone_contacts }}</td><td>{{ item.batch_id }}</td></tr>
+        {% empty %}
+          <tr><td colspan="9">This Journal has no imported POTA History records.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p><button class="button-primary" type="submit" data-save disabled>Save</button> <a class="button-secondary" href="{% url 'journal_entry_detail' entry.pk %}">Cancel</a></p>
+  </form>
+</section>
+<script>
+(function(){
+ const form=document.querySelector('[data-pota-history-form]'), rows=[...form.querySelectorAll('[name="selected_records"]')], scopes=[...form.querySelectorAll('[name="delete_scope"]')], count=form.querySelector('[data-delete-count]'), save=form.querySelector('[data-save]'), confirmation=form.querySelector('[data-bulk-confirm]'), confirmBox=confirmation.querySelector('input'), batch=form.querySelector('[name="batch_id"]');
+ function scope(){return form.querySelector('[name="delete_scope"]:checked').value;}
+ function update(){const current=scope(), n=current==='selected'?rows.filter(x=>x.checked).length:current==='batch'?rows.filter(x=>x.closest('tr').lastElementChild.textContent.trim()===batch.value).length:rows.length, bulk=current!=='selected';count.textContent=String(n);confirmation.hidden=!bulk;confirmBox.disabled=!bulk;save.disabled=n===0||(bulk&&!confirmBox.checked);}
+ form.querySelector('[data-select-all]').addEventListener('click',()=>{rows.forEach(x=>x.checked=true);update();});
+ form.querySelector('[data-select-none]').addEventListener('click',()=>{rows.forEach(x=>x.checked=false);update();});
+ rows.forEach(x=>x.addEventListener('change',update));scopes.forEach(x=>x.addEventListener('change',update));batch.addEventListener('change',update);confirmBox.addEventListener('change',update);update();
+})();
+</script>
+{% endblock %}

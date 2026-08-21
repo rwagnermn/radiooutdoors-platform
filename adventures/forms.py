@@ -454,6 +454,16 @@ class JournalEntryForm(forms.ModelForm):
         adventure = kwargs.pop("adventure", None)
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        history_owner = adventure.owner if adventure and adventure.owner_id else user
+        for field_name in ("radio", "antenna"):
+            options = self._equipment_history(
+                history_owner,
+                field_name,
+                current_entry=self.instance if self.instance.pk else None,
+            )
+            self.fields[field_name].history_options = options
+            if not self.is_bound and not self.instance.pk and options:
+                self.initial.setdefault(field_name, options[0])
         self.fields["status"].choices = [
             (JournalEntry.Status.OPEN, "Active"),
             (JournalEntry.Status.COMPLETED, "Complete"),
@@ -488,6 +498,33 @@ class JournalEntryForm(forms.ModelForm):
             self.initial["entry_at"] = self.instance.entry_at.strftime(
                 "%Y-%m-%dT%H:%M"
             )
+
+    @staticmethod
+    def _equipment_history(user, field_name, current_entry=None):
+        if not getattr(user, "is_authenticated", False):
+            return []
+        eligible_entries = Q(is_adventure_photo_collection=False)
+        if current_entry is not None:
+            eligible_entries |= Q(pk=current_entry.pk)
+        values = (
+            JournalEntry.objects.filter(
+                adventure__owner=user,
+            )
+            .filter(eligible_entries)
+            .exclude(**{field_name: ""})
+            .order_by("-entry_at", "-pk")
+            .values_list(field_name, flat=True)
+        )
+        options = []
+        seen = set()
+        for saved_value in values:
+            value = saved_value.strip()
+            key = value.casefold()
+            if not value or key in seen:
+                continue
+            seen.add(key)
+            options.append(value)
+        return options
 
     def clean_operating_callsign(self):
         callsign = self.cleaned_data["operating_callsign"].strip().upper()

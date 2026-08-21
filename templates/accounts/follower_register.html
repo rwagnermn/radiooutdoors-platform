@@ -12,7 +12,6 @@ and does not receive Member publishing privileges.
 </p>
 <form method="post" class="registration-form">
 {% csrf_token %}
-{% if form.errors %}<div id="registration-error-summary" class="form-error-summary registration-error-summary" role="alert" tabindex="-1"><h2>We could not create your account. Please correct the following:</h2><ul>{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}{% for field in form %}{% for error in field.errors %}<li><strong>{{ field.label }}:</strong> {{ error }}</li>{% endfor %}{% endfor %}</ul></div>{% endif %}
 <div class="two-column-fields">
 <div><label for="{{ form.email.id_for_label }}">Invited email address <span class="required-field-text">Required Field</span></label>{{ form.email }}{{ form.email.errors }}{% if form.email.help_text %}<small>{{ form.email.help_text }}</small>{% endif %}</div>
 <div class="field-span-two">{% include "registration/_password_requirements.html" %}</div>

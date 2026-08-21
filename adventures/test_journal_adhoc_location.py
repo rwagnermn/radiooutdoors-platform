@@ -177,7 +177,11 @@ class JournalUnifiedLocationTests(TestCase):
     def test_adventure_top_add_journal_action_is_authorized(self):
         owner = self.client.get(self.adventure.get_absolute_url())
         self.assertContains(owner, reverse("add_journal_entry", args=[self.adventure.slug]))
-        self.assertContains(owner, 'class="button-primary">+ Add Journal Entry</a>', html=False)
+        self.assertContains(
+            owner,
+            'class="button-primary adventure-journal-add-action">+ Add Journal Entry</a>',
+            html=False,
+        )
         self.client.force_login(self.other)
         visitor = self.client.get(self.adventure.get_absolute_url())
         self.assertNotContains(visitor, reverse("add_journal_entry", args=[self.adventure.slug]))

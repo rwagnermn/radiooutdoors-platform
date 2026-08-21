@@ -48,6 +48,8 @@ class JournalDashboardTests(TestCase):
             body=("First paragraph from the field.\n\nSecond paragraph with more detail. " * 20),
             entry_at=datetime(2026, 8, 13, 20, 45, tzinfo=dt_timezone.utc),
             operating_callsign="W0JRN",
+            radio="Yaesu FT-710",
+            antenna="21-foot telescoping vertical",
             status=JournalEntry.Status.COMPLETED,
             is_public=True,
         )
@@ -68,6 +70,8 @@ class JournalDashboardTests(TestCase):
         self.assertContains(response, "Lake Eleven Woods")
         self.assertContains(response, "W0JRN")
         self.assertContains(response, "August 13, 2026")
+        self.assertContains(response, "Yaesu FT-710")
+        self.assertContains(response, "21-foot telescoping vertical")
         self.assertNotContains(response, "3:45 PM")
         self.assertNotContains(response, "Journal Stories")
         self.assertContains(response, "<strong>Adventure:</strong>", html=True)
@@ -81,6 +85,47 @@ class JournalDashboardTests(TestCase):
         self.assertNotIn("First paragraph from the field.", header)
         self.assertNotContains(response, "data-journal-summary-clamp")
         self.assertNotContains(response, "data-journal-summary-toggle")
+        header = response.content.decode().split('class="journal-summary-copy"', 1)[1].split('class="journal-primary-photo"', 1)[0]
+        self.assertLess(header.index("Location:"), header.index("journal-equipment-meta"))
+        self.assertLess(header.index("journal-equipment-meta"), header.index("Adventure:"))
+
+    def test_equipment_row_handles_single_blank_and_escaped_values(self):
+        self.entry.radio = '<script>alert("radio")</script>'
+        self.entry.antenna = ""
+        self.entry.save(update_fields=["radio", "antenna"])
+        radio_only = self.client.get(self.url)
+        self.assertContains(radio_only, "journal-equipment-meta")
+        self.assertContains(radio_only, "Radio:")
+        self.assertNotContains(radio_only, "Antenna:")
+        self.assertContains(radio_only, '&lt;script&gt;alert(&quot;radio&quot;)&lt;/script&gt;')
+        self.assertNotContains(radio_only, '<script>alert("radio")</script>')
+
+        self.entry.radio = ""
+        self.entry.antenna = "End-fed half-wave"
+        self.entry.save(update_fields=["radio", "antenna"])
+        antenna_only = self.client.get(self.url)
+        self.assertNotContains(antenna_only, "Radio:")
+        self.assertContains(antenna_only, "Antenna:")
+        self.assertContains(antenna_only, "End-fed half-wave")
+
+        self.entry.antenna = ""
+        self.entry.save(update_fields=["antenna"])
+        blank = self.client.get(self.url)
+        self.assertNotContains(blank, "journal-equipment-meta")
+        self.assertNotContains(blank, "Radio:")
+        self.assertNotContains(blank, "Antenna:")
+
+    def test_equipment_row_is_public_read_only_and_keeps_desktop_panel_height(self):
+        public_response = self.client.get(self.url)
+        self.assertContains(public_response, "Yaesu FT-710")
+        self.assertContains(public_response, "21-foot telescoping vertical")
+        self.assertNotContains(public_response, 'name="radio"')
+        self.assertNotContains(public_response, 'name="antenna"')
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".journal-summary-panel { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr); gap:18px; height:230px;", css)
+        self.assertIn(".journal-equipment-meta { display:flex;", css)
+        self.assertIn("flex-wrap:wrap", css)
+        self.assertIn("overflow-wrap:anywhere", css)
 
     def test_notes_are_one_continuous_existing_body_without_categories(self):
         response = self.client.get(self.url)

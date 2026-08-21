@@ -5,8 +5,8 @@
 
 :root{
     --ro-logo-height:135px;
-    --ro-color-action-orange:#f18708;
-    --ro-color-action-orange-hover:#d87500;
+    --ro-color-action-orange:#b95500;
+    --ro-color-action-orange-hover:#984600;
 }
 
 .pota-single-park-map {
@@ -3853,6 +3853,9 @@ input[type="radio"] {
 /* Build 0.38.1 - Location editor repair */
 .form-error-summary{margin:0 0 20px;padding:14px 16px;border:2px solid #b51f2e;border-radius:8px;background:#fff2f3;color:#68111b}
 .form-error-summary p{margin:4px 0 0}
+.save-error-summary:focus{outline:3px solid #1f6fb2;outline-offset:3px}
+.save-error-summary h2{margin:0;font-size:1.12rem;line-height:1.4}
+.save-error-summary a{color:inherit;text-decoration:underline}
 .advisory-editor-section{border:1px solid #cfd6d0;background:#f8faf7}
 .advisory-editor-section.advisory-active{border:2px solid #b51f2e;background:#fff7f7}
 .advisory-editor-section.advisory-has-error{border:2px solid #b51f2e}
@@ -4661,8 +4664,10 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     margin-inline: auto;
     padding: 8px 18px 24px;
 }
-.adventure-dashboard-toolbar { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; }
-.adventure-dashboard-actions { display: flex; align-items: center; gap: 12px; }
+.adventure-dashboard-toolbar { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); min-height: 56px; align-items: center; gap: 12px; }
+.adventure-dashboard-toolbar > .back-link-button { justify-self: start; }
+.adventure-dashboard .adventure-page-type-heading { justify-self: center; color: #40552e; font-size: clamp(2rem,4vw,3.25rem); font-weight: 950; letter-spacing: .035em; line-height: 1; text-align: center; }
+.adventure-dashboard-actions { display: flex; align-items: center; justify-self: end; gap: 12px; }
 .adventure-dashboard-actions .ro-action-menu-panel { right: 42px; left: auto; }
 .adventure-dashboard-card { border: 1px solid rgba(87, 75, 57, .25); border-radius: 10px; background: rgba(255, 252, 246, .92); box-shadow: 0 2px 8px rgba(55, 43, 27, .06); }
 .adventure-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); grid-template-areas: "intro cover"; gap: 16px; padding: 12px 16px; }
@@ -4691,7 +4696,7 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     .adventure-pota-rollup { column-gap:12px; }
 }
 .adventure-dashboard-section-heading { display: flex; min-height: 30px; align-items: baseline; justify-content: space-between; gap: 12px; }
-.adventure-dashboard-section-heading a { color: #bd4615; font-weight: 800; }
+.adventure-dashboard-section-heading a:not(.button-primary) { color: #bd4615; font-weight: 800; }
 .adventure-dashboard-section-heading h2 small { color:#5d655f; font-size:.72em; font-weight:650; }
 .adventure-dashboard-panel-link { display:inline-flex; margin-top:8px; color:#bd4615; font-weight:800; }
 .adventure-dashboard-map { width: 100%; height: 240px; min-height: 240px; margin-top: 8px; border-radius: 7px; }
@@ -4717,6 +4722,16 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 .adventure-dashboard-contacts th { position: sticky; top: 0; z-index: 1; background: #fffaf2; text-align: left; }
 .adventure-dashboard-contacts th, .adventure-dashboard-contacts td { padding: 3px 6px; border-bottom: 1px solid #ddd4c7; line-height: 1.15; white-space: nowrap; }
 .adventure-dashboard-journals { padding: 0 !important; overflow: hidden !important; }
+.adventure-journals-heading { padding: 7px 14px; }
+.adventure-journals-heading-main { display: flex; align-items: center; gap: 14px; }
+.adventure-journal-add-action { min-height: 36px; padding: 6px 12px; }
+.adventure-journals-heading > .adventure-dashboard-view-all { flex: 0 0 auto; color: #bd4615; font-weight: 850; }
+.adventure-journal-storage-notice { display: flex; align-items: center; justify-content: center; gap: 9px; margin: 0; padding: 5px 16px; background: #8b1e1e; color: #fff; font-size: clamp(1rem, 1.65vw, 1.2rem); font-weight: 900; line-height: 1.25; text-align: center; white-space: nowrap; transition: background-color .5s ease, color .5s ease; }
+.adventure-journal-storage-notice-icon { flex: 0 0 auto; font-size: 1.25em; line-height: 1; }
+.adventure-journal-storage-notice.is-permanent { background: #f7d8cc; color: #4f2118; }
+@media (prefers-reduced-motion: reduce) {
+    .adventure-journal-storage-notice { transition: none; }
+}
 .adventure-dashboard-journal-scroll { max-height: 142px; }
 .adventure-journal-scroll-shell { height: 142px; }
 .adventure-journal-card-list { width: 100%; min-width: 0; }
@@ -4730,8 +4745,6 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 .adventure-journal-column-headings > span:nth-child(5) { grid-column: 5; }
 .adventure-journal-column-headings > span:nth-child(6) { grid-column: 6; }
 .adventure-journal-column-headings > span:nth-child(4), .adventure-journal-column-headings > span:nth-child(5), .adventure-journal-row-count { text-align: center; }
-.adventure-journal-column-headings .adventure-dashboard-view-all { width: 108px; min-height: 28px; box-sizing: border-box; grid-column: 6 / 8; grid-row: 1; justify-self: end; padding: 4px 5px; border: 1px solid rgba(255,255,255,.72); border-radius: 5px; background: #f7f2e8; color: #173c2e; font-size: .72rem; line-height: 1.15; text-align: center; text-decoration: none; white-space: nowrap; }
-.adventure-journal-column-headings .adventure-dashboard-view-all:hover, .adventure-journal-column-headings .adventure-dashboard-view-all:focus-visible { background: #fff; outline: 2px solid #dc6b27; outline-offset: -2px; }
 .adventure-journal-row { box-sizing: border-box; height: 36px; min-height: 0; padding: 3px 9px; border-bottom: 1px solid #ddd4c7; background: rgba(255,255,255,.72); line-height: 1.15; cursor: pointer; }
 .adventure-journal-row:hover { background: #fff8ea; }
 .adventure-journal-row:has(.adventure-journal-row-title:focus-visible) { outline: 3px solid #dc6b27; outline-offset: -3px; }
@@ -4766,7 +4779,7 @@ body.adventure-dashboard-page .content.adventure-dashboard {
 @media (max-width: 800px) {
     .adventure-dashboard-page main { background-image: none; }
     body.adventure-dashboard-page .content.adventure-dashboard { width: calc(100% - 24px); padding-inline: 12px; }
-    .adventure-dashboard-toolbar { align-items: flex-start; }
+    .adventure-dashboard-toolbar { align-items: center; }
     .adventure-dashboard-hero { grid-template-columns: 1fr; grid-template-areas: "intro" "cover"; }
     .adventure-dashboard-grid { grid-template-columns: 1fr; }
     .adventure-dashboard .adventure-dashboard-cover { height: min(48vw, 260px); min-height: 0; }
@@ -4779,7 +4792,7 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     .adventure-dashboard-map { height: 300px; }
     .adventure-journal-column-headings { min-height: 58px; grid-template-columns: 54px minmax(64px,1fr) minmax(18px,.7fr) 38px 46px 76px 20px; grid-template-rows: 28px 24px; gap: 0 3px; padding: 3px 5px; font-size: .66rem; }
     .adventure-journal-column-headings > span { grid-row: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .adventure-journal-column-headings .adventure-dashboard-view-all { position: absolute; top: 3px; right: 5px; width: auto; min-height: 26px; padding: 3px 6px; }
+    .adventure-journal-storage-notice { white-space: normal; }
     .adventure-journal-row { width: 100%; height: 36px; min-height: 0; grid-template-columns: 54px minmax(64px,1fr) minmax(18px,.7fr) 38px 46px 76px 20px; gap: 3px; padding: 3px 5px; }
     .adventure-journal-row-date, .adventure-journal-row-title, .adventure-journal-row-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .adventure-journal-row-date, .adventure-journal-row-location, .adventure-journal-row-count { font-size: .72rem; }
@@ -4807,7 +4820,11 @@ body.adventure-dashboard-page .content.adventure-dashboard {
     body.adventure-dashboard-page .content.adventure-dashboard { width: calc(100% - 64px); }
 }
 @media (max-width: 520px) {
-    .adventure-dashboard-toolbar, .adventure-dashboard-title-row { flex-direction: column; }
+    .adventure-dashboard-title-row { flex-direction: column; }
+    .adventure-dashboard-toolbar { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); }
+    .adventure-dashboard .adventure-page-type-heading { font-size: clamp(1.45rem,7vw,2.1rem); }
+    .adventure-journals-heading { align-items: center; }
+    .adventure-journals-heading-main { align-items: flex-start; flex-direction: column; gap: 6px; }
     .adventure-dashboard-actions { width: 100%; justify-content: flex-end; }
     .adventure-dashboard-meta { display: grid; }
     .adventure-dashboard-contacts { overflow-x: auto !important; }
@@ -5070,8 +5087,10 @@ body.journal-dashboard-page .content.journal-dashboard {
 .journal-dashboard h1 { margin:0; color:#163d2d; font-size:clamp(1.6rem,2.25vw,2.2rem); line-height:1.1; }
 .journal-dashboard h2 { margin:0; color:#173c2e; font-size:1.3rem; line-height:1.2; }
 .journal-dashboard-state { flex:0 0 auto; padding:7px 11px; border:1px solid #cdd5b6; border-radius:8px; background:#edf2df; color:#253527; font-weight:800; text-transform:uppercase; }
-.journal-summary-meta { display:flex; flex-wrap:wrap; gap:7px 20px; margin:12px 0 8px; font-size:1.02rem; }
-.journal-adventure-reference { margin:18px 0 0; font-size:1.22rem; line-height:1.4; }
+.journal-summary-meta { display:flex; flex-wrap:wrap; gap:7px 20px; margin:10px 0 3px; font-size:1.02rem; }
+.journal-equipment-meta { display:flex; min-width:0; flex-wrap:wrap; gap:2px 9px; margin:0; color:#51483d; font-size:.95rem; line-height:1.35; overflow-wrap:anywhere; }
+.journal-equipment-separator { color:#8b725d; }
+.journal-adventure-reference { margin:6px 0 0; font-size:1.22rem; line-height:1.4; }
 .journal-adventure-reference a { color:#b94712; font-size:1.3rem; font-weight:850; }
 .journal-primary-photo { position:relative; height:200px; margin:0; overflow:hidden; border-radius:8px; background:#e8e2d7; }
 .journal-primary-photo button { width:100%; height:100%; padding:0; border:0; cursor:zoom-in; }
@@ -5164,6 +5183,7 @@ body.journal-dashboard-page .content.journal-dashboard {
     .journal-dashboard-toolbar>.back-link-button { grid-column:1; grid-row:2; }
     .journal-dashboard-actions { grid-column:2; grid-row:2; justify-self:end; }
     .journal-summary-meta { display:grid; }
+    .journal-equipment-separator { display:none; }
     .journal-contacts-panel { overflow-x:auto!important; }
     .journal-carousel-shell { grid-template-columns:44px minmax(0,1fr) 44px; }
     .journal-carousel-photo { flex-basis:min(190px,calc(100vw - 142px)); }
@@ -7187,6 +7207,7 @@ body.add-contacts-batch-page main {
     .add-contacts-batch-heading-actions { width: 100%; justify-content: space-between; }
     .add-contacts-batch-footer { flex-wrap: wrap; }
 }
+.journal-contact-path-ball{position:absolute;border:0;border-radius:50%;background:#ffd000;box-shadow:none;pointer-events:none;will-change:transform;}
 
 /* Adventure Journal bulk selection and explicit deletion confirmation. */
 .adventure-journals-page .journal-bulk-selection-form { margin: 0; }
@@ -7366,3 +7387,55 @@ body.locations-page .content {
 .pota-leaderboard-page .pota-leaderboard-rank-gold > td { background-color: rgba(255, 224, 102, 0.38); }
 .pota-leaderboard-page .pota-leaderboard-rank-silver > td { background-color: rgba(210, 215, 220, 0.42); }
 .pota-leaderboard-page .pota-leaderboard-rank-bronze > td { background-color: rgba(205, 127, 50, 0.25); }
+
+/* POTA Leaderboard illustrated background */
+.pota-leaderboard-page { min-height:100%; overflow-y:auto; background:#f7f3ec; }
+.pota-leaderboard-page main {
+    min-height:calc(100vh - 86px);
+    overflow:visible;
+    background-color:#f7f3ec;
+    background-image:url("../images/pota-leaderboard-background.png");
+    background-position:center top;
+    background-size:100% auto;
+    background-repeat:no-repeat;
+    background-attachment:fixed;
+}
+body.pota-leaderboard-page .content.pota-leaderboard-content {
+    width:min(760px,calc(100% - 40px));
+    max-width:760px;
+    min-height:calc(100vh - 150px);
+    margin-inline:auto;
+    padding:34px 0 52px;
+}
+.pota-leaderboard-panel {
+    padding:22px 24px 24px;
+    border:1px solid rgba(90,75,56,.25);
+    border-radius:12px;
+    background:rgba(255,253,249,.88);
+    box-shadow:0 6px 24px rgba(54,43,29,.13);
+    -webkit-backdrop-filter:blur(3px);
+    backdrop-filter:blur(3px);
+}
+.pota-leaderboard-heading h1 { margin:0; color:#173c2e; font-size:clamp(2rem,4vw,2.7rem); line-height:1.05; }
+.pota-leaderboard-heading p { margin:6px 0 16px; color:#354b40; font-size:1rem; }
+.pota-leaderboard-period-tabs { margin-bottom:16px; }
+.pota-leaderboard-period-tabs a:focus-visible { position:relative; z-index:1; outline:3px solid #dc6b27; outline-offset:2px; }
+.pota-leaderboard-panel h2 { margin:0 0 10px; color:#173c2e; font-size:1.3rem; }
+.pota-leaderboard-table-scroll { max-width:100%; overflow-x:auto; }
+.pota-leaderboard-table { width:100%; min-width:620px; }
+.pota-leaderboard-table th,.pota-leaderboard-table td { padding:9px 10px; }
+
+@media(max-width:900px) {
+    .pota-leaderboard-page main {
+        background-position:center top;
+        background-size:auto 760px;
+        background-attachment:scroll;
+    }
+    body.pota-leaderboard-page .content.pota-leaderboard-content { width:calc(100% - 24px); padding:24px 0 42px; }
+}
+@media(max-width:560px) {
+    .pota-leaderboard-panel { padding:18px 14px 20px; }
+    .pota-leaderboard-period-tabs { display:grid; grid-template-columns:1fr; gap:8px; }
+    .pota-leaderboard-period-tabs a { border-radius:7px!important; }
+}
+@media(prefers-reduced-motion:reduce) { .pota-leaderboard-page main { background-attachment:scroll; } }

@@ -4,7 +4,7 @@
   {% if contact_map.available and contact_map.message %}<p class="location-card contact-map-explanation" role="status">{{ contact_map.message }}{% if contact_map.unmapped %} {{ contact_map.unmapped }} contact{{ contact_map.unmapped|pluralize }} could not be mapped.{% endif %}</p>{% endif %}
   {% if contact_map.available and contact_map.has_map_points %}
   <div class="contact-map-controls" aria-label="Contact map filters">
-    <label>Journal<select data-contact-filter="journal"><option value="">All Journals</option>{% for option in contact_map.filters.journals %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select></label>
+    <label>Journal<select data-contact-filter="journal"><option value="">All Journals</option>{% for option in contact_map.filters.journals %}<option value="{{ option.id }}"{% if selected_journal_id == option.id|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
     <label>Band<select data-contact-filter="band"><option value="">All bands</option>{% for option in contact_map.filters.bands %}<option value="{{ option }}">{{ option }}</option>{% endfor %}</select></label>
     <label>Mode<select data-contact-filter="mode"><option value="">All modes</option>{% for option in contact_map.filters.modes %}<option value="{{ option }}">{{ option }}</option>{% endfor %}</select></label>
     <label>From date<input type="date" data-contact-filter="from-date"></label>
@@ -13,9 +13,9 @@
   </div>
   <div class="contact-map-summary" role="status" aria-live="polite"><span data-contact-map-count>{{ contact_map.mapped }}</span> mapped contacts shown.</div>
   <div class="contact-map-legend" aria-label="Contact map legend">{% if contact_map.origin %}<span><i class="map-legend-pin map-legend-origin" aria-hidden="true"></i>{{ contact_map_origin_label|default:"Adventure Location" }}</span>{% endif %}<span><i class="map-legend-pin map-legend-contact" aria-hidden="true"></i>Contact</span>{% if contact_map.origin %}<span><i class="map-legend-path" aria-hidden="true"></i>Contact path</span>{% endif %}<span><i class="map-legend-pin map-legend-group" aria-hidden="true"></i>Multiple contacts at one position</span><span><i class="map-legend-pin map-legend-approximate" aria-hidden="true"></i>Approximate grid-square center</span></div>
-  <div id="{{ contact_map_dom_id }}" class="adventure-contact-map" data-contact-map data-map-data-id="{{ contact_map_data_id }}" aria-label="{{ contact_map_heading|default:'Map of contacts from this Adventure' }}"></div>
+  <div id="{{ contact_map_dom_id }}" class="adventure-contact-map" data-contact-map data-map-data-id="{{ contact_map_data_id }}"{% if animate_contact_paths %} data-contact-path-animation="true"{% endif %} aria-label="{{ contact_map_heading|default:'Map of contacts from this Adventure' }}"></div>
   <p class="contact-map-line-note" data-contact-map-line-note hidden></p>
-  <script src="{% static 'js/contact-map.js' %}"></script>
+  <script src="{% static 'js/contact-map.js' %}?v=002"></script>
   {% if google_maps_api_key %}{% if not single_location_map_data %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=marker&callback=initRadioOutdoorsContactMaps&loading=async" async defer></script>{% endif %}{% else %}<p class="form-help">Map display is unavailable because the map service is not configured.</p>{% endif %}
   {% elif contact_map.available %}{% if not contact_map.message %}<div class="location-card empty-contact-message" role="status">No contacts with coordinates or a valid grid square are available to map.</div>{% endif %}
   {% else %}<div class="location-card empty-contact-message" role="status">{{ contact_map.message }}</div>{% endif %}

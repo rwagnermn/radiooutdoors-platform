@@ -74,7 +74,7 @@ class AdventureContactHubTests(TestCase):
         self.assertContains(response, "Associated Adventure")
         self.assertContains(response, "Adventure ID")
         self.assertContains(response, "Total Contacts")
-        self.assertContains(response, reverse("journal_contact_map", args=[entry.pk]))
+        self.assertContains(response, reverse("adventure_contact_geography", args=[self.adventure.slug]))
         self.assertContains(response, reverse("add_journal_contact", args=[entry.pk]))
         self.assertContains(response, reverse("adventure_import_contacts", args=[self.adventure.slug]))
         self.assertContains(response, "Import Contacts", count=1)
@@ -129,7 +129,7 @@ class AdventureContactHubTests(TestCase):
         visitor = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
         self.assertNotContains(visitor, reverse("add_journal_contact", args=[entry.pk]))
         self.assertNotContains(visitor, reverse("adventure_import_contacts", args=[self.adventure.slug]))
-        self.assertContains(visitor, reverse("journal_contact_map", args=[entry.pk]))
+        self.assertContains(visitor, reverse("adventure_contact_geography", args=[self.adventure.slug]))
 
         self.client.force_login(self.owner)
         owner = self.client.get(reverse("adventure_contacts", args=[self.adventure.slug]))
@@ -581,11 +581,15 @@ class AdventureContactHubTests(TestCase):
         self.assertNotContains(hub, 'data-contact-filter="journal"')
         self.assertNotContains(hub, 'data-contact-filter="lines"')
         self.assertNotContains(hub, "Grid-square center")
-        self.assertContains(hub, reverse("journal_contact_map", args=[entry.pk]))
+        adventure_map_url = reverse("adventure_contact_geography", args=[self.adventure.slug])
+        self.assertContains(hub, adventure_map_url)
 
         journal_map = self.client.get(reverse("journal_contact_map", args=[entry.pk]))
-        self.assertEqual(journal_map.status_code, 200)
-        self.assertContains(journal_map, "Contacts From This Journal")
+        self.assertRedirects(
+            journal_map,
+            f"{adventure_map_url}?journal={entry.pk}",
+            fetch_redirect_response=False,
+        )
 
     def test_parser_preserves_radio_and_direct_coordinate_fields(self):
         parsed = parse_adif_text(

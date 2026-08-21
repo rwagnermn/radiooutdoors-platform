@@ -17,6 +17,7 @@ from django.utils import timezone
 from PIL import Image
 
 from .auth import is_verified_member
+from .form_validation import REQUIRED_SAVE_MESSAGE
 from .models import (
     Adventure,
     BlockedDomain,
@@ -709,7 +710,7 @@ class MemberRegistrationTests(TestCase):
         self.assertContains(response, message, count=2)
         self.assertContains(response, reverse("login"))
         self.assertContains(response, reverse("account_recovery"))
-        self.assertContains(response, "registration-error-summary")
+        self.assertContains(response, "save-error-summary")
 
     @patch("core.account_views.lookup_callsign")
     def test_international_qrz_callsign_is_accepted(self, lookup):
@@ -763,7 +764,7 @@ class MemberRegistrationTests(TestCase):
         )
         response = self.client.post(reverse("register"), self.registration_data())
         self.assertContains(response, "That callsign is already registered.", count=2)
-        self.assertContains(response, "registration-error-summary")
+        self.assertContains(response, "save-error-summary")
 
     def test_visible_error_summary_is_focusable_and_lists_all_errors(self):
         response = self.client.post(
@@ -772,7 +773,7 @@ class MemberRegistrationTests(TestCase):
         )
         self.assertContains(
             response,
-            "We could not create your account. Please correct the following:",
+            REQUIRED_SAVE_MESSAGE,
         )
         self.assertContains(response, 'role="alert"')
         self.assertContains(response, 'tabindex="-1"')
@@ -798,7 +799,7 @@ class MemberRegistrationTests(TestCase):
                     reverse("register"), self.registration_data()
                 )
                 self.assertContains(response, expected)
-                self.assertContains(response, "registration-error-summary")
+                self.assertContains(response, "save-error-summary")
                 self.assertFalse(get_user_model().objects.exists())
 
     def test_blocked_email_domain_is_rejected(self):

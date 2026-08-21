@@ -1,26 +1,27 @@
 {% extends "base.html" %}{% load static %}
-{% block title %}{{ entry.title|default:"Journal Entry" }} Contacts Map | Radio Outdoors{% endblock %}
+{% block title %}Contacts From Adventure ({{ adventure.title }}) | Radio Outdoors{% endblock %}
 {% block body_class %}interior-page journal-contact-map-page{% endblock %}
 {% block content %}
 <section class="content journal-contact-map-content">
-  <p><a class="back-link-button" href="{% url 'journal_entry_detail' entry.pk %}">← Back to Journal</a></p>
-  <p class="section-kicker">Journal Contacts Map</p>
-  <h1>{{ entry.title|default:"Journal Entry" }}</h1>
-  <p><strong>Adventure:</strong> <a href="{{ adventure.get_absolute_url }}">{{ adventure.title }}</a></p>
-  <div class="journal-globe-controls" aria-label="Journal Contacts Map display controls">
+  <p><a class="back-link-button" href="{{ adventure.get_absolute_url }}">← Back to Adventure</a></p>
+  <p class="section-kicker">Contact Geography</p>
+  <h1>Contacts From Adventure ({{ adventure.title }})</h1>
+  <div class="journal-globe-controls" aria-label="Adventure Contact Geography display controls">
+    <fieldset><legend>Base map</legend><div class="journal-map-segmented"><button type="button" data-contact-basemap="roadmap" aria-pressed="true">Map</button><button type="button" data-contact-basemap="satellite" aria-pressed="false">Satellite</button></div></fieldset>
     <fieldset><legend>Projection</legend><div class="journal-map-segmented"><button type="button" data-journal-projection="globe" aria-pressed="true">Globe</button><button type="button" data-journal-projection="flat" aria-pressed="false">Flat Map</button></div></fieldset>
-    <fieldset><legend>Globe display</legend><div class="journal-map-segmented"><button type="button" data-journal-display="day" aria-pressed="true">Day</button><button type="button" data-journal-display="night" aria-pressed="false">Night</button><button type="button" data-journal-display="gray-line" aria-pressed="false">Gray Line</button></div></fieldset>
+    <fieldset><legend>Appearance</legend><div class="journal-map-segmented"><button type="button" data-journal-display="day" aria-pressed="true">Day</button><button type="button" data-journal-display="night" aria-pressed="false">Night</button></div></fieldset>
+    <button type="button" class="ro-small-action" data-journal-gray-line aria-pressed="false">Grey Line</button>
     <button type="button" class="ro-small-action journal-globe-reset" data-journal-globe-reset>Reset View</button>
   </div>
-  <p class="journal-globe-status" data-journal-globe-status role="status" aria-live="polite">Globe view · Day</p>
+  <p class="journal-globe-status" data-journal-globe-status role="status" aria-live="polite">Globe view · Day · Grey Line off</p>
   {% if contact_map.available and contact_map.message %}<p class="location-card journal-contact-map-explanation" role="status">{{ contact_map.message }}{% if contact_map.unmapped %} {{ contact_map.unmapped }} contact{{ contact_map.unmapped|pluralize }} could not be mapped.{% endif %}</p>{% endif %}
   <div class="journal-globe-shell" data-journal-globe-shell>
-    <div id="journal-contact-globe" class="journal-contact-globe" data-journal-contact-globe data-map-data-id="{{ contact_map_data_id }}" aria-label="Interactive globe of contacts from this Journal"></div>
-    <div class="journal-globe-live" data-journal-gray-line-status hidden><strong>Gray Line · Live daylight</strong><time data-journal-globe-utc></time><span>Geographic daylight display—not a propagation prediction.</span></div>
+    <div id="journal-contact-globe" class="journal-contact-globe" data-journal-contact-globe data-map-data-id="{{ contact_map_data_id }}" aria-label="Interactive globe of contacts from this Adventure"></div>
+    <div class="journal-globe-live" data-journal-gray-line-status hidden><strong>Grey Line · Live daylight</strong><time data-journal-globe-utc></time><span>Geographic daylight display—not a propagation prediction.</span></div>
   </div>
   <div class="journal-flat-map-shell" data-journal-flat-map-shell hidden>
-    {% include "adventures/_contact_map.html" %}
+    {% include "adventures/_contact_map.html" with animate_contact_paths=True selected_journal_id=selected_journal_id %}
   </div>
 </section>
 {% endblock %}
-{% block extra_scripts %}<link rel="stylesheet" href="{% static 'vendor/maplibre-gl/5.24.0/maplibre-gl.css' %}"><script src="{% static 'vendor/maplibre-gl/5.24.0/maplibre-gl.js' %}"></script><script src="{% static 'js/journal-contact-globe.js' %}?v=002"></script>{% endblock %}
+{% block extra_scripts %}<link rel="stylesheet" href="{% static 'vendor/maplibre-gl/5.24.0/maplibre-gl.css' %}"><script src="{% static 'vendor/maplibre-gl/5.24.0/maplibre-gl.js' %}"></script><script src="{% static 'js/journal-contact-globe.js' %}?v=003"></script>{% endblock %}

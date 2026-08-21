@@ -27,6 +27,7 @@ from core.models import (
 )
 from core.photo_moderation import moderate_location_photo, moderate_photo
 from core.photo_upload_notices import add_photo_upload_notice
+from core.form_validation import form_error_payload, validation_error_payload
 from core.pin_permissions import can_edit_location_pin, can_edit_operating_position_pin
 from core.location_privacy import (
     can_manage_location, can_view_location, location_access_q,
@@ -39,8 +40,9 @@ from core.auth import (
 )
 
 from .adif_parser import parse_adif_bytes_with_counts
-from .contact_map import build_contact_map
+from .contact_map import build_adventure_contact_map, build_contact_map
 from .pota_aggregation import aggregate_pota_journals
+from .pota_aggregation import eligible_pota_journal_imports
 
 from .forms import (
     AdifImportForm,
@@ -944,14 +946,17 @@ def create_operating_position_inline(request, location_id):
     )
 
     if not form.is_valid():
-        return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
+        return JsonResponse(form_error_payload(form), status=400)
 
     if (
         form.cleaned_data["latitude"] is None
         or form.cleaned_data["longitude"] is None
     ):
         return JsonResponse(
-            {"errors": {"coordinates": [{"message": "Choose a point on the map."}]}},
+            validation_error_payload(
+                {"coordinates": [{"message": "Choose a point on the map.", "code": "required"}]},
+                required_missing=True,
+            ),
             status=400,
         )
 
@@ -1275,8 +1280,6 @@ def add_journal_entry(request, slug):
         if last_entry:
             initial = {
                 "operating_callsign": adventure.operating_callsign,
-                "radio": last_entry.radio,
-                "antenna": last_entry.antenna,
                 "portable": last_entry.portable,
                 "mobile": last_entry.mobile,
                 "pota": last_entry.pota,
@@ -1393,6 +1396,12 @@ def journal_entry_detail(request, entry_id):
                 entry.adventure.is_public or entry.adventure.owner == request.user
             ),
             "can_manage_contacts": can_edit_journal,
+            "has_imported_pota_history": bool(
+                can_edit_journal
+                and eligible_pota_journal_imports().filter(
+                    journal_entry_id=entry.pk
+                ).exists()
+            ),
             "can_view_journal_location": can_view_location(request.user, entry.location),
             "single_location_map_data": (
                 {"name": entry.location.name, "latitude": float(entry.latitude), "longitude": float(entry.longitude)}
@@ -1416,26 +1425,39 @@ def journal_contact_map(request, entry_id):
     ):
         raise Http404("Journal Entry not found.")
 
-    contacts = entry.contacts.select_related(
-        "journal_entry", "resolved_location"
-    ).order_by("pk")
-    contact_map = build_contact_map(
-        entry.adventure,
-        contacts,
-        request.user,
-        journal_entry=entry,
+    return redirect(
+        f'{reverse("adventure_contact_geography", args=[entry.adventure.slug])}?journal={entry.pk}'
     )
+
+
+def adventure_contact_geography(request, slug):
+    adventure = get_object_or_404(Adventure.objects.select_related("owner", "location"), slug=slug)
+    can_manage = _can_manage_adventure(request.user, adventure)
+    if not adventure.is_public and not can_manage:
+        raise Http404("Adventure not found.")
+    journals = adventure.journal_entries.select_related("location").order_by("-entry_at", "-pk")
+    if not can_manage and not request.user.is_staff:
+        journals = journals.filter(is_public=True)
+    journals = list(journals)
+    contacts = list(JournalContact.objects.filter(
+        Q(journal_entry__in=journals) | Q(adventure=adventure, journal_entry__isnull=True)
+    ).distinct().select_related("journal_entry", "resolved_location").order_by("journal_entry_id", "pk"))
+    contact_map = build_adventure_contact_map(adventure, journals, contacts, request.user)
+    selected_journal_id = request.GET.get("journal", "")
+    if selected_journal_id not in {str(journal.pk) for journal in journals}:
+        selected_journal_id = ""
     return render(
         request,
         "adventures/journal_contact_map.html",
         {
-            "adventure": entry.adventure,
-            "entry": entry,
+            "adventure": adventure,
+            "entry": None,
             "contact_map": contact_map,
-            "contact_map_dom_id": f"journal-{entry.pk}-contact-map",
-            "contact_map_data_id": f"journal-{entry.pk}-contact-map-data",
-            "contact_map_heading": "Contacts From This Journal",
+            "contact_map_dom_id": f"adventure-{adventure.pk}-contact-map",
+            "contact_map_data_id": f"adventure-{adventure.pk}-contact-map-data",
+            "contact_map_heading": f"Contacts From Adventure ({adventure.title})",
             "contact_map_origin_label": "Journal Location",
+            "selected_journal_id": selected_journal_id,
         },
     )
 
@@ -1999,19 +2021,20 @@ def delete_journal_entry(request, entry_id):
             "Only the Adventure owner or authorized staff can delete this Journal entry."
         )
 
-    deleting_cover = (
-        adventure.cover_photo_id is not None
-        and entry.photos.filter(pk=adventure.cover_photo_id).exists()
-    )
+    with transaction.atomic():
+        deleting_cover = (
+            adventure.cover_photo_id is not None
+            and entry.photos.filter(pk=adventure.cover_photo_id).exists()
+        )
 
-    entry.delete()
+        entry.delete()
 
-    if deleting_cover:
-        adventure.cover_photo = None
-        adventure.cover_photo_is_explicit = False
-        adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit", "updated_at"])
-    else:
-        adventure.save(update_fields=["updated_at"])
+        if deleting_cover:
+            adventure.cover_photo = None
+            adventure.cover_photo_is_explicit = False
+            adventure.save(update_fields=["cover_photo", "cover_photo_is_explicit", "updated_at"])
+        else:
+            adventure.save(update_fields=["updated_at"])
 
     return redirect("edit_adventure", slug=adventure.slug)
 

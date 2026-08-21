@@ -15,17 +15,10 @@ created.
 <form method="post" class="registration-form">
 {% csrf_token %}
 {% if form.errors %}
-<div id="registration-error-summary" class="form-error-summary registration-error-summary" role="alert" aria-labelledby="registration-error-heading" tabindex="-1">
-<h2 id="registration-error-heading">We could not create your account. Please correct the following:</h2>
-<ul class="form-error-list">
-{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
-{% for field in form %}{% for error in field.errors %}<li><strong>{{ field.label }}:</strong> {{ error }}</li>{% endfor %}{% endfor %}
-</ul>
 {% if form.has_duplicate_email_error %}
 <p class="registration-recovery-help"><a href="{% url 'login' %}">Log in</a> or use <a href="{% url 'account_recovery' %}">Forgot callsign or password</a>.</p>
 {% endif %}
 {% if support_contact_needed %}<p class="registration-recovery-help"><a href="mailto:{{ radio_outdoors_contact_email }}">Email Radio Outdoors Support</a></p>{% endif %}
-</div>
 {% endif %}
 <div class="two-column-fields">
 <div><label for="{{ form.callsign.id_for_label }}">Callsign <span class="required-field-text">Required Field</span></label>{{ form.callsign }}{% if form.callsign.errors %}<ul class="field-error-list" aria-live="polite">{% for error in form.callsign.errors %}<li><strong>Error:</strong> {{ error }}</li>{% endfor %}</ul>{% endif %}{% if manual_available %}<div class="manual-verification-offer"><p><strong>Licensed amateur-radio operator but not listed in QRZ?</strong></p><p>Re-enter both password fields, then request a restricted Pending Member account.</p><button type="submit" name="registration_action" value="manual" class="ro-small-action">Request Manual Verification</button></div>{% endif %}</div>

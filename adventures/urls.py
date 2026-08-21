@@ -14,6 +14,7 @@ from .views import (
     add_operating_position,
     adventure_detail,
     adventure_contacts,
+    adventure_contact_geography,
     adventure_journals,
     bulk_delete_adventure_journals,
     adventure_import_contacts,
@@ -59,6 +60,7 @@ from .pota_views import (
     review_pota_pin,
     preview_pota_history,
 )
+from .pota_history_management import imported_pota_history
 from .contact_log_views import (
     add_journal_contact,
     bulk_delete_contacts,
@@ -80,6 +82,7 @@ urlpatterns = [
     path("journal/<int:entry_id>/contacts/add/", add_journal_contact, name="add_journal_contact"),
     path("journal/<int:entry_id>/contacts/qrz/", qrz_contact_lookup, name="qrz_contact_lookup"),
     path("journal/<int:entry_id>/contacts/map/", journal_contact_map, name="journal_contact_map"),
+    path("journal/<int:entry_id>/pota-history/", imported_pota_history, name="imported_pota_history"),
     path("journal/<int:entry_id>/contacts/<int:contact_id>/delete/", delete_journal_contact, name="delete_journal_contact"),
     path("contacts/import/pota-hunter/", import_pota_hunter_contacts, name="import_pota_hunter_log"),
     path("contacts/import/pota-hunter/preview/<str:token>/", preview_pota_hunter_contacts, name="preview_pota_hunter_log"),
@@ -132,6 +135,7 @@ urlpatterns = [
     ),
     path("<slug:slug>/comments/add/", add_comment, name="add_comment"),
     path("<slug:slug>/contacts/", adventure_contacts, name="adventure_contacts"),
+    path("<slug:slug>/contacts/geography/", adventure_contact_geography, name="adventure_contact_geography"),
     path("<slug:slug>/journals/", adventure_journals, name="adventure_journals"),
     path("<slug:slug>/journals/select/", select_adventure_journals, name="select_adventure_journals"),
     path("<slug:slug>/journals/delete-selected/", bulk_delete_adventure_journals, name="bulk_delete_adventure_journals"),

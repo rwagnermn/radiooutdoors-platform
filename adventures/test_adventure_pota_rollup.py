@@ -101,15 +101,15 @@ class AdventurePotaRollupTests(TestCase):
         self.assertContains(full_page, "<thead><tr>", html=False)
         self.assertNotContains(full_page, '<thead class="visually-hidden">', html=False)
 
-    def test_one_and_multiple_journals_sum_stored_values_and_exclude_other_adventure(self):
+    def test_one_and_multiple_journals_derive_totals_and_exclude_other_adventure(self):
         self.journal("First", (2, 5, 10, 19))
         one = self.detail()
-        self.assertEqual(one.context["pota_rollup"], {"cw": 2, "data": 5, "phone": 10, "total": 19})
+        self.assertEqual(one.context["pota_rollup"], {"cw": 2, "data": 5, "phone": 10, "total": 17})
         self.journal("Second", (3, 7, 11, 25))
         other = Adventure.objects.create(owner=self.owner, title="Other Roll-Up")
         self.journal("Foreign", (9999, 9999, 9999, 99999), adventure=other)
         multiple = self.detail()
-        self.assertEqual(multiple.context["pota_rollup"], {"cw": 5, "data": 12, "phone": 21, "total": 44})
+        self.assertEqual(multiple.context["pota_rollup"], {"cw": 5, "data": 12, "phone": 21, "total": 38})
 
     def test_missing_values_and_empty_adventures_display_zero(self):
         empty = self.detail()
@@ -120,12 +120,12 @@ class AdventurePotaRollupTests(TestCase):
         for label in ("POTA Roll-Up", "CW", "DATA", "PHONE", "TOTAL"):
             self.assertContains(no_import, label)
 
-    def test_total_uses_stored_totals_and_large_values_are_not_truncated(self):
+    def test_total_is_derived_and_large_values_are_not_truncated(self):
         self.journal("Large", (9999, 9999, 9999, 99999))
         response = self.detail()
-        self.assertEqual(response.context["pota_rollup"]["total"], 99999)
-        self.assertContains(response, "99999")
-        self.assertNotEqual(response.context["pota_rollup"]["total"], 29997)
+        self.assertEqual(response.context["pota_rollup"]["total"], 29997)
+        self.assertContains(response, "29997")
+        self.assertNotEqual(response.context["pota_rollup"]["total"], 99999)
 
     def test_rollup_uses_one_aggregate_query_without_per_journal_fetches(self):
         for index in range(5):

@@ -383,6 +383,7 @@ def add_journal_contact(request, entry_id):
     defaults = _manual_contact_defaults(request)
     batch_rows = []
     batch_errors = []
+    batch_required_missing = False
     if request.method == "POST" and "contacts_json" in request.POST:
         try:
             submitted = json.loads(request.POST.get("contacts_json", "[]"))
@@ -400,6 +401,11 @@ def add_journal_contact(request, entry_id):
         seen = set()
         for index, row_form in enumerate(forms_for_rows):
             if not row_form.is_valid():
+                batch_required_missing = batch_required_missing or any(
+                    error.code == "required"
+                    for errors in row_form.errors.as_data().values()
+                    for error in errors
+                )
                 for field_name, errors in row_form.errors.items():
                     label = {
                         "qso_date": "Date", "time_on": "Time", "callsign": "Callsign",
@@ -422,6 +428,7 @@ def add_journal_contact(request, entry_id):
             seen.add(duplicate_key)
         if not batch_rows and not batch_errors:
             batch_errors = ["Add at least one Contact before saving."]
+            batch_required_missing = True
         if not batch_errors:
             with transaction.atomic():
                 for row_form in forms_for_rows:
@@ -468,6 +475,8 @@ def add_journal_contact(request, entry_id):
     return render(request, "adventures/add_journal_contact.html", {
         "entry": entry, "adventure": entry.adventure, "form": form,
         "batch_rows": batch_rows, "batch_errors": batch_errors,
+        "save_validation_errors": batch_errors,
+        "save_validation_required": batch_required_missing,
         "batch_limit": CONTACT_BATCH_LIMIT, "batch_warning_at": CONTACT_BATCH_WARNING_AT,
         "batch_default_date": defaults["qso_date"].isoformat(),
         "batch_default_time": defaults["time_on"].strftime("%H:%M") if hasattr(defaults["time_on"], "strftime") else defaults["time_on"],

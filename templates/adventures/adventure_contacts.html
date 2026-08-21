@@ -32,15 +32,7 @@
             {% endif %}
             <a href="{% url 'adventure_import_contacts' adventure.slug %}">Import Contacts</a>
         {% endif %}
-        {% if journal_entries %}
-        <details class="contacts-add-menu contacts-view-map-menu">
-            <summary>View Map</summary>
-            <div class="contacts-add-menu-panel">
-                <p>Select the Journal Contact Map to open.</p>
-                {% for entry in journal_entries %}<a href="{% url 'journal_contact_map' entry.pk %}">{{ entry.title|default:"Journal Entry" }} <small>{{ entry.entry_at|date:"M j, Y" }}</small></a>{% endfor %}
-            </div>
-        </details>
-        {% else %}<span class="contacts-action-disabled" aria-disabled="true">View Map</span>{% endif %}
+        <a href="{% url 'adventure_contact_geography' adventure.slug %}">View Map</a>
     </nav>
 
     <form method="get" class="contacts-filter-panel" aria-label="Filter contacts">

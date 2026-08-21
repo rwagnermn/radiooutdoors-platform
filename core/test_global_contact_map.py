@@ -48,74 +48,76 @@ class GlobalContactMapTests(TestCase):
         defaults.update(overrides)
         return JournalContact.objects.create(**defaults)
 
-    def test_public_contact_payload_contains_destination_and_journal_origin(self):
-        contact = self.add_contact()
-        response = self.client.get(reverse("map_explorer"))
-        points = response.context["contact_points"]
-        self.assertEqual(len(points), 1)
-        point = points[0]
-        self.assertEqual(point["contact_id"], contact.pk)
-        self.assertEqual(point["marker_type"], "contact")
-        self.assertEqual(point["latitude"], 45.520833)
-        self.assertEqual(point["longitude"], -93.291667)
-        self.assertEqual(point["origin_latitude"], 45.1)
-        self.assertEqual(point["origin_longitude"], -93.1)
-        self.assertEqual(point["journal_id"], self.journal.pk)
-
-    def test_contacts_without_coordinates_or_valid_grid_are_omitted(self):
-        self.add_contact(grid_square="", latitude=None, longitude=None)
-        response = self.client.get(reverse("map_explorer"))
-        self.assertEqual(response.context["contact_points"], [])
-
-    def test_private_journal_geography_is_owner_only(self):
-        contact = self.add_contact(callsign="K1PRIVATE")
+    def test_main_map_never_serializes_contact_markers_or_coordinates(self):
+        self.add_contact(callsign="K1PRIVATE")
         self.journal.is_public = False
         self.journal.save(update_fields=["is_public"])
-        visitor = self.client.get(reverse("map_explorer"))
-        self.assertEqual(visitor.context["contact_points"], [])
-        self.assertNotContains(visitor, str(contact.latitude))
-        self.client.force_login(self.owner)
-        owner = self.client.get(reverse("map_explorer"))
-        self.assertEqual(owner.context["contact_points"][0]["contact_id"], contact.pk)
 
-    def test_private_origin_suppresses_contact_geography_for_visitor(self):
-        contact = self.add_contact(callsign="K1SECRET")
-        self.origin.visibility = Location.Visibility.PRIVATE
-        self.origin.save(update_fields=["visibility"])
-        visitor = self.client.get(reverse("map_explorer"))
-        self.assertEqual(visitor.context["contact_points"], [])
-        self.assertNotContains(visitor, str(contact.longitude))
-        self.client.force_login(self.owner)
-        owner = self.client.get(reverse("map_explorer"))
-        self.assertEqual(owner.context["contact_points"][0]["contact_id"], contact.pk)
+        for user in (None, self.owner):
+            if user is None:
+                self.client.logout()
+            else:
+                self.client.force_login(user)
+            response = self.client.get(reverse("map_explorer"))
+            self.assertNotIn("contact_points", response.context)
+            self.assertNotContains(response, "K1PRIVATE")
+            self.assertNotContains(response, "45.520833")
+            self.assertNotContains(response, "-93.291667")
+            self.assertNotContains(response, '"marker_type": "contact"')
+            self.assertNotContains(response, "radio-outdoors-contact-map-data")
 
-    def test_private_resolved_destination_is_not_exposed_to_visitor(self):
-        destination = Location.objects.create(
-            name="Private Contact Destination",
-            created_by=self.owner,
-            visibility=Location.Visibility.PRIVATE,
-            latitude="40.123456",
-            longitude="-75.654321",
-        )
-        contact = self.add_contact(
-            callsign="K1RESOLVED",
-            grid_square="",
-            latitude=None,
-            longitude=None,
-            resolved_location=destination,
-        )
-        visitor = self.client.get(reverse("map_explorer"))
-        self.assertEqual(visitor.context["contact_points"], [])
-        self.assertNotContains(visitor, "40.123456")
-        self.client.force_login(self.owner)
-        owner = self.client.get(reverse("map_explorer"))
-        self.assertEqual(owner.context["contact_points"][0]["contact_id"], contact.pk)
-
-    def test_main_map_renders_contact_filter_markers_paths_and_map_type_restore(self):
+    def test_main_map_contact_filter_legend_marker_and_path_code_are_absent(self):
         self.add_contact()
         response = self.client.get(reverse("map_explorer"))
-        self.assertContains(response, 'id="show-contact-pins" checked')
-        self.assertContains(response, '"marker_type": "contact"')
-        self.assertContains(response, "new google.maps.Polyline")
-        self.assertContains(response, 'map.addListener("maptypeid_changed"')
-        self.assertContains(response, "record.path.setMap")
+        html = response.content.decode()
+
+        self.assertNotIn('id="show-contact-pins"', html)
+        self.assertNotIn("map-legend-pin-blue", html)
+        self.assertNotIn(">Contact</span>", html)
+        self.assertNotIn("contactPoints", html)
+        self.assertNotIn('marker_type === "contact"', html)
+        self.assertNotIn("new google.maps.Polyline", html)
+        self.assertNotIn("pathRecords", html)
+
+    def test_location_advisory_and_active_adventure_markers_remain(self):
+        self.origin.has_operating_advisory = True
+        self.origin.operating_advisory = "Use the east entrance."
+        self.origin.save(
+            update_fields=["has_operating_advisory", "operating_advisory"]
+        )
+        plain = Location.objects.create(
+            name="Plain Location",
+            created_by=self.owner,
+            latitude="46.200000",
+            longitude="-94.200000",
+        )
+        self.add_contact()
+
+        response = self.client.get(reverse("map_explorer"))
+        points = response.context["map_points"]
+        by_name = {point["location_name"]: point for point in points}
+
+        self.assertEqual(response.context["point_count"], 2)
+        self.assertIn(plain.name, by_name)
+        self.assertTrue(by_name[self.origin.name]["has_operating_advisory"])
+        self.assertTrue(by_name[self.origin.name]["has_open_adventure"])
+        self.assertContains(response, 'id="show-location-pins" checked')
+        self.assertContains(response, 'id="show-open-pins" checked')
+        self.assertContains(response, "Operating Advisories — Always shown")
+        self.assertContains(response, "points.forEach")
+
+    def test_authorized_journal_contacts_map_keeps_markers_and_paths(self):
+        contact = self.add_contact()
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            reverse("adventure_contact_geography", args=[self.adventure.slug]) + f"?journal={self.journal.pk}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"Contacts From Adventure ({self.adventure.title})")
+        self.assertContains(response, contact.callsign)
+        self.assertContains(response, '"latitude": 45.520833')
+        self.assertContains(response, '"longitude": -93.291667')
+        self.assertContains(response, "Contact path")
+        self.assertContains(response, "journal-contact-globe.js")
+        self.assertEqual(response.context["contact_map"]["path_count"], 1)

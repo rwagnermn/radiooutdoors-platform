@@ -31,10 +31,13 @@
         countLabels.forEach(label => { label.textContent = `${count} unsaved contact${count === 1 ? "" : "s"}`; });
         warning.hidden = count < warningAt;
     }
-    function showClientErrors(errors) {
+    function showClientErrors(errors, requiredMissing) {
         clientErrors.replaceChildren();
         if (!errors.length) { clientErrors.hidden = true; return; }
-        const title = document.createElement("strong"); title.textContent = "Please correct the highlighted fields:";
+        const title = document.createElement("strong");
+        title.textContent = requiredMissing
+            ? "Save was not completed because required information is missing. Please complete the highlighted fields."
+            : "Save was not completed. Please correct the highlighted information.";
         const list = document.createElement("ul");
         errors.forEach(message => { const item = document.createElement("li"); item.textContent = message; list.appendChild(item); });
         clientErrors.append(title, list); clientErrors.hidden = false;
@@ -142,7 +145,9 @@
     }
     function commitActiveRow() {
         if (storedRows().length >= limit) { warning.hidden = false; return false; }
-        const values = rowValues(activeRow); const errors = validate(values, activeRow); showClientErrors(errors.map(message => `New row, ${message}`)); if (errors.length) return false;
+        const values = rowValues(activeRow); const errors = validate(values, activeRow);
+        const requiredMissing = ["qso_date", "time_on", "callsign", "band", "frequency", "mode"].some(name => !values[name]);
+        showClientErrors(errors.map(message => `New row, ${message}`), requiredMissing); if (errors.length) return false;
         tbody.appendChild(makeUnsavedRow(values)); clearActiveRow(values); showClientErrors([]); updateStatus(); return true;
     }
     activeRow.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); commitActiveRow(); } });
@@ -150,10 +155,15 @@
     shell.querySelectorAll("[data-save-all]").forEach(button => button.addEventListener("click", () => {
         const activeValues = rowValues(activeRow);
         if (activeValues.callsign || activeValues.signal_report || activeValues.state || activeValues.country || activeValues.comment) { if (!commitActiveRow()) return; }
-        const rows = storedRows(); if (!rows.length) { activeRow.classList.add("add-contacts-row-error"); return; }
+        const rows = storedRows(); if (!rows.length) {
+            activeRow.classList.add("add-contacts-row-error");
+            showClientErrors(["Add at least one Contact before saving."], true);
+            return;
+        }
         const values = rows.map(rowValues); const errors = [];
         values.forEach((valuesForRow, index) => validate(valuesForRow, rows[index]).forEach(message => errors.push(`Row ${index + 1}, ${message}`)));
-        showClientErrors(errors); if (errors.length) return;
+        const requiredMissing = values.some(row => ["qso_date", "time_on", "callsign", "band", "frequency", "mode"].some(name => !row[name]));
+        showClientErrors(errors, requiredMissing); if (errors.length) return;
         jsonInput.value = JSON.stringify(values); form.submit();
     }));
     shell.querySelector("[data-discard]").addEventListener("click", () => {

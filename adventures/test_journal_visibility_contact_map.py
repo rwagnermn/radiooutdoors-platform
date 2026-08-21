@@ -47,7 +47,7 @@ class JournalVisibilityAndContactMapTests(TestCase):
             is_public=True,
         )
         self.detail_url = reverse("journal_entry_detail", args=[self.entry.pk])
-        self.map_url = reverse("journal_contact_map", args=[self.entry.pk])
+        self.map_url = reverse("adventure_contact_geography", args=[self.adventure.slug]) + f"?journal={self.entry.pk}"
         self.toggle_url = reverse("toggle_journal_visibility", args=[self.entry.pk])
 
     def add_contact(self, entry, callsign, fingerprint, **values):
@@ -114,11 +114,13 @@ class JournalVisibilityAndContactMapTests(TestCase):
             else:
                 self.client.force_login(user)
             self.assertEqual(self.client.get(self.detail_url).status_code, 404)
-            self.assertEqual(self.client.get(self.map_url).status_code, 404)
+            geography = self.client.get(self.map_url)
+            self.assertEqual(geography.status_code, 200)
+            self.assertNotContains(geography, "Mapped Journal")
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(self.map_url).status_code, 200)
 
-    def test_map_uses_journal_origin_and_only_current_journal_contacts(self):
+    def test_map_combines_adventure_journals_and_preselects_current_journal(self):
         mapped = self.add_contact(
             self.entry,
             "K1MAPPED",
@@ -144,27 +146,28 @@ class JournalVisibilityAndContactMapTests(TestCase):
         response = self.client.get(self.map_url)
         self.assertContains(response, "Mapped Journal")
         self.assertContains(response, "Map Adventure")
-        self.assertContains(response, "Back to Journal")
+        self.assertContains(response, "Back to Adventure")
         self.assertContains(response, "Journal Location")
         self.assertContains(response, "Contact path")
-        self.assertContains(response, '"mapped": 2')
+        self.assertContains(response, '"mapped": 3')
         self.assertContains(response, '"unmapped": 1')
         self.assertContains(response, '"latitude": 44.1')
         self.assertContains(response, '"longitude": -93.2')
         self.assertContains(response, mapped.callsign)
         self.assertContains(response, "K1GRID")
         self.assertContains(response, "K1NONE")
-        self.assertNotContains(response, "K1WRONG")
-        self.assertEqual(response.context["contact_map"]["mapped"], 2)
-        self.assertEqual(len(response.context["contact_map"]["contacts"]), 2)
+        self.assertContains(response, "K1WRONG")
+        self.assertContains(response, f'<option value="{self.entry.pk}" selected>Mapped Journal</option>', html=True)
+        self.assertEqual(response.context["contact_map"]["mapped"], 3)
+        self.assertEqual(len(response.context["contact_map"]["contacts"]), 3)
 
     def test_missing_journal_origin_still_maps_contacts_without_paths(self):
         Location.objects.filter(pk=self.origin.pk).update(latitude=None, longitude=None)
         JournalEntry.objects.filter(pk=self.entry.pk).update(latitude=None, longitude=None)
         self.add_contact(self.entry, "K1GRID", "missing-origin", grid_square="EN34")
         response = self.client.get(self.map_url)
-        self.assertContains(response, "Contact markers are shown, but contact paths cannot be drawn")
-        self.assertContains(response, 'id="journal-{}-contact-map-data"'.format(self.entry.pk))
+        self.assertContains(response, "Contact markers are shown, but authorized Journal Locations do not have coordinates")
+        self.assertContains(response, 'id="adventure-{}-contact-map-data"'.format(self.adventure.pk))
         self.assertContains(response, '"mapped": 1')
         self.assertContains(response, '"path_count": 0')
         self.assertContains(response, '"origin": null')
@@ -196,13 +199,13 @@ class JournalVisibilityAndContactMapTests(TestCase):
 
         self.assertContains(
             response,
-            "None of this Journal&#x27;s contacts contain coordinates or grid squares that can be placed on the map.",
+            "None of this Adventure&#x27;s authorized contacts contain coordinates or grid squares that can be placed on the map.",
         )
         self.assertContains(response, "1 contact could not be mapped")
         self.assertEqual(response.context["contact_map"]["mapped"], 0)
         self.assertEqual(response.context["contact_map"]["unmapped"], 1)
         self.assertFalse(response.context["contact_map"]["has_map_points"])
-        self.assertContains(response, 'id="journal-{}-contact-map-data"'.format(self.entry.pk))
+        self.assertContains(response, 'id="adventure-{}-contact-map-data"'.format(self.adventure.pk))
 
     def test_private_location_coordinates_are_not_serialized_to_visitor(self):
         self.origin.visibility = Location.Visibility.PRIVATE
@@ -215,7 +218,7 @@ class JournalVisibilityAndContactMapTests(TestCase):
             longitude="-71.654321",
         )
         response = self.client.get(self.map_url)
-        self.assertContains(response, "Journal uses a Private Location")
+        self.assertContains(response, "None of this Adventure&#x27;s authorized contacts")
         for value in ("44.1", "-93.2", "41.123456", "-71.654321"):
             self.assertNotContains(response, value)
 
@@ -240,7 +243,7 @@ class JournalVisibilityAndContactMapTests(TestCase):
 
     def test_empty_map_has_useful_state_and_map_javascript_keeps_fullscreen_paths(self):
         response = self.client.get(self.map_url)
-        self.assertContains(response, "This Journal has no contacts to map")
+        self.assertContains(response, "This Adventure has no contacts to map")
         self.assertContains(response, "0 of 0 contacts can be mapped")
         from django.conf import settings
 
@@ -248,10 +251,10 @@ class JournalVisibilityAndContactMapTests(TestCase):
             encoding="utf-8"
         )
         self.assertIn("fullscreenControl: true", source)
-        self.assertIn("path: [origin", source)
+        self.assertIn("contact.origin.latitude", source)
         self.assertIn("radioOutdoorsFitMap", source)
-        self.assertIn("const origin = data.origin ?", source)
-        self.assertIn("if (origin && filter(\"lines\").checked)", source)
+        self.assertIn("const origins =", source)
+        self.assertIn("if (origins.length && filter(\"lines\").checked)", source)
 
     def test_globe_controls_assets_fallback_and_attribution_are_scoped_to_map_page(self):
         self.add_contact(
@@ -266,7 +269,7 @@ class JournalVisibilityAndContactMapTests(TestCase):
         self.assertContains(response, 'data-journal-projection="flat"')
         self.assertContains(response, 'data-journal-display="day"')
         self.assertContains(response, 'data-journal-display="night"')
-        self.assertContains(response, 'data-journal-display="gray-line"')
+        self.assertContains(response, 'data-journal-gray-line')
         self.assertContains(response, 'data-journal-globe-reset')
         self.assertContains(response, 'aria-pressed="true">Globe</button>')
         self.assertContains(response, 'aria-pressed="true">Day</button>')

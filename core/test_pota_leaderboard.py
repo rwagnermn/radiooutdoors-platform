@@ -1,5 +1,7 @@
 from datetime import date
+import hashlib
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -124,6 +126,38 @@ class PotaLeaderboardRouteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/pota_leaderboard.html")
         self.assertContains(response, "<h1>POTA Leaderboard</h1>", html=True)
+
+    def test_leaderboard_uses_supplied_illustrated_background_and_compact_panel(self):
+        response = self.client.get(reverse("pota_leaderboard"))
+        self.assertContains(response, 'class="content pota-leaderboard-content"')
+        self.assertContains(response, 'class="pota-leaderboard-panel"')
+        self.assertContains(response, "pota-leaderboard-period-tabs")
+        self.assertContains(response, "pota-leaderboard-table-scroll")
+        self.assertContains(response, "pota-leaderboard-table")
+        self.assertContains(
+            response,
+            "If you're outdoors operating amateur radio...You belong here.",
+        )
+        self.assertNotContains(response, "Beyond the Four Walls of the Shack")
+
+        asset = settings.BASE_DIR / "static" / "images" / "pota-leaderboard-background.png"
+        self.assertTrue(asset.exists())
+        self.assertEqual(asset.stat().st_size, 2954216)
+        self.assertEqual(
+            hashlib.sha256(asset.read_bytes()).hexdigest(),
+            "609e6ae07e09f87245f7370c2158f286425e6fd6a12b9457ee96f88fce7b02e7",
+        )
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('background-image:url("../images/pota-leaderboard-background.png")', css)
+        self.assertIn("background-size:100% auto", css)
+        self.assertIn("width:min(760px,calc(100% - 40px))", css)
+        self.assertIn("background:rgba(255,253,249,.88)", css)
+        self.assertIn(".pota-leaderboard-table-scroll { max-width:100%; overflow-x:auto; }", css)
+        self.assertIn(".pota-leaderboard-page { min-height:100%; overflow-y:auto;", css)
+        self.assertIn(".pota-leaderboard-page main {", css)
+        self.assertIn("overflow:visible", css)
 
     def test_leaderboard_aggregates_public_activation_history_only(self):
         owner = get_user_model().objects.create_user(username="public-activator")
@@ -274,15 +308,15 @@ class PotaLeaderboardImportRefreshTests(TestCase):
         response, leader = self._leader("W5FRESH")
         self.assertEqual(
             {key: leader[key] for key in ("cw", "data", "phone", "total", "rank")},
-            {"cw": 6, "data": 4, "phone": 11, "total": 23, "rank": 1},
+            {"cw": 6, "data": 4, "phone": 11, "total": 21, "rank": 1},
         )
         other = next(row for row in response.context["leaders"] if row["member"] == "N0OTHER")
         self.assertEqual(other["rank"], 2)
         rollup = self.client.get(adventure.get_absolute_url()).context["pota_rollup"]
-        self.assertEqual(rollup, {"cw": 6, "data": 4, "phone": 11, "total": 23})
+        self.assertEqual(rollup, {"cw": 6, "data": 4, "phone": 11, "total": 21})
 
         refreshed, refreshed_leader = self._leader("W5FRESH")
-        self.assertEqual(refreshed_leader["total"], 23)
+        self.assertEqual(refreshed_leader["total"], 21)
         self.assertEqual(len(refreshed.context["leaders"]), 2)
 
     def test_duplicate_and_aborted_imports_do_not_change_totals(self):
@@ -320,11 +354,11 @@ class PotaLeaderboardImportRefreshTests(TestCase):
         activation.total_contacts = 29
         activation.save(update_fields=["cw_contacts", "total_contacts"])
         self.assertEqual(self._leader("W5FRESH")[1]["cw"], 24)
-        self.assertEqual(self._leader("W5FRESH")[1]["total"], 41)
+        self.assertEqual(self._leader("W5FRESH")[1]["total"], 39)
 
         activation.journal_entry.is_public = False
         activation.journal_entry.save(update_fields=["is_public", "updated_at"])
-        self.assertEqual(self._leader("W5FRESH")[1]["total"], 12)
+        self.assertEqual(self._leader("W5FRESH")[1]["total"], 11)
 
         activation.journal_entry.is_public = True
         activation.journal_entry.save(update_fields=["is_public", "updated_at"])
@@ -333,12 +367,12 @@ class PotaLeaderboardImportRefreshTests(TestCase):
         )
         activation.journal_entry.adventure = destination
         activation.journal_entry.save(update_fields=["adventure", "updated_at"])
-        self.assertEqual(self._leader("W5FRESH")[1]["total"], 12)
-        self.assertEqual(self._leader("N0OTHER")[1]["total"], 29)
+        self.assertEqual(self._leader("W5FRESH")[1]["total"], 11)
+        self.assertEqual(self._leader("N0OTHER")[1]["total"], 28)
 
         activation.journal_entry.delete()
         self.assertIsNone(self._leader("N0OTHER")[1])
-        self.assertEqual(self._leader("W5FRESH")[1]["total"], 12)
+        self.assertEqual(self._leader("W5FRESH")[1]["total"], 11)
 
     def test_private_non_pota_and_other_member_rows_are_not_misattributed(self):
         self._import()
@@ -366,6 +400,6 @@ class PotaLeaderboardImportRefreshTests(TestCase):
         )
 
         response, importer = self._leader("W5FRESH")
-        self.assertEqual(importer["total"], 23)
+        self.assertEqual(importer["total"], 21)
         self.assertFalse(any(row["member"] == "N0OTHER" for row in response.context["leaders"]))
         self.assertTrue(PotaActivationImport.objects.filter(pk=ordinary_import.pk).exists())

@@ -465,4 +465,9 @@ class ManualJournalContactTests(TestCase):
         import_response = self.client.get(reverse("import_pota_hunter_log") + f"?journal_entry={self.journal.pk}")
         map_response = self.client.get(reverse("journal_contact_map", args=[self.journal.pk]))
         self.assertEqual(import_response.status_code, 200)
-        self.assertEqual(map_response.status_code, 200)
+        self.assertRedirects(
+            map_response,
+            reverse("adventure_contact_geography", args=[self.adventure.slug])
+            + f"?journal={self.journal.pk}",
+            fetch_redirect_response=False,
+        )

@@ -115,4 +115,9 @@ def edit_owned_pin_position(request, record_type, record_id):
         ),
         "return_url": return_url,
         "form_error": form_error,
+        "save_validation_errors": [form_error] if form_error else [],
+        "save_validation_required": form_error in {
+            "Place both latitude and longitude coordinates.",
+            "Place a new pin before saving.",
+        },
     })

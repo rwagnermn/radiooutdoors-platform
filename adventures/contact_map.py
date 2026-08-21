@@ -201,3 +201,96 @@ def build_contact_map(
             journal_entry is not None or len(points) <= LINE_LIMIT
         ),
     }
+
+
+def build_adventure_contact_map(adventure, journal_entries, contacts, user):
+    """Build one authorized Adventure payload with each Contact's Journal origin."""
+    journals = list(journal_entries)
+    journals_by_id = {journal.pk: journal for journal in journals}
+    origins = {}
+    for journal in journals:
+        if journal.location and can_view_location(user, journal.location):
+            coordinates = coordinate_pair(journal.latitude, journal.longitude)
+            if coordinates:
+                origins[journal.pk] = {
+                    "journal_id": journal.pk,
+                    "latitude": coordinates[0],
+                    "longitude": coordinates[1],
+                    "name": journal.location.name,
+                    "label": "Journal Location",
+                }
+
+    points = []
+    unmapped_contacts = []
+    bands = set()
+    modes = set()
+    for contact in contacts:
+        journal = journals_by_id.get(contact.journal_entry_id)
+        if contact.journal_entry_id and journal is None:
+            continue
+        if journal and journal.location and not can_view_location(user, journal.location):
+            continue
+        coordinates, source, approximate = contact_coordinates(contact, user)
+        journal_title = journal.title or "Journal Entry" if journal else "Adventure Contact"
+        if coordinates is None:
+            unmapped_contacts.append({
+                "callsign": contact.callsign,
+                "journal": journal_title,
+                "date": contact.qso_date.isoformat(),
+            })
+            continue
+        if contact.band:
+            bands.add(contact.band)
+        if contact.mode:
+            modes.add(contact.mode)
+        points.append({
+            "id": contact.pk,
+            "latitude": coordinates[0],
+            "longitude": coordinates[1],
+            "coordinate_source": source,
+            "approximate": approximate,
+            "callsign": contact.callsign,
+            "date": contact.qso_date.isoformat(),
+            "time": contact.time_on.strftime("%H:%M") if contact.time_on else "",
+            "band": contact.band,
+            "frequency": str(contact.frequency) if contact.frequency is not None else "",
+            "mode": contact.mode,
+            "grid_square": contact.grid_square,
+            "country": contact.country,
+            "state": contact.state,
+            "journal_id": contact.journal_entry_id,
+            "journal": journal_title,
+            "origin": origins.get(contact.journal_entry_id),
+        })
+
+    return {
+        "available": True,
+        "message": (
+            "Contact markers are shown, but authorized Journal Locations do not have coordinates, so paths cannot be drawn."
+            if points and not origins
+            else ""
+            if points
+            else "This Adventure has no contacts to map."
+            if not contacts
+            else "None of this Adventure's authorized contacts contain coordinates or grid squares that can be placed on the map."
+        ),
+        "total": len(contacts),
+        "mapped": len(points),
+        "unmapped": len(unmapped_contacts),
+        "origin": next(iter(origins.values()), None),
+        "origins": list(origins.values()),
+        "has_map_points": bool(points or origins),
+        "path_count": sum(1 for point in points if point["origin"]),
+        "contacts": points,
+        "unmapped_contacts": unmapped_contacts,
+        "filters": {
+            "journals": [
+                {"id": journal.pk, "name": journal.title or "Journal Entry"}
+                for journal in journals
+            ],
+            "bands": sorted(bands, key=str.lower),
+            "modes": sorted(modes, key=str.lower),
+        },
+        "line_limit": None,
+        "lines_default": bool(origins),
+    }

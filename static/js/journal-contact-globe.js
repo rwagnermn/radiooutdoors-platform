@@ -7,6 +7,11 @@
   const GRAY_LINE_INTERVAL = 5 * 60 * 1000;
   const PATH_SOURCE = "journal-contact-paths";
   const PATH_LAYER = "journal-contact-paths";
+  const BALL_SOURCE = "journal-contact-animation-ball";
+  const BALL_LAYER = "journal-contact-animation-ball";
+  const PATH_WIDTH = 2;
+  const PATH_COLOR = "#d9dde1";
+  const PATH_LEG_MS = 500;
   const GRAY_SOURCE = "journal-gray-line";
   const GRAY_LAYERS = ["journal-night-hemisphere", "journal-gray-line-band", "journal-terminator"];
 
@@ -127,7 +132,8 @@
     const data = JSON.parse(dataNode.textContent);
     const preference = safePreference();
     let projection = preference.projection === "flat" ? "flat" : "globe";
-    let display = ["day", "night", "gray-line"].includes(preference.display) ? preference.display : "day";
+    let display = ["day", "night"].includes(preference.display) ? preference.display : "day";
+    let grayLine = Boolean(preference.grayLine);
     let map = null;
     let grayTimer = null;
     let styleGeneration = 0;
@@ -136,6 +142,10 @@
     let markersInitialized = false;
     let overlayRestoreCount = 0;
     const markers = [];
+    let visibleIds = new Set(data.contacts.map(contact => contact.id));
+    let animationFrame = null, animationElapsed = 0, animationPrevious = null, animationPathIndex = 0;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const grayButton = document.querySelector("[data-journal-gray-line]");
 
     function setPressed(buttons, attribute, value) {
       buttons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset[attribute] === value)));
@@ -147,19 +157,20 @@
       flatShell.hidden = false;
       setPressed(projectionButtons, "journalProjection", projection);
       status.textContent = message || "Flat Map view";
-      if (persist !== false) savePreference({ projection, display });
+      if (persist !== false) savePreference({ projection, display, grayLine });
+      window.radioOutdoorsContactProjection = projection;
+      window.dispatchEvent(new CustomEvent("contact-geography-projection", { detail: projection }));
       if (window.initRadioOutdoorsContactMaps) window.initRadioOutdoorsContactMaps();
       if (window.google && google.maps) window.dispatchEvent(new Event("resize"));
     }
 
     function pathGeoJSON() {
-      const origin = [data.origin.longitude, data.origin.latitude];
       return {
         type: "FeatureCollection",
-        features: data.contacts.map((contact) => ({
+        features: data.contacts.filter(contact => contact.origin).map((contact) => ({
           type: "Feature",
           properties: { contact_id: contact.id, callsign: contact.callsign },
-          geometry: { type: "LineString", coordinates: greatCircleCoordinates(origin, [contact.longitude, contact.latitude]) },
+          geometry: { type: "LineString", coordinates: greatCircleCoordinates([contact.origin.longitude, contact.origin.latitude], [contact.longitude, contact.latitude]) },
         })),
       };
     }
@@ -167,6 +178,7 @@
     const authorizedPathData = data.available && data.origin
       ? pathGeoJSON()
       : { type: "FeatureCollection", features: [] };
+    const filteredPathData = () => ({ ...authorizedPathData, features: authorizedPathData.features.filter(feature => visibleIds.has(feature.properties.contact_id)) });
 
     function firstSymbolLayerId() {
       const style = map && map.getStyle();
@@ -194,13 +206,13 @@
 
     function ensureMarkers() {
       if (!map || markersInitialized) return;
-      if (data.origin) {
-        const originMarker = markerElement("origin", `Journal Location: ${data.origin.name}`, "J");
-        markers.push(new maplibregl.Marker({ element: originMarker }).setLngLat([data.origin.longitude, data.origin.latitude]).setPopup(new maplibregl.Popup().setText(`Journal Location: ${data.origin.name}`)).addTo(map));
-      }
+      (data.origins || (data.origin ? [data.origin] : [])).forEach(origin => {
+        const originMarker = markerElement("origin", `Journal Location: ${origin.name}`, "J");
+        markers.push({ kind: "origin", marker: new maplibregl.Marker({ element: originMarker }).setLngLat([origin.longitude, origin.latitude]).setPopup(new maplibregl.Popup().setText(`Journal Location: ${origin.name}`)).addTo(map) });
+      });
       data.contacts.forEach((contact) => {
         const element = markerElement("contact", `Contact ${contact.callsign}`, "C");
-        markers.push(new maplibregl.Marker({ element }).setLngLat([contact.longitude, contact.latitude]).setPopup(new maplibregl.Popup().setDOMContent(popupNode(contact))).addTo(map));
+        markers.push({ kind: "contact", id: contact.id, marker: new maplibregl.Marker({ element }).setLngLat([contact.longitude, contact.latitude]).setPopup(new maplibregl.Popup().setDOMContent(popupNode(contact))).addTo(map) });
       });
       markersInitialized = true;
       globeElement.dataset.contactMarkerCount = String(data.contacts.length);
@@ -209,11 +221,12 @@
     function syncLegendState() {
       setPressed(projectionButtons, "journalProjection", projection);
       setPressed(displayButtons, "journalDisplay", display);
-      liveStatus.hidden = display !== "gray-line";
-      globeShell.classList.toggle("journal-globe-night", display === "night" || display === "gray-line");
+      liveStatus.hidden = !grayLine;
+      grayButton.setAttribute("aria-pressed", String(grayLine));
+      globeShell.classList.toggle("journal-globe-night", display === "night");
       status.textContent = projection === "globe"
-        ? `Globe view · ${display === "gray-line" ? "Gray Line (live)" : display[0].toUpperCase() + display.slice(1)}`
-        : "Flat Map view";
+        ? `Globe view · ${display[0].toUpperCase() + display.slice(1)} · Grey Line ${grayLine ? "on" : "off"}`
+        : `Flat Map view · ${display[0].toUpperCase() + display.slice(1)} · Grey Line ${grayLine ? "on" : "off"}`;
     }
 
     function ensureGrayLineLayers(now, beforeId) {
@@ -239,22 +252,23 @@
       const alreadyComplete = generation === restoredGeneration
         && map.getSource(PATH_SOURCE)
         && map.getLayer(PATH_LAYER)
-        && (display !== "gray-line" || GRAY_LAYERS.every((id) => map.getLayer(id)));
+        && (!grayLine || GRAY_LAYERS.every((id) => map.getLayer(id)));
       if (alreadyComplete) return;
       overlaysRestoring = true;
       restoredGeneration = generation;
       try {
         const beforeId = firstSymbolLayerId();
         ensureMarkers();
-        if (display === "gray-line") ensureGrayLineLayers(new Date(), beforeId);
+        if (grayLine) ensureGrayLineLayers(new Date(), beforeId);
         if (authorizedPathData.features.length) {
-          if (!map.getSource(PATH_SOURCE)) map.addSource(PATH_SOURCE, { type: "geojson", data: authorizedPathData });
+          if (!map.getSource(PATH_SOURCE)) map.addSource(PATH_SOURCE, { type: "geojson", data: filteredPathData() });
           if (!map.getLayer(PATH_LAYER)) addLayerBelowLabels({
             id: PATH_LAYER, type: "line", source: PATH_SOURCE,
-            paint: { "line-color": display === "night" ? "#62d8ff" : "#ff7b25", "line-width": 2.4, "line-opacity": .86 },
+            paint: { "line-color": PATH_COLOR, "line-width": PATH_WIDTH, "line-opacity": 1 },
           }, beforeId);
           if (beforeId && map.getLayer(PATH_LAYER)) map.moveLayer(PATH_LAYER, beforeId);
         }
+        startAnimation(beforeId);
         syncLegendState();
         globeElement.dataset.contactPathCount = String(authorizedPathData.features.length);
         globeElement.dataset.contactPathSourceCount = String(map.getSource(PATH_SOURCE) ? 1 : 0);
@@ -273,7 +287,7 @@
     }
 
     function updateGrayLine(now) {
-      if (!map || display !== "gray-line") return;
+      if (!map || !grayLine) return;
       try { ensureGrayLineLayers(now, firstSymbolLayerId()); } catch (_) {}
     }
 
@@ -282,17 +296,78 @@
       grayTimer = null;
     }
 
+    function removeGrayLineLayers() {
+      if (!map) return;
+      GRAY_LAYERS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+      if (map.getSource(GRAY_SOURCE)) map.removeSource(GRAY_SOURCE);
+    }
+
+    function stopAnimation() {
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+      animationPrevious = null;
+    }
+
+    function animationTick(time) {
+      animationFrame = null;
+      const paths = filteredPathData().features;
+      if (projection !== "globe" || reducedMotion.matches || document.hidden || !map || !paths.length) return;
+      if (animationPrevious === null) animationPrevious = time;
+      animationElapsed += Math.min(time - animationPrevious, 100);
+      animationPrevious = time;
+      const cycle = PATH_LEG_MS * 2;
+      while (animationElapsed >= cycle) {
+        animationElapsed -= cycle;
+        animationPathIndex = (animationPathIndex + 1) % paths.length;
+      }
+      const coordinates = paths[animationPathIndex % paths.length].geometry.coordinates;
+      const outbound = animationElapsed <= PATH_LEG_MS;
+      const leg = outbound ? animationElapsed / PATH_LEG_MS : (animationElapsed - PATH_LEG_MS) / PATH_LEG_MS;
+      const fraction = outbound ? leg : 1 - leg;
+      const scaled = fraction * (coordinates.length - 1);
+      const index = Math.min(coordinates.length - 2, Math.floor(scaled));
+      const amount = scaled - index;
+      const start = coordinates[index], end = coordinates[index + 1];
+      const position = [start[0] + (end[0] - start[0]) * amount, start[1] + (end[1] - start[1]) * amount];
+      const source = map.getSource(BALL_SOURCE);
+      if (source) source.setData({ type: "Point", coordinates: position });
+      animationFrame = requestAnimationFrame(animationTick);
+    }
+
+    function startAnimation(beforeId) {
+      stopAnimation();
+      const paths = filteredPathData().features;
+      if (!map || projection !== "globe" || reducedMotion.matches || !paths.length) return;
+      const first = paths[0].geometry.coordinates[0];
+      if (!map.getSource(BALL_SOURCE)) map.addSource(BALL_SOURCE, { type: "geojson", data: { type: "Point", coordinates: first } });
+      if (!map.getLayer(BALL_LAYER)) addLayerBelowLabels({ id: BALL_LAYER, type: "circle", source: BALL_SOURCE, paint: { "circle-radius": PATH_WIDTH / 2, "circle-color": "#ffd000", "circle-blur": 0, "circle-opacity": 1 } }, beforeId);
+      animationElapsed = 0;
+      animationPathIndex = 0;
+      animationFrame = requestAnimationFrame(animationTick);
+    }
+
+    function toggleGrayLine() {
+      grayLine = !grayLine;
+      clearGrayTimer();
+      if (map && grayLine) {
+        ensureGrayLineLayers(new Date(), firstSymbolLayerId());
+        grayTimer = window.setInterval(() => updateGrayLine(new Date()), GRAY_LINE_INTERVAL);
+      } else removeGrayLineLayers();
+      syncLegendState();
+      savePreference({ projection, display, grayLine });
+    }
+
     function applyDisplay(nextDisplay) {
       display = nextDisplay;
       clearGrayTimer();
       syncLegendState();
-      savePreference({ projection, display });
+      savePreference({ projection, display, grayLine });
       if (!map) return;
       styleGeneration += 1;
       globeElement.dataset.requestedStyleGeneration = String(styleGeneration);
       map.setStyle(display === "night" ? NIGHT_STYLE : DAY_STYLE);
       restoreJournalOverlays(styleGeneration);
-      if (display === "gray-line") grayTimer = window.setInterval(() => updateGrayLine(new Date()), GRAY_LINE_INTERVAL);
+      if (grayLine) grayTimer = window.setInterval(() => updateGrayLine(new Date()), GRAY_LINE_INTERVAL);
     }
 
     function resetView() {
@@ -363,11 +438,13 @@
       if (next === "flat") showFlat(null, true);
       else {
         projection = "globe";
+        window.radioOutdoorsContactProjection = projection;
+        window.dispatchEvent(new CustomEvent("contact-geography-projection", { detail: projection }));
         flatShell.hidden = true;
         globeShell.hidden = false;
         setPressed(projectionButtons, "journalProjection", projection);
-        status.textContent = `Globe view · ${display === "gray-line" ? "Gray Line (live)" : display[0].toUpperCase() + display.slice(1)}`;
-        savePreference({ projection, display });
+        syncLegendState();
+        savePreference({ projection, display, grayLine });
         if (!map) initializeGlobe();
         else {
           map.resize();
@@ -376,15 +453,34 @@
       }
     }));
     displayButtons.forEach((button) => button.addEventListener("click", () => applyDisplay(button.dataset.journalDisplay)));
+    grayButton.addEventListener("click", toggleGrayLine);
+    window.addEventListener("contact-geography-filter-change", event => {
+      visibleIds = new Set(event.detail.visibleIds);
+      markers.forEach(item => {
+        if (item.kind === "contact") item.marker.getElement().hidden = !visibleIds.has(item.id);
+      });
+      if (map && map.getSource(PATH_SOURCE)) map.getSource(PATH_SOURCE).setData(filteredPathData());
+      startAnimation(firstSymbolLayerId());
+    });
+    reducedMotion.addEventListener("change", () => {
+      if (reducedMotion.matches) stopAnimation();
+      else startAnimation(firstSymbolLayerId());
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopAnimation();
+      else startAnimation(firstSymbolLayerId());
+    });
+    window.addEventListener("pagehide", () => { stopAnimation(); clearGrayTimer(); }, { once: true });
     resetButton.addEventListener("click", resetView);
     setPressed(projectionButtons, "journalProjection", projection);
     setPressed(displayButtons, "journalDisplay", display);
     if (projection === "flat") showFlat();
     else {
-      liveStatus.hidden = display !== "gray-line";
-      status.textContent = `Globe view · ${display === "gray-line" ? "Gray Line (live)" : display[0].toUpperCase() + display.slice(1)}`;
+      window.radioOutdoorsContactProjection = projection;
+      window.dispatchEvent(new CustomEvent("contact-geography-projection", { detail: projection }));
+      syncLegendState();
       initializeGlobe();
-      if (display === "gray-line") grayTimer = window.setInterval(() => updateGrayLine(new Date()), GRAY_LINE_INTERVAL);
+      if (grayLine) grayTimer = window.setInterval(() => updateGrayLine(new Date()), GRAY_LINE_INTERVAL);
     }
   }
 

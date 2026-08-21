@@ -21,7 +21,6 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 <button type="submit" class="button-primary">Save Journal Entry</button>
 <a href="{% url 'journal_entry_detail' entry.pk %}" class="cancel-link">Cancel</a>
 </form>
-{% if form.errors %}<div class="form-error-summary">The Journal Entry was not saved. Correct the highlighted field and try again.</div>{% endif %}
 
 {% if entry.photos.all %}<section class="current-photos"><h2>Current Photos</h2><div class="journal-photo-grid">
 {% for photo in entry.photos.all %}<figure class="journal-photo journal-photo-manage">
@@ -33,4 +32,4 @@ onsubmit="return confirm('Delete this Journal Entry, its photos, and imported co
 </div></figure>{% endfor %}</div></section>{% endif %}
 </div></section>
 {% endblock %}
-{% block extra_scripts %}<script src="{% static 'js/location-place-autocomplete.js' %}?v=001"></script><script src="{% static 'js/journal-location-map.js' %}?v=003"></script>{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=places&callback=initJournalLocationMap"></script>{% endif %}{% endblock %}
+{% block extra_scripts %}<script src="{% static 'js/journal-equipment-history.js' %}?v=001"></script><script src="{% static 'js/location-place-autocomplete.js' %}?v=001"></script><script src="{% static 'js/journal-location-map.js' %}?v=003"></script>{% if google_maps_api_key %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&libraries=places&callback=initJournalLocationMap"></script>{% endif %}{% endblock %}

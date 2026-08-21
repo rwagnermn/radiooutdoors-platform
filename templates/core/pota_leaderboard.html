@@ -3,16 +3,21 @@
 {% block body_class %}interior-page pota-leaderboard-page{% endblock %}
 
 {% block content %}
-<section class="content">
-    <div class="section-heading-row">
-        <div>
+<section class="content pota-leaderboard-content">
+    <div class="pota-leaderboard-panel">
+        <header class="pota-leaderboard-heading">
             <h1>POTA Leaderboard</h1>
             <p>Public POTA activation history shared through Radio Outdoors.</p>
-        </div>
-    </div>
+        </header>
 
-    <div class="ro-scroll-table-region" role="region" aria-label="POTA leaderboard" tabindex="0">
-        <table class="ro-record-table">
+        <nav class="adventure-book-mode-tabs pota-leaderboard-period-tabs" aria-label="POTA Leaderboard period">
+            <a href="{% url 'pota_leaderboard' %}"{% if selected_period == "all" %} aria-current="page"{% endif %}>All Time</a>
+            <a href="{% url 'pota_leaderboard' %}?period=current"{% if selected_period == "current" %} aria-current="page"{% endif %}>Current Year ({{ current_year }})</a>
+        </nav>
+        <h2>{{ period_label }} Rankings</h2>
+
+        <div class="ro-scroll-table-region pota-leaderboard-table-scroll" role="region" aria-label="{{ period_label }} POTA leaderboard" tabindex="0">
+            <table class="ro-record-table pota-leaderboard-table">
             <thead>
                 <tr>
                     <th class="text-center">Rank</th>
@@ -39,7 +44,8 @@
                     </tr>
                 {% endfor %}
             </tbody>
-        </table>
+            </table>
+        </div>
     </div>
 </section>
 {% endblock %}

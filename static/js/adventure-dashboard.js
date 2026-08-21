@@ -96,3 +96,12 @@
         update();
     });
 }());
+
+(function () {
+    "use strict";
+    const notice = document.querySelector("[data-journal-storage-notice]");
+    if (!notice) return;
+    window.setTimeout(function () {
+        notice.classList.add("is-permanent");
+    }, 3000);
+}());

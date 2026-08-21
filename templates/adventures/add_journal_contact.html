@@ -12,7 +12,6 @@
       <div class="add-contacts-batch-heading-actions"><span data-contact-count>0 unsaved contacts</span><button type="button" class="button-primary add-contacts-save" data-save-all>Save All Contacts</button></div>
     </header>
     <p class="add-contacts-instructions"><em>Press Enter to add this row</em> <span aria-hidden="true">•</span> Click any cell below to edit</p>
-    {% if batch_errors %}<div class="add-contacts-errors" role="alert"><strong>Please correct the batch:</strong><ul>{% for error in batch_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
     <div class="add-contacts-errors" data-client-errors hidden role="alert"></div>
     <form method="post" class="add-contacts-batch-form" data-batch-form>
       {% csrf_token %}<input type="hidden" name="contacts_json" value="" data-contacts-json>

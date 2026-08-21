@@ -866,13 +866,9 @@ class AddAdventureWorkflowTests(TestCase):
             edit_response,
             'class="compact-contact-table ro-data-table journal-list-table"',
         )
-        self.assertContains(edit_response, "View Journal", count=11)
-        self.assertContains(
-            edit_response,
-            'class="primary-feature-button"',
-            count=11,
-        )
-        self.assertContains(edit_response, ">Edit</a>", count=11)
+        self.assertContains(edit_response, 'class="journal-list-title"', count=11)
+        self.assertNotContains(edit_response, ">View Journal</a>")
+        self.assertNotContains(edit_response, ">Edit</a>")
 
         edit_journal_response = self.client.get(
             reverse("edit_journal_entry", kwargs={"entry_id": entries[0].pk})

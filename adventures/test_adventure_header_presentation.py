@@ -25,6 +25,9 @@ class AdventureHeaderPresentationTests(TestCase):
             callsign_verified=True,
             verification_method=MemberProfile.VerificationMethod.QRZ,
         )
+        self.staff = users.objects.create_user(
+            "header-staff", password="test", is_staff=True
+        )
         self.adventure = Adventure.objects.create(
             owner=self.owner,
             title="Header Presentation Adventure",
@@ -55,6 +58,64 @@ class AdventureHeaderPresentationTests(TestCase):
             response,
             reverse("toggle_adventure_visibility", args=[self.adventure.slug]),
         )
+
+    def test_adventure_page_header_has_requested_placement_and_permissions(self):
+        self.client.force_login(self.owner)
+        owner = self.client.get(self.adventure.get_absolute_url())
+        source = owner.content.decode()
+        toolbar = source.split('class="adventure-dashboard-toolbar"', 1)[1].split(
+            "</div>", 1
+        )[0]
+        self.assertLess(toolbar.index("← Back to My Adventures"), toolbar.index("ADVENTURE"))
+        self.assertLess(toolbar.index("ADVENTURE"), toolbar.index("Adventure actions"))
+        self.assertContains(owner, "Edit Adventure")
+        self.assertContains(owner, "+ Add Journal Entry")
+
+        self.client.force_login(self.staff)
+        staff = self.client.get(self.adventure.get_absolute_url())
+        self.assertContains(staff, 'aria-label="Adventure actions"')
+        self.assertContains(staff, "Edit Adventure")
+        self.assertEqual(
+            self.client.get(
+                reverse("edit_adventure", args=[self.adventure.slug])
+            ).status_code,
+            200,
+        )
+
+        self.client.force_login(self.other)
+        other = self.client.get(self.adventure.get_absolute_url())
+        self.assertContains(other, "ADVENTURE")
+        self.assertNotContains(other, 'aria-label="Adventure actions"')
+        self.assertNotContains(other, "Edit Adventure")
+        self.assertEqual(
+            self.client.get(
+                reverse("edit_adventure", args=[self.adventure.slug])
+            ).status_code,
+            403,
+        )
+
+    def test_add_journal_entry_uses_shared_orange_button_without_heading_override(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(self.adventure.get_absolute_url())
+        self.assertContains(
+            response,
+            'class="button-primary adventure-journal-add-action"',
+        )
+
+        stylesheet = (
+            settings.BASE_DIR / "static" / "css" / "style.css"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            ".adventure-dashboard-section-heading a:not(.button-primary)",
+            stylesheet,
+        )
+        self.assertIn(
+            ".button-primary{background:var(--ro-color-action-orange);"
+            "border:2px solid var(--ro-color-action-orange);color:#fff;",
+            stylesheet,
+        )
+        self.assertIn("--ro-color-action-orange:#b95500;", stylesheet)
+        self.assertIn("--ro-color-action-orange-hover:#984600;", stylesheet)
 
     def test_http_reference_is_a_safe_external_link_for_public_visitors(self):
         response = self.client.get(self.adventure.get_absolute_url())
@@ -107,12 +168,12 @@ class AdventureHeaderPresentationTests(TestCase):
         self.assertNotContains(response, "Event Website or Reference:")
         self.assertNotContains(response, "adventure-dashboard-reference")
 
-    def test_footer_and_photos_heading_use_exact_required_copy(self):
+    def test_journal_notice_and_photos_heading_use_exact_required_copy(self):
         response = self.client.get(self.adventure.get_absolute_url())
 
         self.assertContains(
             response,
-            "QSO’s and Contacts, Map Locations &amp; Photos are stored in Journals",
+            "QSO’s and Contacts, Map Locations &amp; Photos are stored in Journals.",
             html=True,
         )
         self.assertNotContains(response, "Status: QSO’s and Contacts")
@@ -143,23 +204,44 @@ class AdventureHeaderPresentationTests(TestCase):
         journal_panel = source.split('<section id="journal-entries"', 1)[1].split(
             "</section>", 1
         )[0]
-        self.assertLess(journal_panel.index("Date"), journal_panel.index("Journal Name"))
-        self.assertLess(journal_panel.index("Journal Name"), journal_panel.index("Location"))
-        self.assertLess(journal_panel.index("Location"), journal_panel.index("Photos"))
-        self.assertLess(journal_panel.index("Photos"), journal_panel.index("Contacts"))
-        self.assertLess(journal_panel.index("Contacts"), journal_panel.index("Status"))
+        column_headings = journal_panel.split('class="adventure-journal-column-headings"', 1)[1].split("</div>", 1)[0]
+        heading_row = journal_panel.split('class="adventure-dashboard-section-heading adventure-journals-heading"', 1)[1].split('class="adventure-journal-storage-notice"', 1)[0]
+        self.assertIn("View All Journals", heading_row)
+        self.assertNotIn("View All Journals", column_headings)
+        self.assertLess(column_headings.index("Date"), column_headings.index("Journal Name"))
+        self.assertLess(column_headings.index("Journal Name"), column_headings.index("Location"))
+        self.assertLess(column_headings.index("Location"), column_headings.index("Photos"))
+        self.assertLess(column_headings.index("Photos"), column_headings.index("Contacts"))
+        self.assertLess(column_headings.index("Contacts"), column_headings.index("Status"))
         self.assertNotIn("Activity", journal_panel)
         self.assertIn("adventure-journal-row-photos", journal_panel)
         self.assertIn("adventure-journal-row-contacts", journal_panel)
         self.assertNotIn("adventure-journal-row-menu", journal_panel)
         self.assertNotIn("visibility-badge", journal_panel)
-        self.assertNotIn("<h2>Adventure Journals</h2>", journal_panel)
+        self.assertIn("<h2>Adventure Journals</h2>", journal_panel)
 
         script = (settings.BASE_DIR / "static" / "js" / "adventure-dashboard.js").read_text(
             encoding="utf-8"
         )
         self.assertIn('event.target.closest("a, button, input, select, textarea, summary, details, form")', script)
         self.assertIn("window.getSelection()", script)
+
+    def test_view_all_journals_has_linked_names_without_redundant_actions(self):
+        entry = self.adventure.journal_entries.get()
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            reverse("adventure_journals", args=[self.adventure.slug])
+        )
+        detail_url = reverse("journal_entry_detail", args=[entry.pk])
+
+        self.assertContains(
+            response,
+            f'class="journal-list-title" href="{detail_url}"',
+        )
+        self.assertNotContains(response, ">View Journal</a>")
+        self.assertNotContains(response, ">Edit</a>")
+        self.assertNotContains(response, "journal-list-action-column")
+        self.assertNotContains(response, "journal-list-actions")
 
     def test_journal_rows_show_zero_and_permission_safe_multiple_counts(self):
         empty_entry = self.adventure.journal_entries.get()

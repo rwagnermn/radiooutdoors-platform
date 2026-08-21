@@ -2,6 +2,125 @@
   "use strict";
 
   const activeMaps = new WeakSet();
+  const CONTACT_PATH_LEG_MS = 500;
+  const CONTACT_PATH_STROKE_WIDTH = 2;
+  const CONTACT_PATH_COLOR = "#D9DDE1";
+
+  function interpolateGreatCircle(start, end, fraction) {
+    const radians = value => value * Math.PI / 180;
+    const degrees = value => value * 180 / Math.PI;
+    const startLat = radians(start.lat), startLng = radians(start.lng);
+    const endLat = radians(end.lat), endLng = radians(end.lng);
+    const cosine = Math.sin(startLat) * Math.sin(endLat) + Math.cos(startLat) * Math.cos(endLat) * Math.cos(endLng - startLng);
+    const angle = Math.acos(Math.max(-1, Math.min(1, cosine)));
+    if (!angle) return { lat: start.lat, lng: start.lng };
+    const denominator = Math.sin(angle);
+    const a = Math.sin((1 - fraction) * angle) / denominator;
+    const b = Math.sin(fraction * angle) / denominator;
+    const x = a * Math.cos(startLat) * Math.cos(startLng) + b * Math.cos(endLat) * Math.cos(endLng);
+    const y = a * Math.cos(startLat) * Math.sin(startLng) + b * Math.cos(endLat) * Math.sin(endLng);
+    const z = a * Math.sin(startLat) + b * Math.sin(endLat);
+    return { lat: degrees(Math.atan2(z, Math.sqrt(x * x + y * y))), lng: degrees(Math.atan2(y, x)) };
+  }
+
+  function createPathAnimation(map, container) {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let paths = [], pathIndex = 0, elapsed = 0, previousTime = null, frame = null, overlay = null, ball = null, stopped = false, active = window.radioOutdoorsContactProjection === "flat";
+
+    function removeBall() {
+      if (overlay) overlay.setMap(null);
+      overlay = null;
+      ball = null;
+      container.dataset.contactAnimationBallCount = "0";
+    }
+    function cancelFrame() {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      previousTime = null;
+    }
+    function ensureBall() {
+      if (ball || reducedMotion.matches || !paths.length) return;
+      ball = document.createElement("div");
+      ball.className = "journal-contact-path-ball";
+      ball.style.width = `${CONTACT_PATH_STROKE_WIDTH}px`;
+      ball.style.height = `${CONTACT_PATH_STROKE_WIDTH}px`;
+      ball.setAttribute("aria-hidden", "true");
+      overlay = new google.maps.OverlayView();
+      overlay.onAdd = () => overlay.getPanes().overlayLayer.appendChild(ball);
+      overlay.draw = () => {};
+      overlay.onRemove = () => { if (ball) ball.remove(); };
+      overlay.setMap(map);
+      container.dataset.contactAnimationBallCount = "1";
+    }
+    function placeBall(position) {
+      if (!overlay || !ball) return;
+      const projection = overlay.getProjection();
+      if (!projection) return;
+      const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(position.lat, position.lng));
+      if (point) ball.style.transform = `translate(${point.x - 1}px,${point.y - 1}px)`;
+    }
+    function tick(time) {
+      frame = null;
+      if (stopped || !active || reducedMotion.matches || document.hidden || !paths.length) return;
+      if (previousTime === null) previousTime = time;
+      elapsed += Math.min(time - previousTime, 100);
+      previousTime = time;
+      const cycleTime = CONTACT_PATH_LEG_MS * 2;
+      while (elapsed >= cycleTime) {
+        elapsed -= cycleTime;
+        pathIndex = (pathIndex + 1) % paths.length;
+      }
+      const outbound = elapsed <= CONTACT_PATH_LEG_MS;
+      const legProgress = outbound ? elapsed / CONTACT_PATH_LEG_MS : (elapsed - CONTACT_PATH_LEG_MS) / CONTACT_PATH_LEG_MS;
+      const fraction = outbound ? legProgress : 1 - legProgress;
+      placeBall(interpolateGreatCircle(paths[pathIndex].start, paths[pathIndex].end, fraction));
+      container.dataset.contactAnimationPathIndex = String(pathIndex);
+      container.dataset.contactAnimationDirection = outbound ? "outbound" : "return";
+      frame = requestAnimationFrame(tick);
+    }
+    function start() {
+      if (stopped || !active || reducedMotion.matches || document.hidden || !paths.length) return;
+      ensureBall();
+      if (frame === null) frame = requestAnimationFrame(tick);
+    }
+    function reset(nextPaths) {
+      cancelFrame();
+      paths = nextPaths;
+      pathIndex = 0;
+      elapsed = 0;
+      container.dataset.contactAnimationPathCount = String(paths.length);
+      if (!paths.length || reducedMotion.matches) removeBall();
+      else start();
+    }
+    function setActive(nextActive) {
+      active = nextActive;
+      if (!active) { cancelFrame(); removeBall(); }
+      else start();
+    }
+    function motionChanged() {
+      if (reducedMotion.matches) { cancelFrame(); removeBall(); }
+      else start();
+    }
+    function visibilityChanged() {
+      if (document.hidden) cancelFrame();
+      else start();
+    }
+    function projectionChanged(event) { setActive(event.detail === "flat"); }
+    function destroy() {
+      stopped = true;
+      cancelFrame();
+      removeBall();
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      window.removeEventListener("pagehide", destroy);
+      window.removeEventListener("contact-geography-projection", projectionChanged);
+      reducedMotion.removeEventListener("change", motionChanged);
+    }
+    document.addEventListener("visibilitychange", visibilityChanged);
+    window.addEventListener("pagehide", destroy, { once: true });
+    window.addEventListener("contact-geography-projection", projectionChanged);
+    reducedMotion.addEventListener("change", motionChanged);
+    return { reset, destroy, setActive };
+  }
 
   function textElement(tag, text, className) {
     const element = document.createElement(tag);
@@ -34,15 +153,16 @@
     if (!data.available || !data.has_map_points) return;
     activeMaps.add(container);
 
-    const origin = data.origin ? { lat: data.origin.latitude, lng: data.origin.longitude } : null;
+    const origins = (data.origins || (data.origin ? [data.origin] : [])).map(item => ({ ...item, lat: item.latitude, lng: item.longitude }));
+    const origin = origins.length ? { lat: origins[0].latitude, lng: origins[0].longitude } : null;
     const firstContact = data.contacts[0];
     const initialCenter = origin || { lat: firstContact.latitude, lng: firstContact.longitude };
     const map = new google.maps.Map(container, { center: initialCenter, zoom: 4, minZoom: 2, mapTypeControl: true, fullscreenControl: true, streetViewControl: false, mapId: "DEMO_MAP_ID" });
     const infoWindow = new google.maps.InfoWindow();
-    if (origin) {
-      const originPin = new google.maps.marker.PinElement({ background: "#d86a1c", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "A", scale: 1.15 });
-      new google.maps.marker.AdvancedMarkerElement({ map, position: origin, title: `${data.origin.label || "Adventure Location"}: ${data.origin.name}`, content: originPin.element });
-    }
+    origins.forEach(item => {
+      const originPin = new google.maps.marker.PinElement({ background: "#d86a1c", borderColor: "#ffffff", glyphColor: "#ffffff", glyph: "J", scale: 1.15 });
+      new google.maps.marker.AdvancedMarkerElement({ map, position: { lat: item.latitude, lng: item.longitude }, title: `${item.label || "Journal Location"}: ${item.name}`, content: originPin.element });
+    });
 
     const controls = container.closest(".adventure-contact-map-section");
     const filter = (name) => controls.querySelector(`[data-contact-filter="${name}"]`);
@@ -50,6 +170,36 @@
     const lineNote = controls.querySelector("[data-contact-map-line-note]");
     let markers = [];
     let lines = [];
+    let grayLineOverlays = [];
+    const animation = origins.length && container.dataset.contactPathAnimation === "true" ? createPathAnimation(map, container) : null;
+    const baseMapButtons = document.querySelectorAll("[data-contact-basemap]");
+    const displayButtons = document.querySelectorAll("[data-journal-display]");
+    const setPressed = (buttons, value, key) => buttons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset[key] === value)));
+    baseMapButtons.forEach(button => button.addEventListener("click", () => {
+      map.setMapTypeId(button.dataset.contactBasemap);
+      setPressed(baseMapButtons, button.dataset.contactBasemap, "contactBasemap");
+    }));
+    displayButtons.forEach(button => button.addEventListener("click", () => {
+      const night = button.dataset.journalDisplay === "night";
+      map.setOptions({ styles: night ? [
+        { elementType: "geometry", stylers: [{ color: "#1d2630" }] },
+        { elementType: "labels.text.fill", stylers: [{ color: "#d7dde5" }] },
+        { elementType: "labels.text.stroke", stylers: [{ color: "#111820" }] },
+      ] : null });
+    }));
+    const grayButton = document.querySelector("[data-journal-gray-line]");
+    if (grayButton) grayButton.addEventListener("click", () => {
+      grayLineOverlays.forEach(overlay => overlay.setMap(null));
+      grayLineOverlays = [];
+      const enabled = grayButton.getAttribute("aria-pressed") === "true";
+      const helper = window.RadioOutdoorsJournalGlobe;
+      if (!enabled || !helper) return;
+      const features = helper.grayLineGeoJSON(new Date()).features;
+      const night = features.find(feature => feature.properties.kind === "night");
+      const terminator = features.find(feature => feature.properties.kind === "terminator");
+      if (night) grayLineOverlays.push(new google.maps.Polygon({ map, paths: night.geometry.coordinates[0].map(point => ({ lat: point[1], lng: point[0] })), fillColor: "#03111f", fillOpacity: .34, strokeOpacity: 0, clickable: false }));
+      if (terminator) grayLineOverlays.push(new google.maps.Polyline({ map, path: terminator.geometry.coordinates.map(point => ({ lat: point[1], lng: point[0] })), geodesic: false, strokeColor: "#ffe39b", strokeOpacity: .9, strokeWeight: 2, clickable: false }));
+    });
 
     function clearRendered() {
       markers.forEach((marker) => { marker.map = null; });
@@ -83,7 +233,7 @@
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(contact);
       });
-      const positions = origin ? [origin] : [];
+      const positions = origins.map(item => ({ lat: item.latitude, lng: item.longitude }));
       groups.forEach((group) => {
         const first = group[0];
         const position = { lat: first.latitude, lng: first.longitude };
@@ -100,14 +250,20 @@
         marker.addListener("click", () => { infoWindow.setContent(popupContent(group)); infoWindow.open({ map, anchor: marker }); });
         markers.push(marker);
       });
-      if (origin && filter("lines").checked) {
+      if (origins.length && filter("lines").checked) {
         const lineContacts = data.line_limit ? visible.slice(0, data.line_limit) : visible;
-        lineContacts.forEach((contact) => lines.push(new google.maps.Polyline({ map, path: [origin, { lat: contact.latitude, lng: contact.longitude }], geodesic: true, strokeColor: "#d86a1c", strokeOpacity: 0.42, strokeWeight: 1 })));
+        const pathContacts = lineContacts.filter(contact => contact.origin);
+        pathContacts.forEach((contact) => lines.push(new google.maps.Polyline({ map, path: [{ lat: contact.origin.latitude, lng: contact.origin.longitude }, { lat: contact.latitude, lng: contact.longitude }], geodesic: true, strokeColor: CONTACT_PATH_COLOR, strokeOpacity: 1, strokeWeight: CONTACT_PATH_STROKE_WIDTH })));
+        if (animation) animation.reset(pathContacts.map(contact => ({ start: { lat: contact.origin.latitude, lng: contact.origin.longitude }, end: { lat: contact.latitude, lng: contact.longitude } })));
         if (data.line_limit && visible.length > data.line_limit) {
           lineNote.hidden = false;
           lineNote.textContent = `Showing the first ${data.line_limit} contact paths. All ${visible.length} mapped contacts remain visible.`;
         } else lineNote.hidden = true;
-      } else lineNote.hidden = true;
+      } else {
+        lineNote.hidden = true;
+        if (animation) animation.reset([]);
+      }
+      window.dispatchEvent(new CustomEvent("contact-geography-filter-change", { detail: { visibleIds: visible.map(contact => contact.id) } }));
       radioOutdoorsFitMap(map, positions, 32, 14);
     }
 
