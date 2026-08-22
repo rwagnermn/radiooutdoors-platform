@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}POTA Contacts Import Results | Radio Outdoors{% endblock %}
+{% block content %}<section class="content narrow-content"><h1>POTA Contacts Import Results</h1>
+<dl><dt>Imported</dt><dd>{{ imported_count }}</dd><dt>Duplicates</dt><dd>{{ duplicate_count }}</dd><dt>Invalid</dt><dd>{{ invalid_count }}</dd><dt>Unselected</dt><dd>{{ unselected_count }}</dd><dt>QRZ-resolved</dt><dd>{{ resolved_count }}</dd><dt>Unresolved geography</dt><dd>{{ unresolved_count }}</dd><dt>Import batch</dt><dd>{{ batch.pk }}</dd></dl>
+<p class="ro-page-actions"><a class="button-primary" href="{% url 'journal_entry_detail' destination_journal.pk %}">Return to Journal</a></p></section>{% endblock %}

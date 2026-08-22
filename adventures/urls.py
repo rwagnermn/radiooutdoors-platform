@@ -63,11 +63,15 @@ from .pota_views import (
 from .pota_history_management import imported_pota_history
 from .contact_log_views import (
     add_journal_contact,
+    abort_pota_activation_contacts,
     bulk_delete_contacts,
+    confirm_pota_activation_contacts,
     confirm_pota_hunter_contacts,
+    import_pota_activation_contacts,
     import_pota_hunter_contacts,
     my_contact_log,
     pota_hunter_contact_result,
+    preview_pota_activation_contacts,
     preview_pota_hunter_contacts,
     qrz_contact_lookup,
 )
@@ -88,6 +92,10 @@ urlpatterns = [
     path("contacts/import/pota-hunter/preview/<str:token>/", preview_pota_hunter_contacts, name="preview_pota_hunter_log"),
     path("contacts/import/pota-hunter/confirm/<str:token>/", confirm_pota_hunter_contacts, name="confirm_pota_hunter_log"),
     path("contacts/import/pota-hunter/result/", pota_hunter_contact_result, name="pota_hunter_result"),
+    path("contacts/import/pota/", import_pota_activation_contacts, name="import_pota_contacts"),
+    path("contacts/import/pota/preview/<str:token>/", preview_pota_activation_contacts, name="preview_pota_contacts"),
+    path("contacts/import/pota/abort/<str:token>/", abort_pota_activation_contacts, name="abort_pota_contacts"),
+    path("contacts/import/pota/confirm/<str:token>/", confirm_pota_activation_contacts, name="confirm_pota_contacts"),
     path(
         "import/pota/preview/<str:token>/",
         preview_pota_history,

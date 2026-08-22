@@ -1455,7 +1455,7 @@ def adventure_contact_geography(request, slug):
             "contact_map": contact_map,
             "contact_map_dom_id": f"adventure-{adventure.pk}-contact-map",
             "contact_map_data_id": f"adventure-{adventure.pk}-contact-map-data",
-            "contact_map_heading": f"Contacts From Adventure ({adventure.title})",
+            "contact_map_heading": f"Contacts from Adventure - {adventure.title}",
             "contact_map_origin_label": "Journal Location",
             "selected_journal_id": selected_journal_id,
         },

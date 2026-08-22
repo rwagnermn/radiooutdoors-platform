@@ -12,6 +12,10 @@ foreach($name in @('Status','Get-TestFailureSummary','Test-StatusBlocksPush','Ge
 }
 function Assert-True($condition,$message){if(!$condition){throw "FAIL: $message"}}
 
+$listenersAst=$ast.Find({param($node)$node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Listeners'},$true)
+Assert-True ($null-ne$listenersAst) 'Listeners function must exist'
+Assert-True (-not $listenersAst.Extent.Text.Contains(',$a')) 'Listeners must not wrap an empty result as one array item'
+
 $ProjectRoot=$PSScriptRoot
 $script:TileNames=@{tests='Tests';migrations='Migrations';db='Database backup';server='Port 8000 / Server';leftovers='Codex leftovers';safe='Checkpoint safety'}
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('ro-manager-corrective-'+[guid]::NewGuid().ToString('N'))

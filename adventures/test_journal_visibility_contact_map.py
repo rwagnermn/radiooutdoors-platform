@@ -244,7 +244,7 @@ class JournalVisibilityAndContactMapTests(TestCase):
     def test_empty_map_has_useful_state_and_map_javascript_keeps_fullscreen_paths(self):
         response = self.client.get(self.map_url)
         self.assertContains(response, "This Adventure has no contacts to map")
-        self.assertContains(response, "0 of 0 contacts can be mapped")
+        self.assertContains(response, "0 of 0 Adventure contacts have map coordinates")
         from django.conf import settings
 
         source = (settings.BASE_DIR / "static" / "js" / "contact-map.js").read_text(
@@ -254,9 +254,9 @@ class JournalVisibilityAndContactMapTests(TestCase):
         self.assertIn("contact.origin.latitude", source)
         self.assertIn("radioOutdoorsFitMap", source)
         self.assertIn("const origins =", source)
-        self.assertIn("if (origins.length && filter(\"lines\").checked)", source)
+        self.assertIn("if (currentOrigins.length && filter(\"lines\").checked)", source)
 
-    def test_globe_controls_assets_fallback_and_attribution_are_scoped_to_map_page(self):
+    def test_advanced_controls_and_maplibre_assets_are_removed_from_map_page(self):
         self.add_contact(
             self.entry,
             "K1GLOBE",
@@ -265,95 +265,38 @@ class JournalVisibilityAndContactMapTests(TestCase):
             longitude="-75.200000",
         )
         response = self.client.get(self.map_url)
-        self.assertContains(response, 'data-journal-projection="globe"')
-        self.assertContains(response, 'data-journal-projection="flat"')
-        self.assertContains(response, 'data-journal-display="day"')
-        self.assertContains(response, 'data-journal-display="night"')
-        self.assertContains(response, 'data-journal-gray-line')
-        self.assertContains(response, 'data-journal-globe-reset')
-        self.assertContains(response, 'aria-pressed="true">Globe</button>')
-        self.assertContains(response, 'aria-pressed="true">Day</button>')
-        self.assertContains(response, "vendor/maplibre-gl/5.24.0/maplibre-gl.js")
-        self.assertContains(response, "vendor/maplibre-gl/5.24.0/maplibre-gl.css")
+        for removed in (
+            'data-journal-projection="globe"', 'data-journal-projection="flat"',
+            'data-journal-display="day"', 'data-journal-display="night"',
+            "data-journal-gray-line", "data-journal-globe-reset",
+            "vendor/maplibre-gl/5.24.0/maplibre-gl.js",
+            "vendor/maplibre-gl/5.24.0/maplibre-gl.css",
+        ):
+            self.assertNotContains(response, removed)
+        self.assertContains(response, "contact-map.js")
         self.assertNotContains(self.client.get(self.detail_url), "journal-contact-globe.js")
 
+    def test_overlay_and_animation_code_is_absent(self):
         from django.conf import settings
 
-        source = (
-            settings.BASE_DIR / "static" / "js" / "journal-contact-globe.js"
-        ).read_text(encoding="utf-8")
-        self.assertIn('projection: { type: "globe" }', source)
-        self.assertIn("greatCircleCoordinates(origin", source)
-        self.assertIn("maplibregl.FullscreenControl", source)
-        self.assertIn("supportsWebGL()", source)
-        self.assertIn('canvas.getContext("webgl2"', source)
-        self.assertIn("Flat Map shown because interactive globe rendering is unavailable", source)
-        self.assertIn("OpenFreeMap © OpenMapTiles · Data © OpenStreetMap contributors", source)
-        self.assertIn("localStorage.getItem(PREFERENCE_KEY)", source)
-        self.assertIn("localStorage.setItem(PREFERENCE_KEY", source)
-        self.assertNotIn("demotiles.maplibre.org", source)
-        self.assertNotIn("mapbox.com", source)
-        self.assertNotIn("maptiler.com", source)
+        source = (settings.BASE_DIR / "static" / "js" / "contact-map.js").read_text(encoding="utf-8")
+        for removed in ("grayLine", "requestAnimationFrame", "contactAnimation", "contact-geography-display"):
+            self.assertNotIn(removed, source)
+        self.assertFalse((settings.BASE_DIR / "static" / "js" / "journal-contact-globe.js").exists())
 
-    def test_gray_line_uses_current_utc_and_updates_one_existing_source(self):
+    def test_static_map_uses_one_path_renderer(self):
         from django.conf import settings
 
-        source = (
-            settings.BASE_DIR / "static" / "js" / "journal-contact-globe.js"
-        ).read_text(encoding="utf-8")
-        self.assertIn("grayLineGeoJSON(now)", source)
-        self.assertIn("updateGrayLine(new Date())", source)
-        self.assertIn("source.setData(geojson)", source)
-        self.assertIn("5 * 60 * 1000", source)
-        self.assertIn("now.toISOString()", source)
-        self.assertIn("pointer-events:none", (settings.BASE_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8"))
+        source = (settings.BASE_DIR / "static" / "js" / "contact-map.js").read_text(encoding="utf-8")
+        self.assertEqual(source.count("new google.maps.Polyline"), 1)
+        self.assertIn('const CONTACT_PATH_COLOR = "#e47b08"', source)
+        self.assertIn("const CONTACT_PATH_STROKE_WIDTH = 4", source)
+        self.assertIn("geodesic: true", source)
 
-    def test_globe_style_changes_restore_one_authorized_overlay_set(self):
+    def test_google_contact_markers_keep_grouping_and_origin_distinction(self):
         from django.conf import settings
 
-        source = (
-            settings.BASE_DIR / "static" / "js" / "journal-contact-globe.js"
-        ).read_text(encoding="utf-8")
-        self.assertIn("const authorizedPathData =", source)
-        self.assertIn("function restoreJournalOverlays(generation)", source)
-        self.assertIn("generation !== styleGeneration", source)
-        self.assertIn('map.on("style.load", restoreCurrentStyle)', source)
-        self.assertIn('map.on("styledata", restoreCurrentStyle)', source)
-        self.assertIn("map.setStyle(", source)
-        self.assertIn("restoreJournalOverlays(styleGeneration)", source)
-        self.assertIn("if (!map.getSource(PATH_SOURCE))", source)
-        self.assertIn("if (!map.getLayer(PATH_LAYER))", source)
-        self.assertIn("if (!map.getLayer(layer.id))", source)
-        self.assertIn("map.moveLayer(PATH_LAYER, beforeId)", source)
-        self.assertIn("if (!map || markersInitialized) return", source)
-        self.assertIn("authorizedPathData.features.length", source)
-        self.assertIn("if (data.origin)", source)
-        self.assertIn("center: initialCenter()", source)
-        self.assertIn("contactPathSourceCount", source)
-        self.assertIn("contactPathLayerCount", source)
-        self.assertIn("mapMarkerCount", source)
-        self.assertIn("generation === restoredGeneration", source)
-        self.assertIn("overlaysRestoring", source)
-        self.assertIn('overlayPending = "true"', source)
-        self.assertIn("requestedStyleGeneration", source)
-        self.assertNotIn("setTimeout(", source)
-
-    def test_contact_marker_head_is_half_size_centered_and_origin_is_unchanged(self):
-        from django.conf import settings
-
-        javascript = (
-            settings.BASE_DIR / "static" / "js" / "journal-contact-globe.js"
-        ).read_text(encoding="utf-8")
-        stylesheet = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn('markerElement("contact", `Contact ${contact.callsign}`, "C")', javascript)
-        self.assertIn('head.className = "journal-globe-marker-head"', javascript)
-        self.assertIn('head.setAttribute("aria-hidden", "true")', javascript)
-        self.assertIn(".journal-globe-marker { display:inline-flex; width:34px; height:34px;", stylesheet)
-        self.assertIn(".journal-globe-marker-head { display:inline-flex; width:17px; height:17px;", stylesheet)
-        self.assertIn("align-items:center; justify-content:center; padding:0;", stylesheet)
-        self.assertIn("font-size:.42rem;", stylesheet)
-        self.assertIn("line-height:1;", stylesheet)
-        self.assertIn(".journal-globe-marker-origin { width:40px; height:40px; }", stylesheet)
-        self.assertIn(".journal-globe-marker-origin .journal-globe-marker-head { width:40px; height:40px;", stylesheet)
+        javascript = (settings.BASE_DIR / "static" / "js" / "contact-map.js").read_text(encoding="utf-8")
+        self.assertIn("const groups = new Map()", javascript)
+        self.assertIn('glyph: grouped ? String(Math.min(group.length, 99)) : "C"', javascript)
+        self.assertIn('glyph: "J"', javascript)

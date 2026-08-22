@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Import POTA Contacts | Radio Outdoors{% endblock %}
+{% block content %}<section class="content narrow-content">
+<h1>Import POTA Contacts</h1>
+<p>Paste contacts copied from the POTA activation Contacts/QSOs page, review them, and import them into one of your Journals.</p>
+<p>On POTA, open the activation, display the Contacts/QSOs table, select only the table rows and page-count footer, then copy and paste them below. Only pasted Contacts can be imported.</p>
+{% if error %}<div class="form-error-summary" role="alert"><h2>We couldn’t review the POTA Contacts.</h2><p>{{ error }}</p></div>{% endif %}
+<form method="post">{% csrf_token %}
+<div class="form-row"><label for="pota-contacts-adventure">Destination Adventure</label><select id="pota-contacts-adventure" name="adventure" required><option value="">Choose an Adventure</option>{% for adventure in adventures %}<option value="{{ adventure.pk }}"{% if selected_adventure_id == adventure.pk|stringformat:'s' %} selected{% endif %}>{{ adventure.title }}</option>{% endfor %}</select></div>
+<div class="form-row"><label for="pota-contacts-journal">Destination Journal</label><select id="pota-contacts-journal" name="journal_entry" required><option value="">Choose a Journal</option>{% for journal in journals %}<option value="{{ journal.pk }}" data-adventure-id="{{ journal.adventure_id }}"{% if selected_journal_id == journal.pk|stringformat:'s' %} selected{% endif %}>{{ journal.adventure.title }} — {{ journal.title|default:"Journal Entry" }} ({{ journal.entry_at|date:"M j, Y" }})</option>{% endfor %}</select></div>
+<label for="pota-contacts-source">POTA activation Contacts/QSOs</label><textarea id="pota-contacts-source" name="pota_contacts" rows="18" required>{{ submitted_text }}</textarea>
+<div class="ro-page-actions"><button class="button-primary" type="submit">Review Contacts</button><a class="button-secondary-dark" href="{% url 'my_adventures' %}">Abort Import</a></div>
+</form>
+<script>(function(){const a=document.getElementById('pota-contacts-adventure'),j=document.getElementById('pota-contacts-journal');if(!a||!j)return;function sync(){for(const o of j.options)o.hidden=!!o.value&&o.dataset.adventureId!==a.value;if(j.selectedOptions[0]?.hidden)j.value='';}a.addEventListener('change',sync);sync();})();</script>
+</section>{% endblock %}

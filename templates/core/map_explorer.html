@@ -328,6 +328,19 @@ async function initRadioOutdoorsMap() {
             ? "<span class='radio-map-live-badge'>Active</span>"
             : "";
 
+        const advisoryText = String(point.operating_advisory || "").trim();
+        const advisory = point.has_operating_advisory && advisoryText
+            ? (
+                "<section class='radio-map-popup-advisory' aria-label='Operating advisory'>"
+                + "<strong><span class='radio-map-popup-advisory-icon' aria-hidden='true'>!</span>"
+                + " OPERATING ADVISORY</strong>"
+                + "<p>"
+                + escapeMapText(advisoryText).replace(/\r\n?|\n/g, "<br>")
+                + "</p>"
+                + "</section>"
+            )
+            : "";
+
         const latest = point.latest_title
             ? (
                 "<div class='radio-map-popup-latest'>"
@@ -368,6 +381,7 @@ async function initRadioOutdoorsMap() {
             + "</span>"
             + "<h3>" + escapeMapText(point.title) + "</h3>"
             + "<p>" + escapeMapText(point.subtitle) + "</p>"
+            + advisory
             + "<div class='radio-map-popup-count'>"
             + point.adventure_count
             + " Adventure"

@@ -125,7 +125,7 @@ function Listeners(){
             $a[0].RO=$true
         }
     }
-    ,$a
+    $a
 }
 function Server(){ $a=@(Listeners);if(!$a.Count){return Status "yellow" "Stopped" "No listener on $Port"};if($a.Count-gt1){return Status "red" "$($a.Count) listeners" (($a|%{"PID $($_.PID): $($_.Cmd)"})-join"`r`n")};$x=$a[0];Status ($(if($x.RO){"green"}else{"red"})) "PID $($x.PID)" $x.Cmd}
 function Leftovers(){ $all=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue|?{$_.CommandLine-like"*radiooutdoors-platform*" -and $_.CommandLine-like"*manage.py*runserver*"});$ls=@(Listeners|%{$_.PID});$e=@($all|?{$_.ProcessId-notin$ls});if($e.Count){Status "yellow" "$($e.Count) extra" (($e|%{"PID $($_.ProcessId): $($_.CommandLine)"})-join"`r`n")}else{Status "green" "None" ""}}

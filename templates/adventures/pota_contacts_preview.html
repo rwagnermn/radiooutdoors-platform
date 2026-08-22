@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Review POTA Contacts | Radio Outdoors{% endblock %}
+{% block body_class %}interior-page qso-table-page{% endblock %}
+{% block content %}<section class="content">
+<h1>Review POTA Contacts</h1>
+<p><strong>{{ valid_count }} valid; {{ duplicate_count }} duplicate{{ duplicate_count|pluralize }}; {{ invalid_count }} invalid.</strong></p>
+{% if partial_total %}<div class="form-error-summary" role="alert"><p><strong>This paste contains {{ pasted_count }} of {{ partial_total }} contacts shown by POTA. Only the pasted contacts can be imported.</strong></p></div>{% endif %}
+<p><strong>Destination:</strong> {{ destination_journal.adventure.title }} — {{ destination_journal.title|default:"Journal Entry" }}</p>
+<section class="pota-accepted-source"><h2>Accepted source data</h2><p>This source is locked for review. Confirmation uses this server-side copy.</p><textarea rows="10" readonly aria-readonly="true">{{ submitted_text }}</textarea></section>
+<form method="post" action="{% url 'confirm_pota_contacts' token %}">{% csrf_token %}
+<div class="ro-page-actions"><button type="button" class="button-secondary-dark" data-select-all>Select All</button><button type="button" class="button-secondary-dark" data-select-none>Select None</button><button class="button-primary" type="submit">Import Selected Contacts</button></div>
+<div class="ro-scroll-table-region qso-table-wrap" tabindex="0" role="region" aria-label="POTA Contacts review"><table class="ro-record-table qso-table"><thead><tr><th>Include</th><th>Date</th><th>Time</th><th>Contact</th><th>Band</th><th>Mode</th><th>Type</th><th>Activation location</th><th>Activation park</th><th>Duplicate</th><th>Validation</th></tr></thead><tbody>
+{% for row in rows %}<tr><td>{% if row.valid %}<input type="checkbox" name="selected" value="{{ row.index }}"{% if not row.duplicate %} checked{% else %} disabled{% endif %} aria-label="Include row {{ row.index|add:1 }}">{% else %}—{% endif %}</td><td>{{ row.activation_date|default:"—" }}</td><td>{{ row.time|default:"—" }}</td><td>{{ row.worked_callsign|default:"—" }}</td><td>{{ row.band|default:"—" }}</td><td>{{ row.mode|default:"—" }}</td><td>{{ row.contact_type|default:"—" }}</td><td>{{ row.activation_location|default:"—" }}</td><td>{% if row.park_reference %}{{ row.park_reference }} — {{ row.park_name }}{% else %}—{% endif %}</td><td>{% if row.duplicate %}Duplicate{% else %}No{% endif %}</td><td>{{ row.validation_status }}{% if row.excerpt %}<br><code>{{ row.excerpt }}</code>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div><button class="button-primary" type="submit">Import Selected Contacts</button></form>
+<form method="post" action="{% url 'abort_pota_contacts' token %}" class="ro-page-actions">{% csrf_token %}<button class="button-secondary-dark" type="submit">Abort Import</button></form>
+<script>(function(){const boxes=document.querySelectorAll('input[name="selected"]:not(:disabled)');document.querySelector('[data-select-all]').addEventListener('click',()=>boxes.forEach(b=>b.checked=true));document.querySelector('[data-select-none]').addEventListener('click',()=>boxes.forEach(b=>b.checked=false));})();</script>
+</section>{% endblock %}

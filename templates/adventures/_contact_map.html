@@ -1,6 +1,6 @@
 {% load static %}
-<section class="adventure-contact-map-section{% if embedded_map_layout %} embedded-detail-map-layout embedded-contact-map-layout{% endif %}" aria-labelledby="{{ contact_map_dom_id }}-heading">
-  <div class="contact-map-heading-row"><div><p class="section-kicker">Contact geography</p><h2 id="{{ contact_map_dom_id }}-heading">{{ contact_map_heading|default:"Contacts From This Adventure" }}</h2><p>{{ contact_map.mapped }} of {{ contact_map.total }} contact{{ contact_map.total|pluralize }} can be mapped.</p></div></div>
+<section class="adventure-contact-map-section{% if embedded_map_layout %} embedded-detail-map-layout embedded-contact-map-layout{% endif %}"{% if embedded_map_layout %} aria-labelledby="{{ contact_map_dom_id }}-heading"{% else %} aria-label="Adventure contact map"{% endif %}>
+  <div class="contact-map-heading-row">{% if embedded_map_layout %}<div><p class="section-kicker">Contact geography</p><h2 id="{{ contact_map_dom_id }}-heading">{{ contact_map_heading|default:"Contacts From This Adventure" }}</h2>{% endif %}<p>{{ contact_map.mapped }} of {{ contact_map.total }} Adventure contact{{ contact_map.total|pluralize }} have map coordinates.</p>{% if embedded_map_layout %}</div>{% endif %}</div>
   {% if contact_map.available and contact_map.message %}<p class="location-card contact-map-explanation" role="status">{{ contact_map.message }}{% if contact_map.unmapped %} {{ contact_map.unmapped }} contact{{ contact_map.unmapped|pluralize }} could not be mapped.{% endif %}</p>{% endif %}
   {% if contact_map.available and contact_map.has_map_points %}
   <div class="contact-map-controls" aria-label="Contact map filters">
@@ -11,11 +11,11 @@
     <label>To date<input type="date" data-contact-filter="to-date"></label>
     <label class="contact-map-checkbox"><input type="checkbox" data-contact-filter="lines" {% if contact_map.lines_default %}checked{% endif %}{% if not contact_map.origin %} disabled{% endif %}> Show Contact Lines</label>
   </div>
-  <div class="contact-map-summary" role="status" aria-live="polite"><span data-contact-map-count>{{ contact_map.mapped }}</span> mapped contacts shown.</div>
+  <div class="contact-map-summary" role="status" aria-live="polite"><span data-contact-map-count>{{ contact_map.mapped }}</span> mapped contacts shown for the current filters.</div>
   <div class="contact-map-legend" aria-label="Contact map legend">{% if contact_map.origin %}<span><i class="map-legend-pin map-legend-origin" aria-hidden="true"></i>{{ contact_map_origin_label|default:"Adventure Location" }}</span>{% endif %}<span><i class="map-legend-pin map-legend-contact" aria-hidden="true"></i>Contact</span>{% if contact_map.origin %}<span><i class="map-legend-path" aria-hidden="true"></i>Contact path</span>{% endif %}<span><i class="map-legend-pin map-legend-group" aria-hidden="true"></i>Multiple contacts at one position</span><span><i class="map-legend-pin map-legend-approximate" aria-hidden="true"></i>Approximate grid-square center</span></div>
-  <div id="{{ contact_map_dom_id }}" class="adventure-contact-map" data-contact-map data-map-data-id="{{ contact_map_data_id }}"{% if animate_contact_paths %} data-contact-path-animation="true"{% endif %} aria-label="{{ contact_map_heading|default:'Map of contacts from this Adventure' }}"></div>
+  <div id="{{ contact_map_dom_id }}" class="adventure-contact-map" data-contact-map data-map-data-id="{{ contact_map_data_id }}" aria-label="{{ contact_map_heading|default:'Map of contacts from this Adventure' }}"></div>
   <p class="contact-map-line-note" data-contact-map-line-note hidden></p>
-  <script src="{% static 'js/contact-map.js' %}?v=002"></script>
+  <script src="{% static 'js/contact-map.js' %}?v=004"></script>
   {% if google_maps_api_key %}{% if not single_location_map_data %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=marker&callback=initRadioOutdoorsContactMaps&loading=async" async defer></script>{% endif %}{% else %}<p class="form-help">Map display is unavailable because the map service is not configured.</p>{% endif %}
   {% elif contact_map.available %}{% if not contact_map.message %}<div class="location-card empty-contact-message" role="status">No contacts with coordinates or a valid grid square are available to map.</div>{% endif %}
   {% else %}<div class="location-card empty-contact-message" role="status">{{ contact_map.message }}</div>{% endif %}

@@ -24,6 +24,104 @@ def clean_pota_park_name(reference, value):
         name = re.sub(rf"^{re.escape(reference)}\s*", "", name, flags=re.IGNORECASE)
     return re.sub(r"^[\s\-\u2013\u2014:]+", "", name).strip()
 
+
+POTA_CONTACT_START_RE = re.compile(
+    r"^(?P<contact_type>ActivatorP2P|Activator)\s+"
+    r"(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})(?P<remainder>.*)$",
+    re.I,
+)
+POTA_CONTACT_BAND_RE = re.compile(r"^\d+(?:\.\d+)?(?:CM|MM|M)$", re.I)
+POTA_CONTACT_FOOTER_RE = re.compile(
+    r"^(?:Rows per page:|\d+\s*$|\d+\s*-\s*\d+\s+of\s+\d+|Your QSOs as a Hunter)",
+    re.I,
+)
+
+
+def _pota_contact_failure(line_number, reason, excerpt):
+    return {
+        "line_number": line_number,
+        "reason": reason,
+        "excerpt": re.sub(r"\s+", " ", excerpt).strip()[:180],
+    }
+
+
+def parse_pota_activation_contacts(text, max_rows=1000):
+    """Parse copied rows from a POTA activation Contacts/QSOs page."""
+    physical = [(number, raw.replace("\u00a0", " ").strip()) for number, raw in enumerate(text.splitlines(), 1)]
+    starts = [index for index, (_, line) in enumerate(physical) if POTA_CONTACT_START_RE.match(line)]
+    if not starts:
+        return [], [], {"pasted_count": 0, "range_start": None, "range_end": None, "total_shown": None}
+    if len(starts) > max_rows:
+        raise ValueError(f"No more than {max_rows} POTA Contacts may be imported at once.")
+
+    footer_match = re.search(r"\b(?P<start>\d+)\s*-\s*(?P<end>\d+)\s+of\s+(?P<total>\d+)\b", text, re.I)
+    metadata = {
+        "pasted_count": len(starts),
+        "range_start": int(footer_match.group("start")) if footer_match else None,
+        "range_end": int(footer_match.group("end")) if footer_match else None,
+        "total_shown": int(footer_match.group("total")) if footer_match else None,
+    }
+    rows, invalid = [], []
+    for position, start in enumerate(starts):
+        end = starts[position + 1] if position + 1 < len(starts) else len(physical)
+        line_number, first_line = physical[start]
+        start_match = POTA_CONTACT_START_RE.match(first_line)
+        record_lines = [start_match.group("remainder").strip()]
+        for _, line in physical[start + 1:end]:
+            if POTA_CONTACT_FOOTER_RE.match(line):
+                break
+            if line:
+                record_lines.append(line)
+        logical = " ".join(record_lines).strip()
+        try:
+            qso_at = datetime.strptime(start_match.group("timestamp"), "%Y-%m-%d %H:%M")
+        except ValueError:
+            invalid.append(_pota_contact_failure(line_number, "The Contact timestamp is invalid.", first_line))
+            continue
+        tokens = logical.split()
+        band_index = next((index for index, value in enumerate(tokens) if POTA_CONTACT_BAND_RE.match(value)), None)
+        if band_index is None:
+            invalid.append(_pota_contact_failure(line_number, "The Contact Band is missing or invalid.", logical))
+            continue
+        if band_index < 3 or not CALL_RE.match(tokens[band_index - 1]):
+            invalid.append(_pota_contact_failure(line_number, "The contacted callsign is missing or invalid.", logical))
+            continue
+        contact_callsign = tokens[band_index - 1].upper()
+        repeated_callsigns = [value.upper() for value in tokens[:band_index - 1] if CALL_RE.match(value)]
+        entity_index = next((index for index in range(band_index + 1, len(tokens)) if re.fullmatch(r"[A-Z]{2}-[A-Z0-9-]+", tokens[index], re.I)), None)
+        if entity_index is None or entity_index == band_index + 1:
+            invalid.append(_pota_contact_failure(line_number, "The Contact Mode or activation location is missing.", logical))
+            continue
+        mode_source = " ".join(tokens[band_index + 1:entity_index]).upper()
+        reference_index = next((index for index in range(entity_index + 1, len(tokens)) if PARK_RE.match(tokens[index])), None)
+        if reference_index is None:
+            invalid.append(_pota_contact_failure(line_number, "The activation park reference is missing or invalid.", logical))
+            continue
+        park_name = clean_pota_park_name(tokens[reference_index], " ".join(tokens[reference_index + 1:]))
+        if not park_name:
+            invalid.append(_pota_contact_failure(line_number, "The activation park name is missing.", logical))
+            continue
+        mode = "SSB" if mode_source == "PHONE (SSB)" else mode_source
+        rows.append({
+            "line_number": line_number,
+            "contact_type": "P2P" if start_match.group("contact_type").casefold() == "activatorp2p" else "Activator",
+            "source_contact_type": start_match.group("contact_type"),
+            "qso_at": qso_at,
+            "activation_date": qso_at.date().isoformat(),
+            "time": qso_at.time().isoformat(timespec="minutes"),
+            "station_callsign": repeated_callsigns[0] if repeated_callsigns else "",
+            "operator_callsign": repeated_callsigns[1] if len(repeated_callsigns) > 1 else (repeated_callsigns[0] if repeated_callsigns else ""),
+            "worked_callsign": contact_callsign,
+            "band": tokens[band_index].upper(),
+            "mode": mode,
+            "source_mode": mode_source,
+            "activation_location": tokens[entity_index].upper(),
+            "park_reference": tokens[reference_index].upper(),
+            "park_name": park_name,
+            "is_p2p": start_match.group("contact_type").casefold() == "activatorp2p",
+        })
+    return rows, invalid, metadata
+
 @dataclass
 class PotaRow:
     line_number: int

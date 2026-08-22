@@ -151,6 +151,77 @@ class MapExplorerOpenAdventureTests(TestCase):
         self.assertTrue(point["has_operating_advisory"])
         self.assertEqual(point["operating_advisory"], "Road access is limited.")
 
+    def test_advisory_popup_renders_current_text_safely_in_the_required_position(self):
+        location = Location.objects.create(
+            name="Airport Operating Site",
+            latitude="44.000000",
+            longitude="-94.000000",
+            has_operating_advisory=True,
+            operating_advisory='First line.\nSecond <script>alert("x")</script> line.',
+        )
+
+        response = self.client.get(reverse("map_explorer"))
+        point = response.context["map_points"][0]
+        html = response.content.decode()
+
+        self.assertEqual(point["location_id"], location.pk)
+        self.assertEqual(
+            point["operating_advisory"],
+            'First line.\nSecond <script>alert("x")</script> line.',
+        )
+        self.assertContains(response, "radio-map-popup-advisory")
+        self.assertContains(response, "OPERATING ADVISORY")
+        self.assertContains(response, "escapeMapText(advisoryText).replace")
+        self.assertNotIn('<script>alert("x")</script>', html)
+        self.assertLess(html.index("+ advisory"), html.index("radio-map-popup-count"))
+
+        location.operating_advisory = "Updated advisory text."
+        location.save(update_fields=["operating_advisory"])
+        updated_response = self.client.get(reverse("map_explorer"))
+        self.assertEqual(
+            updated_response.context["map_points"][0]["operating_advisory"],
+            "Updated advisory text.",
+        )
+
+    def test_advisory_popup_requires_both_advisory_marker_and_nonblank_text(self):
+        ordinary = Location.objects.create(
+            name="Ordinary Location",
+            latitude="44.000000",
+            longitude="-94.000000",
+            operating_advisory="Text on an ordinary pin is not displayed.",
+        )
+        blank_advisory = Location.objects.create(
+            name="Blank Advisory Location",
+            latitude="45.000000",
+            longitude="-95.000000",
+            has_operating_advisory=True,
+            operating_advisory="   ",
+        )
+
+        response = self.client.get(reverse("map_explorer"))
+        points = {
+            point["location_id"]: point for point in response.context["map_points"]
+        }
+
+        self.assertFalse(points[ordinary.pk]["has_operating_advisory"])
+        self.assertTrue(points[blank_advisory.pk]["has_operating_advisory"])
+        self.assertContains(
+            response,
+            "point.has_operating_advisory && advisoryText",
+        )
+
+    def test_advisory_popup_is_vertically_scrollable_without_horizontal_overflow(self):
+        css = (settings.BASE_DIR / "static" / "css" / "style.css").read_text(
+            encoding="utf-8"
+        )
+
+        popup_rule = css[css.index(".radio-map-popup-card{") :]
+        self.assertIn("max-height:min(520px,calc(100vh - 90px))", popup_rule)
+        self.assertIn("overflow-x:hidden", popup_rule)
+        self.assertIn("overflow-y:auto", popup_rule)
+        self.assertIn(".radio-map-popup-advisory{", css)
+        self.assertIn("overflow-wrap:anywhere", css)
+
     def test_location_without_coordinates_is_excluded(self):
         Location.objects.create(name="No Coordinates")
 

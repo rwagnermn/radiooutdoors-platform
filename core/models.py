@@ -470,6 +470,7 @@ class PotaImportBatch(models.Model):
     class Source(models.TextChoices):
         ACTIVATION_HISTORY = "activation_history", "POTA Activation History"
         HUNTER_LOG = "hunter_log", "POTA Hunter Log"
+        ACTIVATION_CONTACTS = "activation_contacts", "POTA Activation Contacts"
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pota_import_batches")
     source = models.CharField(max_length=24, choices=Source.choices, default=Source.ACTIVATION_HISTORY)
@@ -656,6 +657,7 @@ class JournalContact(models.Model):
     class Source(models.TextChoices):
         MANUAL = "manual", "Manual"
         POTA_HUNTER = "pota_hunter", "POTA Hunter Log"
+        POTA_CONTACTS = "pota_contacts", "POTA Activation Contacts"
         ADIF = "adif", "ADIF"
         OTHER = "other", "Other"
 

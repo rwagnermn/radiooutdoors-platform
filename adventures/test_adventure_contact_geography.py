@@ -39,7 +39,10 @@ class AdventureContactGeographyTests(TestCase):
 
     def test_public_payload_combines_only_authorized_journals_and_escapes_title(self):
         response = self.client.get(self.url)
-        self.assertContains(response, "Contacts From Adventure (North &lt;Shore&gt; &amp; &quot;Weekend&quot;)")
+        self.assertContains(response, '<h1>Contacts from Adventure - North &lt;Shore&gt; &amp; &quot;Weekend&quot;</h1>')
+        self.assertNotContains(response, "<h2")
+        self.assertContains(response, "Adventure contacts have map coordinates")
+        self.assertContains(response, "mapped contacts shown for the current filters")
         self.assertContains(response, "All Journals")
         self.assertContains(response, "First Journal")
         self.assertContains(response, "Second Journal")
@@ -69,21 +72,18 @@ class AdventureContactGeographyTests(TestCase):
         self.assertContains(selected, f'<option value="{self.first.pk}" selected>First Journal</option>', html=True)
         self.assertContains(selected, "Second Journal")
 
-    def test_controls_filters_curves_animation_and_failure_isolation_are_wired(self):
+    def test_simple_static_map_controls_and_paths_are_wired(self):
         response = self.client.get(self.url)
-        for value in ('data-contact-basemap="roadmap"', 'data-contact-basemap="satellite"', 'data-journal-projection="globe"', 'data-journal-projection="flat"', 'data-journal-display="day"', 'data-journal-display="night"', "data-journal-gray-line"):
-            self.assertContains(response, value)
-        flat = (Path(settings.BASE_DIR) / "static/js/contact-map.js").read_text(encoding="utf-8")
-        globe = (Path(settings.BASE_DIR) / "static/js/journal-contact-globe.js").read_text(encoding="utf-8")
-        self.assertIn("greatCircleCoordinates", globe)
-        self.assertIn("geodesic: true", flat)
-        self.assertIn("const PATH_LEG_MS = 500", globe)
-        self.assertIn("const CONTACT_PATH_LEG_MS = 500", flat)
-        self.assertIn('"circle-radius": PATH_WIDTH / 2', globe)
-        self.assertIn("CONTACT_PATH_STROKE_WIDTH", flat)
-        self.assertIn('matchMedia("(prefers-reduced-motion: reduce)")', flat)
-        self.assertIn('matchMedia("(prefers-reduced-motion: reduce)")', globe)
-        self.assertIn("try {", globe)
-        self.assertIn("contact-geography-filter-change", globe)
-        self.assertIn("map.setMapTypeId", flat)
-        self.assertIn("toggleGrayLine", globe)
+        self.assertContains(response, 'data-contact-filter="journal"')
+        self.assertContains(response, 'data-contact-filter="band"')
+        self.assertContains(response, 'data-contact-filter="mode"')
+        self.assertContains(response, 'data-contact-filter="from-date"')
+        self.assertContains(response, 'data-contact-filter="to-date"')
+        self.assertContains(response, 'data-contact-filter="lines"')
+        for removed in ("data-contact-basemap", "data-journal-projection", "data-journal-display", "data-journal-gray-line", "journal-contact-globe.js"):
+            self.assertNotContains(response, removed)
+        source = (Path(settings.BASE_DIR) / "static/js/contact-map.js").read_text(encoding="utf-8")
+        self.assertIn("geodesic: true", source)
+        self.assertIn('const CONTACT_PATH_COLOR = "#e47b08"', source)
+        self.assertIn("const CONTACT_PATH_STROKE_WIDTH = 4", source)
+        self.assertNotIn("requestAnimationFrame", source)

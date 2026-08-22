@@ -16,12 +16,12 @@ from django.views.decorators.http import require_GET, require_POST
 
 from core.auth import verified_member_or_staff_required, verified_member_required
 from core.location_privacy import visible_locations
-from core.models import Adventure, JournalContact, JournalEntry, Location, LocationType
+from core.models import Adventure, JournalContact, JournalEntry, Location, LocationType, PotaImportBatch
 from .adif_parser import haversine_miles
 from .contact_geography import sanitize_qrz_geography, sign_geography
 from .forms import BatchJournalContactForm, JournalContactForm
 from .pota_geocoding import entity_region
-from .pota_import import clean_pota_park_name, parse_pota_hunter_log
+from .pota_import import clean_pota_park_name, parse_pota_activation_contacts, parse_pota_hunter_log
 from .pota_parks import normalize_pota_reference
 from .pota_views import _matching_pota_location, _unique_parks
 from core.qrz_service import QRZError, lookup_callsign
@@ -33,6 +33,54 @@ CONTACT_BATCH_WARNING_AT = 45
 
 def _hunter_key(token):
     return f"pota-hunter-contacts:{token}"
+
+
+def _pota_contacts_key(token):
+    return f"pota-activation-contacts:{token}"
+
+
+def _pota_contact_identity(row):
+    return (
+        row["worked_callsign"].strip().upper(), row["activation_date"], row["time"],
+        row["band"].strip().upper(), row["mode"].strip().upper(),
+    )
+
+
+def _pota_contact_fingerprint(journal_id, row):
+    identity = (journal_id, *_pota_contact_identity(row))
+    return hashlib.sha256("|".join(str(value) for value in identity).encode()).hexdigest()
+
+
+def _existing_contact_identities(journal):
+    return {
+        (
+            contact.callsign.strip().upper(), contact.qso_date.isoformat(),
+            contact.time_on.isoformat(timespec="minutes") if contact.time_on else "",
+            contact.band.strip().upper(), contact.mode.strip().upper(),
+        )
+        for contact in journal.contacts.all().only("callsign", "qso_date", "time_on", "band", "mode")
+    }
+
+
+def _pota_contact_qrz(callsign):
+    cache_key = f"pota-contact-qrz:{callsign.strip().upper()}"
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        return cached
+    try:
+        result = lookup_callsign(callsign)
+        geography = sanitize_qrz_geography(
+            grid=result.grid, latitude=result.latitude, longitude=result.longitude,
+        )
+        resolved = {
+            "state": result.state, "country": result.country,
+            "grid_square": geography.grid_square,
+            "latitude": geography.latitude, "longitude": geography.longitude,
+        }
+    except QRZError:
+        resolved = {"state": "", "country": "", "grid_square": "", "latitude": None, "longitude": None}
+    cache.set(cache_key, resolved, 24 * 60 * 60)
+    return resolved
 
 
 def _hunter_fingerprint(owner_id, row):
@@ -294,6 +342,185 @@ def confirm_pota_hunter_contacts(request, token):
 @verified_member_required
 def pota_hunter_contact_result(request):
     return redirect("my_contact_log")
+
+
+def _pota_contact_destination_context(user, selected_adventure="", selected_journal=""):
+    return {
+        "adventures": _owned_adventures(user),
+        "journals": _owned_journals(user),
+        "selected_adventure_id": str(selected_adventure or ""),
+        "selected_journal_id": str(selected_journal or ""),
+    }
+
+
+@verified_member_or_staff_required
+def import_pota_activation_contacts(request):
+    requested_journal = request.POST.get("journal_entry") or request.GET.get("journal_entry")
+    requested_adventure = request.POST.get("adventure") or request.GET.get("adventure")
+    context = _pota_contact_destination_context(request.user, requested_adventure, requested_journal)
+    if request.method != "POST":
+        return render(request, "adventures/pota_contacts_import.html", {**context, "submitted_text": ""})
+
+    pasted = request.POST.get("pota_contacts", "")
+    destination = _requested_journal(request.user, requested_journal)
+    if destination is None:
+        return render(request, "adventures/pota_contacts_import.html", {
+            **context, "submitted_text": pasted,
+            "error": "Select the destination Adventure and Journal.",
+        })
+    if not requested_adventure or str(destination.adventure_id) != str(requested_adventure):
+        return render(request, "adventures/pota_contacts_import.html", {
+            **context, "submitted_text": pasted,
+            "error": "The selected Journal does not belong to the selected Adventure.",
+        })
+    try:
+        parsed, invalid, metadata = parse_pota_activation_contacts(pasted)
+    except ValueError as exc:
+        return render(request, "adventures/pota_contacts_import.html", {
+            **context, "submitted_text": pasted, "error": str(exc),
+        })
+    if not parsed and not invalid:
+        return render(request, "adventures/pota_contacts_import.html", {
+            **context, "submitted_text": pasted,
+            "error": "No Activator or ActivatorP2P Contact records were recognized.",
+        })
+
+    existing = _existing_contact_identities(destination)
+    seen = set()
+    rows = []
+    for index, row in enumerate(parsed):
+        identity = _pota_contact_identity(row)
+        duplicate = identity in existing or identity in seen
+        seen.add(identity)
+        rows.append({
+            **row, "index": index, "qso_at": row["qso_at"].isoformat(),
+            "duplicate": duplicate, "valid": True,
+            "validation_status": "Duplicate" if duplicate else "Ready to import",
+        })
+    for offset, invalid_row in enumerate(invalid, len(rows)):
+        rows.append({
+            "index": offset, "valid": False, "duplicate": False,
+            "line_number": invalid_row["line_number"], "error": invalid_row["reason"],
+            "excerpt": invalid_row.get("excerpt", ""), "validation_status": invalid_row["reason"],
+        })
+    token = uuid4().hex
+    cache.set(_pota_contacts_key(token), {
+        "owner": request.user.pk, "journal_entry": destination.pk,
+        "source": pasted, "rows": rows, "metadata": metadata,
+    }, 3600)
+    return redirect("preview_pota_contacts", token=token)
+
+
+@verified_member_or_staff_required
+def preview_pota_activation_contacts(request, token):
+    payload = cache.get(_pota_contacts_key(token))
+    if not payload or payload.get("owner") != request.user.pk:
+        messages.error(request, "That POTA Contacts preview expired.")
+        return redirect("import_pota_contacts")
+    destination = _requested_journal(request.user, payload.get("journal_entry"))
+    rows = payload["rows"]
+    metadata = payload.get("metadata", {})
+    total_shown = metadata.get("total_shown") or 0
+    pasted_count = metadata.get("pasted_count") or 0
+    return render(request, "adventures/pota_contacts_preview.html", {
+        "token": token, "rows": rows, "submitted_text": payload["source"],
+        "destination_journal": destination,
+        "valid_count": sum(row.get("valid", False) and not row.get("duplicate", False) for row in rows),
+        "duplicate_count": sum(row.get("duplicate", False) for row in rows),
+        "invalid_count": sum(not row.get("valid", False) for row in rows),
+        "partial_total": total_shown if total_shown > pasted_count else None,
+        "pasted_count": pasted_count,
+    })
+
+
+@verified_member_or_staff_required
+@require_POST
+def abort_pota_activation_contacts(request, token):
+    payload = cache.get(_pota_contacts_key(token))
+    if payload and payload.get("owner") == request.user.pk:
+        cache.delete(_pota_contacts_key(token))
+    return redirect("import_pota_contacts")
+
+
+@verified_member_or_staff_required
+@require_POST
+def confirm_pota_activation_contacts(request, token):
+    payload = cache.get(_pota_contacts_key(token))
+    if not payload or payload.get("owner") != request.user.pk:
+        messages.error(request, "That POTA Contacts preview expired.")
+        return redirect("import_pota_contacts")
+    destination = _requested_journal(request.user, payload.get("journal_entry"))
+    reparsed, reparsed_invalid, metadata = parse_pota_activation_contacts(payload["source"])
+    valid_by_index = {index: row for index, row in enumerate(reparsed)}
+    selected = {int(value) for value in request.POST.getlist("selected") if value.isdigit()}
+    selected_valid = selected & set(valid_by_index)
+    existing = _existing_contact_identities(destination)
+    imported, duplicates, resolved_count, unresolved_count = [], 0, 0, 0
+
+    with transaction.atomic():
+        batch = PotaImportBatch.objects.create(
+            owner=request.user,
+            source=PotaImportBatch.Source.ACTIVATION_CONTACTS,
+            confirmed_at=timezone.now(),
+            diagnostics={
+                "source_rows": len(reparsed), "invalid_rows": len(reparsed_invalid),
+                "footer": metadata, "destination_journal_id": destination.pk,
+                "source_records": [
+                    {
+                        "contact_type": row["source_contact_type"], "mode": row["source_mode"],
+                        "activation_location": row["activation_location"],
+                        "park_reference": row["park_reference"], "park_name": row["park_name"],
+                        "contact_callsign": row["worked_callsign"],
+                        "timestamp": row["qso_at"].isoformat(),
+                    }
+                    for row in reparsed
+                ],
+            },
+        )
+        seen = set()
+        for index, row in valid_by_index.items():
+            if index not in selected:
+                continue
+            identity = _pota_contact_identity(row)
+            if identity in existing or identity in seen:
+                duplicates += 1
+                continue
+            seen.add(identity)
+            qrz = _pota_contact_qrz(row["worked_callsign"])
+            state, country, grid_square = qrz["state"], qrz["country"], qrz["grid_square"]
+            latitude, longitude = qrz["latitude"], qrz["longitude"]
+            if latitude is not None and longitude is not None:
+                resolved_count += 1
+            else:
+                unresolved_count += 1
+            imported.append(JournalContact(
+                owner=request.user, journal_entry=destination, adventure=destination.adventure,
+                qso_date=date.fromisoformat(row["activation_date"]),
+                time_on=time.fromisoformat(row["time"]), callsign=row["worked_callsign"],
+                station_callsign=row["station_callsign"], operator_callsign=row["operator_callsign"],
+                band=row["band"], mode=row["mode"], state=state, country=country,
+                grid_square=grid_square, latitude=latitude, longitude=longitude,
+                pota_park_reference=row["park_reference"], pota_park_name=row["park_name"],
+                is_p2p=row["is_p2p"], source=JournalContact.Source.POTA_CONTACTS,
+                fingerprint=_pota_contact_fingerprint(destination.pk, row),
+            ))
+            existing.add(identity)
+        JournalContact.objects.bulk_create(imported, batch_size=250)
+        batch.diagnostics.update({
+            "imported": len(imported), "duplicates": duplicates,
+            "unselected": len(valid_by_index) - len(selected_valid),
+            "qrz_resolved": resolved_count, "unresolved_geography": unresolved_count,
+            "contact_ids": [contact.pk for contact in imported],
+        })
+        batch.save(update_fields=["diagnostics"])
+    cache.delete(_pota_contacts_key(token))
+    return render(request, "adventures/pota_contacts_result.html", {
+        "destination_journal": destination, "batch": batch,
+        "imported_count": len(imported), "duplicate_count": duplicates,
+        "invalid_count": len(reparsed_invalid),
+        "unselected_count": len(valid_by_index) - len(selected_valid),
+        "resolved_count": resolved_count, "unresolved_count": unresolved_count,
+    })
 
 
 def _manual_contact_defaults(request):

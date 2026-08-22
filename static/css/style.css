@@ -2029,7 +2029,9 @@ td{padding:14px;border-bottom:1px solid #ddd;}
 }
 .radio-map-popup-card{
     width:310px;
-    overflow:hidden;
+    max-height:min(520px,calc(100vh - 90px));
+    overflow-x:hidden;
+    overflow-y:auto;
     background:#fff;
     border-radius:10px;
 }
@@ -2051,6 +2053,7 @@ td{padding:14px;border-bottom:1px solid #ddd;}
 .radio-map-popup-content{
     display:grid;
     gap:6px;
+    min-width:0;
     padding:15px;
 }
 .radio-map-popup-content h3{
@@ -2082,6 +2085,48 @@ td{padding:14px;border-bottom:1px solid #ddd;}
 .radio-map-popup-count{
     color:#315f48;
     font-weight:800;
+}
+.radio-map-popup-advisory{
+    display:grid;
+    gap:4px;
+    margin:2px 0;
+    padding:9px 10px;
+    border:1px solid #cf6a73;
+    border-left:4px solid #b51f2e;
+    border-radius:7px;
+    background:#fff0f1;
+    color:#51151b;
+    overflow-wrap:anywhere;
+}
+.radio-map-popup-advisory strong{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    color:#7f1722;
+    font-size:12px;
+    font-weight:900;
+    letter-spacing:.45px;
+    line-height:1.3;
+}
+.radio-map-popup-advisory-icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:16px;
+    height:16px;
+    flex:0 0 16px;
+    border-radius:50%;
+    background:#b51f2e;
+    color:#fff;
+    font-size:12px;
+    line-height:1;
+}
+.radio-map-popup-advisory p{
+    margin:0;
+    color:#42161a;
+    line-height:1.4;
+    overflow-wrap:anywhere;
+    word-break:break-word;
 }
 .radio-map-popup-latest{
     display:grid;
@@ -5961,37 +6006,8 @@ body.location-help-open { overflow: hidden; }
 .contact-map-summary { margin-bottom: .6rem; font-weight: 650; }
 .contact-map-legend { display: flex; flex-wrap: wrap; gap: .6rem 1rem; margin-bottom: .75rem; }
 .contact-map-legend span { display: inline-flex; align-items: center; gap: .4rem; }
-.map-legend-path { display:inline-block; width:28px; border-top:3px solid #d86a1c; }
+.map-legend-path { display:inline-block; width:28px; border-top:4px solid #e47b08; }
 .journal-contact-map-content { max-width:1240px; }
-.journal-globe-controls { display:flex; flex-wrap:wrap; align-items:end; gap:10px 18px; margin:18px 0 8px; padding:12px; border:1px solid #b9c6bd; border-radius:10px; background:#f8faf8; }
-.journal-globe-controls fieldset { margin:0; padding:0; border:0; }
-.journal-globe-controls legend { margin-bottom:5px; color:#263c31; font-size:.9rem; font-weight:850; }
-.journal-map-segmented { display:flex; }
-.journal-map-segmented button { min-height:42px; padding:7px 15px; border:1px solid #8ea097; color:#173c2e; background:#fff; font-size:1rem; font-weight:850; cursor:pointer; }
-.journal-map-segmented button:first-child { border-radius:7px 0 0 7px; }
-.journal-map-segmented button:last-child { border-radius:0 7px 7px 0; }
-.journal-map-segmented button+button { margin-left:-1px; }
-.journal-map-segmented button[aria-pressed="true"] { z-index:1; border-color:#174d36; color:#fff; background:#07572f; }
-.journal-map-segmented button:focus-visible,.journal-globe-reset:focus-visible { outline:3px solid #e77722; outline-offset:2px; }
-.journal-globe-reset { min-height:42px; margin:0; }
-.journal-globe-status { margin:8px 0; font-weight:800; }
-.journal-globe-shell { position:relative; border-radius:10px; overflow:hidden; background:radial-gradient(circle at 50% 45%,#164c72 0,#071c31 55%,#020912 100%); }
-.journal-contact-globe { width:100%; height:clamp(430px,68vh,720px); border:1px solid #647b89; border-radius:10px; }
-.journal-globe-live { position:absolute; z-index:3; right:10px; bottom:34px; display:grid; gap:2px; max-width:min(330px,calc(100% - 20px)); padding:8px 11px; border:1px solid rgba(255,255,255,.55); border-radius:7px; color:#fff; background:rgba(3,18,31,.88); pointer-events:none; }
-.journal-globe-live[hidden] { display:none; }
-.journal-globe-live time,.journal-globe-live span { font-size:.83rem; }
-.journal-globe-marker { display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; padding:0; border:0; color:#fff; background:transparent; line-height:1; cursor:pointer; }
-.journal-globe-marker-head { display:inline-flex; width:17px; height:17px; flex:0 0 17px; align-items:center; justify-content:center; padding:0; border:1.5px solid #fff; border-radius:50%; color:#fff; background:#1769aa; box-shadow:0 1px 4px rgba(0,0,0,.65); font-size:.42rem; font-weight:950; line-height:1; }
-.journal-globe-marker-origin { width:40px; height:40px; }
-.journal-globe-marker-origin .journal-globe-marker-head { width:40px; height:40px; flex-basis:40px; border-width:3px; background:#db6419; box-shadow:0 2px 8px rgba(0,0,0,.65); font-size:.84rem; }
-.journal-globe-night .journal-globe-marker-contact .journal-globe-marker-head { background:#42a5f5; }
-.journal-globe-night .journal-globe-marker-origin .journal-globe-marker-head { background:#ff8c35; }
-.journal-contact-globe .maplibregl-popup-content { max-width:360px; padding:12px; color:#17231d; font-size:1rem; line-height:1.4; }
-.journal-contact-globe .maplibregl-ctrl button { width:38px; height:38px; }
-.journal-contact-globe .maplibregl-ctrl-attrib { font-size:11px; }
-.journal-flat-map-shell[hidden],.journal-globe-shell[hidden] { display:none; }
-@media (max-width:700px) { .journal-globe-controls { align-items:stretch; } .journal-globe-controls fieldset { flex:1 1 100%; } .journal-map-segmented button { flex:1; } .journal-contact-globe { height:min(62vh,500px); } }
-@media (prefers-reduced-motion:reduce) { .journal-contact-globe * { transition:none!important; animation:none!important; } }
 .map-legend-pin { width: 18px; height: 18px; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 .map-legend-origin { background: #d86a1c; }
 .map-legend-contact { background: #1769aa; }
@@ -7207,8 +7223,6 @@ body.add-contacts-batch-page main {
     .add-contacts-batch-heading-actions { width: 100%; justify-content: space-between; }
     .add-contacts-batch-footer { flex-wrap: wrap; }
 }
-.journal-contact-path-ball{position:absolute;border:0;border-radius:50%;background:#ffd000;box-shadow:none;pointer-events:none;will-change:transform;}
-
 /* Adventure Journal bulk selection and explicit deletion confirmation. */
 .adventure-journals-page .journal-bulk-selection-form { margin: 0; }
 .adventure-journals-page .journal-bulk-selection-toolbar {

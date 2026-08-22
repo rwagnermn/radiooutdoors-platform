@@ -114,10 +114,10 @@ class GlobalContactMapTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"Contacts From Adventure ({self.adventure.title})")
+        self.assertContains(response, "Contacts from Adventure - Mapped Contact Adventure")
         self.assertContains(response, contact.callsign)
         self.assertContains(response, '"latitude": 45.520833')
         self.assertContains(response, '"longitude": -93.291667')
         self.assertContains(response, "Contact path")
-        self.assertContains(response, "journal-contact-globe.js")
+        self.assertNotContains(response, "journal-contact-globe.js")
         self.assertEqual(response.context["contact_map"]["path_count"], 1)
